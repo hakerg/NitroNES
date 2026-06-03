@@ -124,8 +124,6 @@ int wmain(int argc, wchar_t* argv[])
 	AudioStream audioStream;
 	if (!audioStream.open()) std::cerr << "Ostrzezenie: brak audio\n";
 
-	core->setResetAudio([&]{ audioStream.reset(); });
-
 	PrecisionSleeper sleeper;
 
 	std::atomic<bool> running{ true };

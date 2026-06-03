@@ -155,16 +155,6 @@ public:
         if (queued > maxBytes) SDL_ClearAudioStream(stream);
     }
 
-    void reset() {
-        batchBuf.clear();
-        batchTimeAcc = 0.0;
-        if (blip) blip->reset();
-        hpf90.reset(); hpf440.reset(); lpf14k.reset();
-        timeAccum   = 0.0;
-        lastEmitted = 0.0f;
-        if (stream) SDL_ClearAudioStream(stream);
-    }
-
     bool isOpen()        const { return deviceId != 0 && stream != nullptr; }
     int  getSampleRate() const { return sampleRate; }
 

@@ -145,18 +145,9 @@ public:
 	void defaultWindowSize(int& w, int& h) const override { w = 480; h = 120; }
 
 	void onSpacePressed() override { togglePause(); }
-	void onRightPressed() override { changeSong(+1); }
-	void onLeftPressed()  override { changeSong(-1); }
+	void onRightPressed() override { nextSong(); }
+	void onLeftPressed()  override { prevSong(); }
 
-private:
-	// Zmiana utworu musi byc atomowa wzgledem producer-callback - inaczej
-	// trafilibysmy w polowe initSong().
-	void changeSong(int delta) {
-		if (delta >= 0) nextSong(); else prevSong();
-		if (resetAudio) resetAudio();
-	}
-
-public:
 	// Jeden cykl CPU w trybie NSF. Brak PPU, brak NMI. Linia /IRQ
 	// zawsze nieaktywna (NSF V1.61: brak wektorow przerwan).
 	void clockOneCycle() override {

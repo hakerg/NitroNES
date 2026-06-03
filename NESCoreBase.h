@@ -18,8 +18,6 @@ public:
 	}
 	virtual ~NESCoreBase() = default;
 
-	void setResetAudio(std::function<void()> f) { resetAudio = std::move(f); }
-
 	void tick(float& outSample, double& outDt) {
 		if (!paused) clockOneCycle();
 		outSample = getAudioSample();
@@ -63,5 +61,4 @@ protected:
 	bool    pal = false;
 	double  emuSpeed = 1.0;
 	bool    paused = false;
-	std::function<void()> resetAudio;
 };
