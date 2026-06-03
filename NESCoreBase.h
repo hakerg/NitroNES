@@ -28,8 +28,8 @@ public:
 
 	virtual void clockOneCycle(float& outSample, double& outDt) = 0;
 
-	void   setSpeed(double spd) { emuSpeed.store(spd, std::memory_order_relaxed); }
-	double getSpeed() const { return emuSpeed.load(std::memory_order_relaxed); }
+	void   setSpeed(double spd) { emuSpeed = spd; }
+	double getSpeed() const { return emuSpeed; }
 
 	virtual bool loadFile(const std::string& path) = 0;
 
@@ -50,6 +50,6 @@ protected:
 	APU2A03 apu;
 	std::array<uint8_t, 2048> cpuRam;
 	bool    pal = false;
-	std::atomic<double> emuSpeed{ 1.0 };
+	double  emuSpeed = 1.0;
 	Host    host;
 };

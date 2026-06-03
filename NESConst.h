@@ -41,7 +41,7 @@ namespace NES {
 
     // --- Timing ---
     // Maksymalne opóźnienie pętli NES/audio; zapobiega spiral-of-lag i przepełnieniu bufora.
-    static constexpr double MAX_DELAY = 0.020; // seconds
+    static constexpr double MAX_DELAY = 0.025; // seconds
     // Maksymalny mnożnik prędkości (TAB / RT); używany do prealokacji buforów audio.
     static constexpr double MAX_SPEED = 4.0;
 

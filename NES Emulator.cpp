@@ -1,5 +1,3 @@
-//#define BEAMRACER_LOG
-
 #include "NESConst.h"
 #include "NESCoreBase.h"
 #include "NSFPlayer.h"

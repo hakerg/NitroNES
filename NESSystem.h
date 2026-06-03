@@ -149,9 +149,8 @@ public:
 
         outSample = apu.getOutputSample() + (cart ? cart->audioOutput() : 0.0f);
         const double hwDt = 1.0 / (pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC);
-        double eff = effectiveSpeed.load(std::memory_order_relaxed);
-        if (eff <= 0.0) eff = getSpeed();
-        outDt = hwDt / eff;
+        double speed = getSpeed();
+        outDt = hwDt / speed; // TODO: move this logic to NESCoreBase
     }
 
 private:
@@ -236,7 +235,6 @@ protected:
     bool    controllerStrobe = false;
 
     MonitorRefreshRateDetector refreshDetector;
-    std::atomic<double> effectiveSpeed{ 1.0 };
 
     HWND             hwnd      = nullptr;
     SDL_Window*      window    = nullptr;
