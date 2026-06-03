@@ -49,7 +49,9 @@ public:
 	// Podepnij/odpnij pada SDL (nullptr = tylko klawiatura).
 	void attachGamepad(SDL_Gamepad* gp) { sdlGamepad = gp; }
 	void detachGamepad()                { sdlGamepad = nullptr; }
+	void closeAndDetachGamepad()        { if (sdlGamepad) { SDL_CloseGamepad(sdlGamepad); sdlGamepad = nullptr; } }
 	SDL_Gamepad* gamepad() const        { return sdlGamepad; }
+	SDL_JoystickID gamepadID() const    { return sdlGamepad ? SDL_GetGamepadID(sdlGamepad) : 0; }
 
 	// Zwróć bieżący stan wszystkich przycisków jako bajt NES:
 	//   bit 7: A  |  bit 6: B  |  bit 5: Select  |  bit 4: Start

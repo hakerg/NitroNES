@@ -6,7 +6,6 @@
 #include <iostream>
 #include <memory>
 #include <filesystem>
-#include <SDL3/SDL.h>
 
 #include "NESConst.h"
 #include "NESCoreBase.h"
@@ -145,35 +144,22 @@ public:
 	}
 	void defaultWindowSize(int& w, int& h) const override { w = 480; h = 120; }
 
-	bool handleEvent(const SDL_Event& ev, bool& paused) override {
-		if (ev.type != SDL_EVENT_KEY_DOWN || ev.key.repeat) return false;
-		switch (ev.key.scancode) {
-			case SDL_SCANCODE_SPACE:
-				paused = !paused;
-				return true;
-			case SDL_SCANCODE_RIGHT:
-				changeSong(+1);
-				return true;
-			case SDL_SCANCODE_LEFT:
-				changeSong(-1);
-				return true;
-			default:
-				return false;
-		}
-	}
+	void onSpacePressed() override { togglePause(); }
+	void onRightPressed() override { changeSong(+1); }
+	void onLeftPressed()  override { changeSong(-1); }
 
 private:
 	// Zmiana utworu musi byc atomowa wzgledem producer-callback - inaczej
 	// trafilibysmy w polowe initSong().
 	void changeSong(int delta) {
-		if (delta > 0) nextSong(); else prevSong();
-		if (host.resetAudio)  host.resetAudio();
+		if (delta >= 0) nextSong(); else prevSong();
+		if (resetAudio) resetAudio();
 	}
 
 public:
 	// Jeden cykl CPU w trybie NSF. Brak PPU, brak NMI. Linia /IRQ
 	// zawsze nieaktywna (NSF V1.61: brak wektorow przerwan).
-	void clockOneCycle(float& outSample, double& outDt) override {
+	void clockOneCycle() override {
 		trampolineMaintenance();
 		if (expChip) expChip->clock();
 		apu.clock();
@@ -192,9 +178,10 @@ public:
 			apu.loadDMCSample(s);
 			cpu.addStall(4);
 		}
+	}
 
-		outSample = apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
-		outDt     = (1.0 / (double)cpuClock) / getSpeed();
+	float getAudioSample() override {
+		return apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
 	}
 
 private:

@@ -33,9 +33,21 @@ namespace NES {
     static constexpr uint16_t APU_FRAME_CTR_ADDR = 0x4017;
     static constexpr uint16_t NSF_BANK_BASE      = 0x5FF8;   // Rejestr bankswitch NSF
 
-    static constexpr int OVERSCAN_TOP = 8;
+    // --- Ekran PPU ---
+    static constexpr int SCREEN_WIDTH  = 256; // pikseli na linie
+    static constexpr int SCREEN_HEIGHT = 240; // wszystkich linii (z overscan)
+
+    // --- Skanline PPU ---
+    static constexpr int SCANLINE_PRERENDER     = -1;  // pre-render
+    static constexpr int SCANLINE_VISIBLE_FIRST =  0;
+    static constexpr int SCANLINE_VISIBLE_LAST  = 239;
+    static constexpr int SCANLINE_VBLANK_START  = 241;
+    static constexpr int SCANLINE_LAST          = 261;
+    static constexpr int TOTAL_SCANLINES        = 262;
+
+    static constexpr int OVERSCAN_TOP    = 8;
     static constexpr int OVERSCAN_BOTTOM = 8;
-    static constexpr int VISIBLE_H = 240 - OVERSCAN_TOP - OVERSCAN_BOTTOM; // 224
+    static constexpr int VISIBLE_H = SCREEN_HEIGHT - OVERSCAN_TOP - OVERSCAN_BOTTOM; // 224
     static constexpr int PAR_NUM = 8;  // NTSC PAR 8:7
     static constexpr int PAR_DEN = 7;
 

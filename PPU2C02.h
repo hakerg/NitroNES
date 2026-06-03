@@ -4,17 +4,10 @@
 #include <cstring>
 #include <functional>
 #include "PPUBus.h"
+#include "NESConst.h"
 
 class PPU2C02 {
 public:
-    static constexpr int SCREEN_WIDTH = 256;
-    static constexpr int SCREEN_HEIGHT = 240;
-    static constexpr int TOTAL_SCANLINES = 262;       // -1 pre-render + 0-239 visible + 240-260 vblank + 261 idle (NTSC)
-    static constexpr int SCANLINE_PRERENDER     = -1; // pre-render (czyszczenie flag, reload scroll)
-    static constexpr int SCANLINE_VISIBLE_FIRST =  0; // pierwszy widoczny scanline
-    static constexpr int SCANLINE_VISIBLE_LAST  = 239;// ostatni widoczny scanline
-    static constexpr int SCANLINE_VBLANK_START  = 241;// NMI setowany na tym scanline, cykl 1
-    static constexpr int SCANLINE_LAST          = 261;// ostatni scanline klatki (po nim wraparound)
 
     PPU2C02() {
         buf.fill(0xFF000000);
@@ -157,8 +150,8 @@ public:
     //  CLOCK - pojedynczy dot PPU. Wolany 3x na cykl CPU.
     // ====================================================
     void clock() {
-        const bool visible = (scanline >= SCANLINE_VISIBLE_FIRST && scanline <= SCANLINE_VISIBLE_LAST);
-        const bool prerender = (scanline == SCANLINE_PRERENDER);
+        const bool visible = (scanline >= NES::SCANLINE_VISIBLE_FIRST && scanline <= NES::SCANLINE_VISIBLE_LAST);
+        const bool prerender = (scanline == NES::SCANLINE_PRERENDER);
         const bool rendering = visible || prerender;
 
         if (rendering) {
@@ -185,7 +178,7 @@ public:
         }
 
         // VBL flag set (dot 1 linii 241).
-        if (scanline == SCANLINE_VBLANK_START && cycle == 1) {
+        if (scanline == NES::SCANLINE_VBLANK_START && cycle == 1) {
             if (!suppressVblThisFrame) status.vertical_blank = 1;
             suppressVblThisFrame = false;
         }
@@ -193,7 +186,7 @@ public:
         renderPixel();
 
         // MMC3 scanline counter (bezpieczna alternatywa do A12 - hook co linia).
-        if (renderingEnabled() && cycle == 260 && scanline <= SCANLINE_VISIBLE_LAST) {
+        if (renderingEnabled() && cycle == 260 && scanline <= NES::SCANLINE_VISIBLE_LAST) {
             if (ppuBus && ppuBus->cart) ppuBus->cart->scanline();
         }
 
@@ -354,7 +347,7 @@ private:
         if (!bReadOnly) {
             // VBL race / NMI suppression: odczyt $2002 na dot 1 linii 241
             // (przed setem VBL) tlumi VBL i NMI dla tej klatki.
-            if (scanline == SCANLINE_VBLANK_START && cycle == 1) {
+            if (scanline == NES::SCANLINE_VBLANK_START && cycle == 1) {
                 suppressVblThisFrame = true;
                 data &= 0x7F;
             }
@@ -630,7 +623,7 @@ private:
         // Background/sprite shifters dostarczaja danych tylko dla widocznych
         // pikseli (cycle 1..256, scanline 0..239). Sprite-0 hit jest setowany
         // tylko gdy cycle < 256, wiec poza tym oknem renderowanie to no-op.
-        if ((unsigned)x >= (unsigned)SCREEN_WIDTH || (unsigned)y >= (unsigned)SCREEN_HEIGHT) {
+        if ((unsigned)x >= (unsigned)NES::SCREEN_WIDTH || (unsigned)y >= (unsigned)NES::SCREEN_HEIGHT) {
             return;
         }
 
@@ -673,31 +666,31 @@ private:
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         }
         if (mask.greyscale) idx &= 0x30;
-        buf[y * SCREEN_WIDTH + x] = emphasisLUT()[emphasis_index][idx & 0x3F];
+        buf[y * NES::SCREEN_WIDTH + x] = emphasisLUT()[emphasis_index][idx & 0x3F];
     }
 
     void advanceCycle() {
         // Zatrzaskujemy warunek pominięcia klatki na końcu cyklu 338.
         // Symuluje to sprzętowe opóźnienie (setup time/propagation delay)
         // dla bitów maski docierających do układu ucinającego cykl 340.
-        if (scanline == SCANLINE_PRERENDER && cycle == 338) {
+        if (scanline == NES::SCANLINE_PRERENDER && cycle == 338) {
             odd_frame_skip = frame_odd && renderingEnabled();
         }
 
         cycle++;
 
         // Wykonujemy pominięcie na takcie 340, korzystając z zatrzaśniętej wartości
-        if (scanline == SCANLINE_PRERENDER && cycle == 340 && odd_frame_skip) {
+        if (scanline == NES::SCANLINE_PRERENDER && cycle == 340 && odd_frame_skip) {
             cycle = 0;
-            scanline = SCANLINE_VISIBLE_FIRST;
+            scanline = NES::SCANLINE_VISIBLE_FIRST;
             odd_frame_skip = false;
         }
         else if (cycle >= 341) {
             cycle = 0;
-            if (scanline == SCANLINE_VISIBLE_LAST) { if (onFrameEnd) onFrameEnd(); }
+            if (scanline == NES::SCANLINE_VISIBLE_LAST) { if (onFrameEnd) onFrameEnd(); }
             scanline++;
-            if (scanline >= SCANLINE_LAST) {
-                scanline = SCANLINE_PRERENDER;
+            if (scanline >= NES::SCANLINE_LAST) {
+                scanline = NES::SCANLINE_PRERENDER;
                 frame_odd = !frame_odd;
                 decayOpenBus();
             }

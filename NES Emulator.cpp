@@ -2,6 +2,7 @@
 #include "NESCoreBase.h"
 #include "NSFPlayer.h"
 #include "NESSystem.h"
+#include "OpenGLRenderer.h"
 #include "AudioStream.h"
 #include <SDL3/SDL.h>
 #include <iostream>
@@ -103,74 +104,103 @@ int wmain(int argc, wchar_t* argv[])
 	SDL_GL_MakeCurrent(window, glCtx);
 	SDL_GL_SetSwapInterval(0);
 
-	core->initVideo(window);
+	// Renderer OpenGL – init po aktywowaniu kontekstu GL.
+	OpenGLRenderer glRenderer;
+	if (!glRenderer.init()) {
+		std::cerr << "Blad inicjalizacji renderera GL\n";
+		SDL_GL_DestroyContext(glCtx); SDL_DestroyWindow(window); SDL_Quit(); return 1;
+	}
+
+	// Przekaz renderer i HWND do NESSystem (jesli core nim jest).
+	if (auto* nesSystem = dynamic_cast<NESSystem*>(core.get())) {
+		nesSystem->onRenderFrame = [&](const uint32_t* fb) {
+			int w = 0, h = 0;
+			SDL_GetWindowSizeInPixels(window, &w, &h);
+			glRenderer.renderFrame(fb, w, h);
+		};
+	}
 
 	// 3. Audio.
 	AudioStream audioStream;
 	if (!audioStream.open()) std::cerr << "Ostrzezenie: brak audio\n";
 
-	core->setHost({
-		[&]{ audioStream.reset(); },
-	});
+	core->setResetAudio([&]{ audioStream.reset(); });
 
 	PrecisionSleeper sleeper;
 
 	std::atomic<bool> running{ true };
-	bool   paused    = false;
-	double baseSpeed = 1.0;
 	bool   keyFast   = false; // TAB
 	bool   keySlow   = false; // Shift+TAB
 	bool   padFast   = false; // RT
 	bool   padSlow   = false; // LT
+	SDL_JoystickID speedPadId = 0; // pad aktualnie kontrolujący prędkość (0 = brak)
 
-	auto updateBaseSpeed = [&]() {
-		if      (keyFast || padFast) baseSpeed = NES::MAX_SPEED;
-		else if (keySlow || padSlow) baseSpeed = 0.5;
-		else                         baseSpeed = 1.0;
+	auto calcSpeed = [&]() -> double {
+		if      (keyFast || padFast) return NES::MAX_SPEED;
+		else if (keySlow || padSlow) return 0.5;
+		else                         return 1.0;
 	};
 
 	Uint64 freq = SDL_GetPerformanceFrequency();
 	Uint64 prev = SDL_GetPerformanceCounter();
 	double lag = 0.0;
 
+	auto processEvent = [&](const SDL_Event& ev) {
+		switch (ev.type) {
+		case SDL_EVENT_QUIT:
+			running = false;
+			return;
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+			core->renderFrame();
+			return;
+		case SDL_EVENT_KEY_DOWN:
+			if (ev.key.repeat) return;
+			if (ev.key.scancode == SDL_SCANCODE_TAB) {
+				bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+				if (shift) { keySlow = true;  keyFast = false; }
+				else       { keyFast = true;  keySlow = false; }
+				return;
+			}
+			switch (ev.key.scancode) {
+				case SDL_SCANCODE_ESCAPE: running = false;            return;
+				case SDL_SCANCODE_P:      core->togglePause();        return;
+				case SDL_SCANCODE_F11:    toggleFullscreen(window);   return;
+				case SDL_SCANCODE_SPACE:  core->onSpacePressed();     return;
+				case SDL_SCANCODE_RIGHT:  core->onRightPressed();     return;
+				case SDL_SCANCODE_LEFT:   core->onLeftPressed();      return;
+				default: return;
+			}
+		case SDL_EVENT_KEY_UP:
+			if (ev.key.scancode == SDL_SCANCODE_TAB) { keyFast = false; keySlow = false; }
+			return;
+		case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+			if (ev.gaxis.axis != SDL_GAMEPAD_AXIS_RIGHT_TRIGGER &&
+				ev.gaxis.axis != SDL_GAMEPAD_AXIS_LEFT_TRIGGER) return;
+
+			constexpr Sint16 THRESHOLD = 8000;
+			SDL_JoystickID jid = ev.gaxis.which;
+			if (speedPadId == 0) speedPadId = jid;      // pierwszy pad, który ruszy trigger, przejmuje kontrolę
+			if (speedPadId != jid) return;              // inny pad – ignoruj
+			if (ev.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) padFast = ev.gaxis.value > THRESHOLD;
+			if (ev.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  padSlow = ev.gaxis.value > THRESHOLD;
+			if (!padFast && !padSlow) speedPadId = 0;   // oba triggery puszczone – zwalniamy blokadę
+			return;
+		}
+		case SDL_EVENT_GAMEPAD_ADDED:
+			core->onGamepadAdded(ev.gdevice.which);
+			return;
+		case SDL_EVENT_GAMEPAD_REMOVED:
+			core->onGamepadRemoved(ev.gdevice.which);
+			return;
+		default: break;
+		}
+	};
+
 	while (running.load(std::memory_order_relaxed)) {
 		SDL_Event ev;
-		while (SDL_PollEvent(&ev)) {
-			// Globalne (okno/aplikacja) - reszta idzie do rdzenia.
-			if (ev.type == SDL_EVENT_QUIT) { running = false; continue; }
-			if (ev.type == SDL_EVENT_KEY_DOWN && !ev.key.repeat) {
-				switch (ev.key.scancode) {
-					case SDL_SCANCODE_ESCAPE: running = false;            continue;
-					case SDL_SCANCODE_P:      paused  = !paused;          continue;
-					case SDL_SCANCODE_F11:    toggleFullscreen(window);   continue;
-					default: break;
-				}
-			}
-			if (ev.type == SDL_EVENT_KEY_DOWN || ev.type == SDL_EVENT_KEY_UP) {
-				if (ev.key.scancode == SDL_SCANCODE_TAB && !ev.key.repeat) {
-					bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
-					bool down  = (ev.type == SDL_EVENT_KEY_DOWN);
-					if (shift) { keySlow = down; keyFast = false; }
-					else        { keyFast = down; keySlow = false; }
-					updateBaseSpeed();
-					continue;
-				}
-			}
-			if (ev.type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
-				constexpr Sint16 THRESHOLD = 8000;
-				if (ev.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
-					padFast = ev.gaxis.value > THRESHOLD;
-					updateBaseSpeed(); continue;
-				}
-				if (ev.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) {
-					padSlow = ev.gaxis.value > THRESHOLD;
-					updateBaseSpeed(); continue;
-				}
-			}
-			core->handleEvent(ev, paused);
-		}
+		while (SDL_PollEvent(&ev)) processEvent(ev);
 
-		core->setSpeed(paused ? 0.0 : baseSpeed);
+		core->setSpeed(calcSpeed());
 
 		Uint64 now = SDL_GetPerformanceCounter();
 		double elapsed = (double)(now - prev) / (double)freq;
@@ -178,12 +208,11 @@ int wmain(int argc, wchar_t* argv[])
 		if (lag > NES::MAX_DELAY) lag = NES::MAX_DELAY; // limit spiral-of-lag
 		prev = now;
 
-		double spd = core->getSpeed();
-		if (spd > 0.0) {
+		{
 			float sample = 0.0f;
 			double dt = 0.0;
 			while (lag > 0.0) {
-				core->clockOneCycle(sample, dt);
+				core->tick(sample, dt);
 				audioStream.addSample(dt, sample);
 				lag -= dt;
 			}
@@ -195,6 +224,7 @@ int wmain(int argc, wchar_t* argv[])
 
 	audioStream.close();
 	core->shutdown();
+	glRenderer.shutdown();
 	SDL_GL_DestroyContext(glCtx);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
