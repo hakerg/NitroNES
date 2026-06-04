@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <functional>
+#include <mutex>
 
 class NESCoreBase;
 class SDLAudioStream;
@@ -15,6 +16,8 @@ struct SyncContext {
 	// Callbacki do obsługi eventów i akcji
 	std::function<void(const SDL_Event&)> handleEvent;
 	std::function<double()> getSpeed;
+
+	std::mutex tickMutex;
 };
 
 class SyncStrategy {

@@ -73,30 +73,41 @@ private:
 
 		UINT32 pathCount = 0, modeCount = 0;
 		if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS,
-				&pathCount, &modeCount) != ERROR_SUCCESS) return;
+			&pathCount, &modeCount) != ERROR_SUCCESS) return;
 
 		std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
 		std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
 
 		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS,
-				&pathCount, paths.data(),
-				&modeCount, modes.data(),
-				nullptr) != ERROR_SUCCESS) return;
+			&pathCount, paths.data(),
+			&modeCount, modes.data(),
+			nullptr) != ERROR_SUCCESS) return;
 
 		paths.resize(pathCount);
 
 		for (const auto& path : paths) {
 			DISPLAYCONFIG_SOURCE_DEVICE_NAME srcName{};
-			srcName.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
-			srcName.header.size      = sizeof(srcName);
+			srcName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+			srcName.header.size = sizeof(srcName);
 			srcName.header.adapterId = path.sourceInfo.adapterId;
-			srcName.header.id        = path.sourceInfo.id;
+			srcName.header.id = path.sourceInfo.id;
 			if (DisplayConfigGetDeviceInfo(&srcName.header) != ERROR_SUCCESS) continue;
 
 			if (wcscmp(srcName.viewGdiDeviceName, mi.szDevice) != 0) continue;
 
+			UINT32 modeIdx = path.targetInfo.modeInfoIdx;
+			if (modeIdx != DISPLAYCONFIG_PATH_MODE_IDX_INVALID && modeIdx < modes.size()) {
+				if (modes[modeIdx].infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET) {
+					const DISPLAYCONFIG_RATIONAL& r = modes[modeIdx].targetMode.targetVideoSignalInfo.vSyncFreq;
+					if (r.Denominator != 0) {
+						refreshHz = (double)r.Numerator / (double)r.Denominator;
+						return;
+					}
+				}
+			}
+
 			const DISPLAYCONFIG_RATIONAL& r = path.targetInfo.refreshRate;
-			if (r.Denominator == 0) return;
+			if (r.Denominator == 0) continue;
 
 			refreshHz = (double)r.Numerator / (double)r.Denominator;
 			return;
@@ -108,7 +119,7 @@ private:
 		mi.cbSize = sizeof(mi);
 		if (!GetMonitorInfoA(hmon, &mi)) return;
 
-		HDC hdc = CreateDCA(mi.szDevice, mi.szDevice, nullptr, nullptr);
+		HDC hdc = CreateDCA(nullptr, mi.szDevice, nullptr, nullptr);
 		if (!hdc) return;
 
 		D3DKMT_OPENADAPTERFROMHDC oa{};

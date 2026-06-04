@@ -1,14 +1,21 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <iostream>
+#include <mutex>
+#include <vector>
 
 #include "AudioStream.h"
+#include "SyncStrategy.h"
 
 // ============================================================
 //  SDLAudioStream - backend audio oparty na SDL3.
 //
-//  Dziedziczy po AudioStream i implementuje submitSamples(),
-//  przekazujac gotowe probki float32 mono do SDL AudioStream.
+//  Dziedziczy po AudioStream i implementuje submitSample(),
+//  ktore pushuje kazda probke float32 mono bezposrednio do SDL.
+//
+//  Po wywolaniu bindContext() rejestruje universalny audioCallback,
+//  ktory sam dotacza tickow gdy bufor SDL jest za maly.
+//  Synchronizacja przez SyncContext::tickMutex.
 // ============================================================
 
 class SDLAudioStream : public AudioStream {
@@ -79,8 +86,16 @@ public:
 		return true;
 	}
 
+	void bindContext(SyncContext* ctx) {
+		syncCtx = ctx;
+		if (sdlStream) {
+			SDL_SetAudioStreamGetCallback(sdlStream, audioCallback, this);
+		}
+	}
+
 	void close() {
 		if (sdlStream) {
+			SDL_SetAudioStreamGetCallback(sdlStream, nullptr, nullptr);
 			SDL_DestroyAudioStream(sdlStream);
 			sdlStream = nullptr;
 		}
@@ -89,26 +104,50 @@ public:
 			deviceId = 0;
 			SDL_QuitSubSystem(SDL_INIT_AUDIO);
 		}
+		syncCtx = nullptr;
 	}
 
 	bool isOpen() const { return deviceId != 0 && sdlStream != nullptr; }
 
-	// Dostęp do raw SDL_AudioStream* (dla zaawansowanych strategii sync)
 	SDL_AudioStream* getSDLStream() { return sdlStream; }
 
 protected:
-	void submitSamples(const float* samples, int count) override {
-		if (!sdlStream) return;
-
-		SDL_PutAudioStreamData(sdlStream, samples, count * (int)sizeof(float) * CHANNELS);
-
-		// Usuń nadmiar bufora SDL, jesli przekracza MAX_DELAY
-		int queued   = SDL_GetAudioStreamQueued(sdlStream);
-		int maxBytes = (int)(NES::MAX_LAG * getSampleRate()) * (int)sizeof(float) * CHANNELS;
-		if (queued > maxBytes) SDL_ClearAudioStream(sdlStream);
+	void submitSample(float sample) override {
+		int maxSamples = (int)(NES::MAX_LAG * getSampleRate());
+		if ((int)outBuf.size() < maxSamples) {
+			outBuf.push_back(sample);
+		}
 	}
 
 private:
-	SDL_AudioDeviceID deviceId  = 0;
-	SDL_AudioStream*  sdlStream = nullptr;
+	static void SDLCALL audioCallback(void* userdata, SDL_AudioStream* /*stream*/,
+									   int additional_amount, int /*total_amount*/) {
+		auto* self = static_cast<SDLAudioStream*>(userdata);
+		if (!self || !self->syncCtx) return;
+
+		SyncContext& ctx = *self->syncCtx;
+		if (ctx.core->isPaused()) return;
+
+		int samplesNeeded = additional_amount / (int)sizeof(float);
+		if (samplesNeeded <= 0) return;
+
+		std::lock_guard<std::mutex> lock(ctx.tickMutex);
+		ctx.core->setSpeed(ctx.getSpeed());
+		while ((int)self->outBuf.size() < samplesNeeded) {
+			ctx.core->tick();
+		}
+		self->flush();
+	}
+
+	void flush() {
+		if (outBuf.empty() || !sdlStream) return;
+
+		SDL_PutAudioStreamData(sdlStream, outBuf.data(), (int)(outBuf.size() * sizeof(float)));
+		outBuf.clear();
+	}
+
+	SDL_AudioDeviceID    deviceId  = 0;
+	SDL_AudioStream*     sdlStream = nullptr;
+	SyncContext*         syncCtx   = nullptr;
+	std::vector<float>   outBuf;
 };

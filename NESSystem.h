@@ -73,7 +73,7 @@ public:
         if (controller2.gamepadID() == joystickId) { controller2.closeAndDetachGamepad(); return; }
     }
 
-    void clockOneCycle() override {
+    void clockOneCycle(float& outAudioSample) override {
         ppu.clock();
         ppu.clock();
         if (cart) cart->clock();
@@ -92,11 +92,11 @@ public:
             apu.loadDMCSample(s);
             cpu.addStall(4);
         }
+
+        outAudioSample = apu.getOutputSample() + (cart ? cart->audioOutput() : 0.0f);
     }
 
-    float getAudioSample() override {
-        return apu.getOutputSample() + (cart ? cart->audioOutput() : 0.0f);
-    }
+
 
     void renderFrame() override {
         if (onRenderFrame) onRenderFrame(ppu.getFramebuffer());

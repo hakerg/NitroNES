@@ -45,7 +45,7 @@ public:
 			int phase = (int)(frac * PHASES + 0.5);
 			if (phase > PHASES) phase = PHASES;
 
-			if (ipos + KERNEL_SIZE >= blipAccum.size()) {
+			if (ipos + KERNEL_SIZE >= (int)blipAccum.size()) {
 				blipAccum.resize(ipos + KERNEL_SIZE + 1, 0.0f);
 			}
 
@@ -61,34 +61,21 @@ public:
 		}
 	}
 
-	void commitBatch() {
-		if (outBuf.empty()) return;
-
-		int got = (int)outBuf.size();
-		for (int i = 0; i < got; i++) {
-			float y = outBuf[i];
-			y = hpf90.process(y);
-			y = hpf440.process(y);
-			y = lpf14k.process(y);
-			y *= NES::AUDIO_VOLUME;
-			outBuf[i] = y;
-		}
-
-		submitSamples(outBuf.data(), got);
-		outBuf.clear();
-	}
-
 	int getSampleRate() const { return sampleRate; }
 
-	int getQueuedSamples() const { return (int)outBuf.size(); }
-
 protected:
-	virtual void submitSamples(const float* samples, int count) = 0;
+	virtual void submitSample(float sample) = 0;
 
 private:
 	void commitOutSample() {
 		blipRunningSum += blipAccum[0];
-		outBuf.push_back(blipRunningSum);
+
+		float y = blipRunningSum;
+		y = hpf90.process(y);
+		y = hpf440.process(y);
+		y = lpf14k.process(y);
+		y *= NES::AUDIO_VOLUME;
+		submitSample(y);
 
 		int size = (int)blipAccum.size();
 		std::memmove(blipAccum.data(), blipAccum.data() + 1, (size - 1) * sizeof(float));
@@ -132,6 +119,4 @@ private:
 	AudioFilter hpf90;
 	AudioFilter hpf440;
 	AudioFilter lpf14k;
-
-	std::vector<float> outBuf;
 };

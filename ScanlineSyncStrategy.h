@@ -1,7 +1,6 @@
 #pragma once
 #include "SyncStrategy.h"
 #include "NESCoreBase.h"
-#include "SDLAudioStream.h"
 #include "MonitorRefreshRateDetector.h"
 #include "NESCoordUtils.h"
 #include "PrecisionSleeper.h"
@@ -9,6 +8,7 @@
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 class ScanlineSyncStrategy : public SyncStrategy {
 public:
@@ -71,15 +71,15 @@ public:
 		double speed = ctx->getSpeed();
 		double nesRefreshHz = NES::REFRESH_RATE_NTSC_ON * speed;
 		double monitorRefreshHz = detector.getRefreshHz();
-		ctx->core->setSpeed(monitorRefreshHz > 0.0 ? speed * (monitorRefreshHz / nesRefreshHz) : speed);
-
 		int currentNesScanline = ctx->core->getCurrentScanline();
-		while (currentNesScanline != targetNesScanline) {
-			ctx->core->tick();
-			currentNesScanline = ctx->core->getCurrentScanline();
+		{
+			std::lock_guard<std::mutex> lock(ctx->tickMutex);
+			ctx->core->setSpeed(monitorRefreshHz > 0.0 ? speed * (monitorRefreshHz / nesRefreshHz) : speed);
+			while (currentNesScanline != targetNesScanline) {
+				ctx->core->tick();
+				currentNesScanline = ctx->core->getCurrentScanline();
+			}
 		}
-
-		ctx->audioStream->commitBatch();
 		ctx->core->renderFrame();
 
 		sleeper.sleep(0.001);

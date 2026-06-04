@@ -57,6 +57,6 @@ namespace NES {
     static constexpr double REFRESH_RATE_NTSC_ON  = PPU_CLOCK_NTSC / (PPU_CYCLES_PER_FRAME - 0.5);
 
     // --- Timing ---
-    static constexpr double MAX_LAG = 0.1; // s
+    static constexpr double MAX_LAG = 0.05; // s
 
 } // namespace NES

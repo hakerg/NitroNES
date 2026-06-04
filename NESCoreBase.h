@@ -23,8 +23,11 @@ public:
 	double tick() {
 		const double hwClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
 		const double dt = (1.0 / hwClock) / emuSpeed;
-		if (!paused) clockOneCycle();
-		if (onAudioSample) onAudioSample(getAudioSample(), dt);
+		if (!paused) {
+			float audioSample = 0.0f;
+			clockOneCycle(audioSample);
+			if (onAudioSample) onAudioSample(audioSample, dt);
+		}
 		return dt;
 	}
 
@@ -64,9 +67,8 @@ public:
 	virtual void onLeftPressed()                           {}
 
 protected:
-	virtual void  clockOneCycle() = 0;
-	virtual float getAudioSample() = 0;
-	virtual bool  isFrameReady() = 0;
+	virtual void clockOneCycle(float& outAudioSample) = 0;
+	virtual bool isFrameReady() = 0;
 
 	virtual uint8_t cpuRead(uint16_t addr) = 0;
 	virtual void    cpuWrite(uint16_t addr, uint8_t data) = 0;

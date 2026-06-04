@@ -140,16 +140,14 @@ public:
 	void onRightPressed() override { nextSong(); }
 	void onLeftPressed()  override { prevSong(); }
 
-	// Jeden cykl CPU w trybie NSF. Brak PPU, brak NMI. Linia /IRQ
-	// zawsze nieaktywna (NSF V1.61: brak wektorow przerwan).
-	void clockOneCycle() override {
+	void clockOneCycle(float& outAudioSample) override {
 		trampolineMaintenance();
 		if (expChip) expChip->clock();
 		apu.clock();
 		cpu.setIRQ(false);
 		cpu.tick();
 
-		if (playTimer > 0.0) playTimer--;
+		playTimer -= 1.0;
 
 		if (!callDone && cpu.PC == TRAMPOLINE_ADDR) {
 			callDone = true;
@@ -160,10 +158,8 @@ public:
 			apu.loadDMCSample(s);
 			cpu.addStall(4);
 		}
-	}
 
-	float getAudioSample() override {
-		return apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
+		outAudioSample = apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
 	}
 
 protected:
@@ -172,23 +168,18 @@ protected:
 private:
 	// Trampoline pod $5000: zarzadzanie wywolaniem PLAY.
 	void trampolineMaintenance() {
-		if (callDone && playTimer == 0.0) {
-			// PC/SP wolno modyfikowac TYLKO na granicy instrukcji - inaczej
-			// trampoline JMP $5000 (3 cykle) doczyta high byte z playAddr+1.
+		if (callDone && playTimer <= 0.0) {
 			if (!cpu.isAtInstructionBoundary()) return;
 
-			// Twardy reset SP - wiele ripow konczy PLAY inna sciezka niz
-			// RTS (np. JMP indirect), bez tego stos drenuje sie po ~127
-			// wywolaniach i nadpisuje silnik muzyczny w $0100-$01FF.
 			cpu.S = 0xFD;
 			callDone = false;
 			pushWord(TRAMPOLINE_ADDR - 1);
 			cpu.PC = nsfHeader.playAddr;
-			playTimer = playCycles;
+
+			playTimer += playCycles;
 			playRunCycles = 0.0;
-		} else if (!callDone) {
-			// Watchdog: PLAY ktore nie wrocilo w 4x czas miedzy wywolaniami
-			// forsujemy z powrotem na trampoline.
+		}
+		else if (!callDone) {
 			if (++playRunCycles > playCycles * 4.0 && playCycles > 0.0) {
 				if (!cpu.isAtInstructionBoundary()) return;
 				cpu.PC = TRAMPOLINE_ADDR;

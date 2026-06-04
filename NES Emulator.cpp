@@ -38,21 +38,13 @@ static void toggleFullscreen(SDL_Window* window) {
 	if (!isFs) {
 		SDL_DisplayID display = SDL_GetDisplayForWindow(window);
 		const SDL_DisplayMode* desktop = SDL_GetDesktopDisplayMode(display);
-		int w = desktop ? desktop->w : 0;
-		int h = desktop ? desktop->h : 0;
-		int n = 0;
-		SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(display, &n);
-		const SDL_DisplayMode* best = nullptr;
-		float bestDiff = 1e9f;
-		for (int i = 0; i < n; i++) {
-			if (modes[i]->w != w || modes[i]->h != h) continue;
-			float diff = std::fabs(modes[i]->refresh_rate - NES::REFRESH_RATE_NTSC_ON);
-			if (diff < bestDiff) { bestDiff = diff; best = modes[i]; }
+
+		if (desktop) {
+			SDL_SetWindowFullscreenMode(window, desktop);
 		}
-		if (best) SDL_SetWindowFullscreenMode(window, best);
-		SDL_free(modes);
 		SDL_HideCursor();
-	} else {
+	}
+	else {
 		SDL_ShowCursor();
 	}
 	SDL_SetWindowFullscreen(window, !isFs);
@@ -206,6 +198,8 @@ int wmain(int argc, wchar_t* argv[])
 		.handleEvent = processEvent,
 		.getSpeed = calcSpeed
 	};
+
+	audioStream.bindContext(&syncContext);
 
 	TimerSyncStrategy timerStrategy(syncContext, NES::MAX_LAG);
 	ScanlineSyncStrategy scanlineStrategy(syncContext);
