@@ -21,10 +21,9 @@ public:
     NESSystem() {
         ppu.ppuBus = &ppuBus;
         cpu.setIrqAckCallback([this]() { if (cart) cart->irqClear(); });
-        ppu.onFrameEnd = [this]() {
+        ppu.onFrameComplete = [this]() {
             controller.tickFrame();
             controller2.tickFrame();
-            renderFrame();
         };
     }
 
@@ -101,6 +100,19 @@ public:
 
     void renderFrame() override {
         if (onRenderFrame) onRenderFrame(ppu.getFramebuffer());
+    }
+
+    bool hasPPU() const override {
+        return true;
+    }
+
+    int getCurrentScanline() const override {
+        return ppu.getScanline();
+    }
+
+protected:
+    bool isFrameReady() override {
+        return ppu.isFrameComplete();
     }
 
 private:

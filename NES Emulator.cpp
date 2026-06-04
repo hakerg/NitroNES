@@ -15,7 +15,10 @@
 #include <atomic>
 #include <windows.h>
 #include "PrecisionSleeper.h"
-#include "FrameTimer.h"
+#include "SyncStrategy.h"
+#include "TimerSyncStrategy.h"
+#include "ScanlineSyncStrategy.h"
+#include "AudioCallbackSyncStrategy.h"
 
 #pragma comment(lib, "winmm.lib")
 
@@ -43,7 +46,7 @@ static void toggleFullscreen(SDL_Window* window) {
 		float bestDiff = 1e9f;
 		for (int i = 0; i < n; i++) {
 			if (modes[i]->w != w || modes[i]->h != h) continue;
-			float diff = std::fabs(modes[i]->refresh_rate - NES::REFRESH_NTSC);
+			float diff = std::fabs(modes[i]->refresh_rate - NES::REFRESH_RATE_NTSC_ON);
 			if (diff < bestDiff) { bestDiff = diff; best = modes[i]; }
 		}
 		if (best) SDL_SetWindowFullscreenMode(window, best);
@@ -125,22 +128,23 @@ int wmain(int argc, wchar_t* argv[])
 	SDLAudioStream audioStream;
 	if (!audioStream.open()) std::cerr << "Ostrzezenie: brak audio\n";
 
-	PrecisionSleeper sleeper;
+	core->onAudioSample = [&](float sample, double dt) {
+		audioStream.addNESSample(dt, sample);
+	};
 
-	std::atomic<bool> running{ true };
+	bool   running   = true;
 	bool   keyFast   = false; // TAB
 	bool   keySlow   = false; // Shift+TAB
 	bool   padFast   = false; // RT
 	bool   padSlow   = false; // LT
 	SDL_JoystickID speedPadId = 0; // pad aktualnie kontrolujący prędkość (0 = brak)
+	bool   useScanlineSync = false; // B - przełączanie strategii sync
 
 	auto calcSpeed = [&]() -> double {
-		if      (keyFast || padFast) return NES::MAX_SPEED;
+		if      (keyFast || padFast) return 4.0;
 		else if (keySlow || padSlow) return 0.5;
 		else                         return 1.0;
 	};
-
-	FrameTimer frameTimer(NES::MAX_DELAY);
 
 	auto processEvent = [&](const SDL_Event& ev) {
 		switch (ev.type) {
@@ -165,6 +169,7 @@ int wmain(int argc, wchar_t* argv[])
 				case SDL_SCANCODE_SPACE:  core->onSpacePressed();     return;
 				case SDL_SCANCODE_RIGHT:  core->onRightPressed();     return;
 				case SDL_SCANCODE_LEFT:   core->onLeftPressed();      return;
+				case SDL_SCANCODE_B:      useScanlineSync = !useScanlineSync; return;
 				default: return;
 			}
 		case SDL_EVENT_KEY_UP:
@@ -193,22 +198,29 @@ int wmain(int argc, wchar_t* argv[])
 		}
 	};
 
-	while (running.load(std::memory_order_relaxed)) {
-		SDL_Event ev;
-		while (SDL_PollEvent(&ev)) processEvent(ev);
+	// Przygotowanie kontekstu dla strategii synchronizacji
+	SyncContext syncContext{
+		.core = core.get(),
+		.audioStream = &audioStream,
+		.window = window,
+		.handleEvent = processEvent,
+		.getSpeed = calcSpeed
+	};
 
-		core->setSpeed(calcSpeed());
+	TimerSyncStrategy timerStrategy(syncContext, NES::MAX_LAG);
+	ScanlineSyncStrategy scanlineStrategy(syncContext);
+	AudioCallbackSyncStrategy audioStrategy(syncContext);
 
-		float sample = 0.0f;
-		double dt = 0.0;
-		while (frameTimer.shouldTick()) {
-			core->tick(sample, dt);
-			audioStream.addSample(dt, sample);
-			frameTimer.addTime(dt);
+	while (running) {
+		SyncStrategy* activeStrategy;
+
+		if (core->hasPPU()) {
+			activeStrategy = (useScanlineSync && scanlineStrategy.canUse()) ? static_cast<SyncStrategy*>(&scanlineStrategy) : &timerStrategy;
+		} else {
+			activeStrategy = &audioStrategy;
 		}
-		audioStream.commitBatch();
 
-		sleeper.sleep(0.001);
+		activeStrategy->run();
 	}
 
 	audioStream.close();

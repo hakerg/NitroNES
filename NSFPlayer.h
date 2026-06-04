@@ -27,9 +27,8 @@ public:
 	bool load(const NSFFile& nsf) {
 		nsfHeader = nsf.header;  // kopiujemy tylko 128 B naglowka
 		pal = nsfIsPAL() && !nsfIsDualMode();
-		cpuClock    = pal ? NES::CPU_CLOCK_PAL   : NES::CPU_CLOCK_NTSC;
-		frameClocks = pal ? NES::CPU_CYCLES_PER_FRAME_PAL : NES::CPU_CYCLES_PER_FRAME_NTSC;
-		playCycles  = calcPlayCycles(pal);
+		cpuClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
+		playCycles = calcPlayCycles(pal);
 
 		// Skonfiguruj timing APU pod region (tabele okresow + frame counter)
 		apu.setPAL(pal);
@@ -66,7 +65,6 @@ public:
 	// Zainicjalizuj i odtworz dany utwor (1-based)
 	void initSong(uint8_t songNum) {
 		currentSong = songNum;
-		cycleCount  = 0;
 		playTimer   = 0;
 		callDone    = true;
 
@@ -107,13 +105,7 @@ public:
 
 		// Wykonaj INIT do momentu powrotu (max 200000 cykli)
 		int initCycles = 0;
-		for (; initCycles < 200000 && cpu.PC != TRAMPOLINE_ADDR; initCycles++)
-			cpu.tick();
-
-		if (cpu.PC != TRAMPOLINE_ADDR) {
-			// INIT nie wrocil w limicie - kontynuujemy mimo to.
-		}
-
+		for (; initCycles < 200000 && cpu.PC != TRAMPOLINE_ADDR; initCycles++) cpu.tick();
 	}
 
 	void nextSong() {
@@ -157,8 +149,7 @@ public:
 		cpu.setIRQ(false);
 		cpu.tick();
 
-		cycleCount++;
-		if (playTimer > 0) playTimer--;
+		if (playTimer > 0.0) playTimer--;
 
 		if (!callDone && cpu.PC == TRAMPOLINE_ADDR) {
 			callDone = true;
@@ -175,10 +166,13 @@ public:
 		return apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
 	}
 
+protected:
+	bool isFrameReady() override { return true; }
+
 private:
 	// Trampoline pod $5000: zarzadzanie wywolaniem PLAY.
 	void trampolineMaintenance() {
-		if (callDone && playTimer == 0) {
+		if (callDone && playTimer == 0.0) {
 			// PC/SP wolno modyfikowac TYLKO na granicy instrukcji - inaczej
 			// trampoline JMP $5000 (3 cykle) doczyta high byte z playAddr+1.
 			if (!cpu.isAtInstructionBoundary()) return;
@@ -191,11 +185,11 @@ private:
 			pushWord(TRAMPOLINE_ADDR - 1);
 			cpu.PC = nsfHeader.playAddr;
 			playTimer = playCycles;
-			playRunCycles = 0;
+			playRunCycles = 0.0;
 		} else if (!callDone) {
 			// Watchdog: PLAY ktore nie wrocilo w 4x czas miedzy wywolaniami
 			// forsujemy z powrotem na trampoline.
-			if (++playRunCycles > playCycles * 4u && playCycles > 0) {
+			if (++playRunCycles > playCycles * 4.0 && playCycles > 0.0) {
 				if (!cpu.isAtInstructionBoundary()) return;
 				cpu.PC = TRAMPOLINE_ADDR;
 				playRunCycles = 0;
@@ -216,11 +210,11 @@ private:
 		while (len < 32 && nsfHeader.songName[len] != '\0') len++;
 		return std::string(nsfHeader.songName, len);
 	}
-	uint32_t calcPlayCycles(bool palMode) const {
-		uint32_t clk   = palMode ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
+	double calcPlayCycles(bool palMode) const {
+		double   clk   = palMode ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
 		uint16_t speed = palMode ? nsfHeader.speedPAL   : nsfHeader.speedNTSC;
 		if (speed == 0) speed = palMode ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
-		return (uint32_t)((uint64_t)clk * speed / 1000000);
+		return clk * speed / 1000000.0;
 	}
 
 	// --- Pamiec CPU --------------------------------------------------------
@@ -280,12 +274,10 @@ private:
 
 	// Tylko naglowek (128 B) - dane muzyczne sa kopiowane raz do prgRom/bankRom podczas load()
 	NSFHeader nsfHeader  = {};
-	uint32_t  cpuClock    = NES::CPU_CLOCK_NTSC;
-	uint32_t  frameClocks = NES::CPU_CYCLES_PER_FRAME_NTSC;
-	uint32_t  playCycles  = 0;
-	uint32_t  cycleCount  = 0;
-	uint32_t  playTimer   = 0;
-	uint32_t  playRunCycles = 0;  // ile cykli aktualne PLAY juz sie wykonuje
+	double    cpuClock    = NES::CPU_CLOCK_NTSC;
+	double    playCycles    = 0.0;
+	double    playTimer     = 0.0;
+	double    playRunCycles = 0.0;  // ile cykli aktualne PLAY juz sie wykonuje
 	bool      callDone    = true;
 	uint8_t   currentSong = 1;
 

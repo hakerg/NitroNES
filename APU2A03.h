@@ -536,19 +536,6 @@ public:
 
     // --- Zapis przez CPU (adresy 0x4000 - 0x4017) ---
     void cpuWrite(uint16_t addr, uint8_t data) {
-        if constexpr (NES::Debug::LOG_APU_WRITES) {
-            static constexpr const char* regName[] = {
-                "PL1_R0","PL1_R1","PL1_R2","PL1_R3",  // $4000-$4003
-                "PL2_R0","PL2_R1","PL2_R2","PL2_R3",  // $4004-$4007
-                "TRI_R0","      ","TRI_R2","TRI_R3",  // $4008-$400B
-                "NOI_R0","      ","NOI_R2","NOI_R3",  // $400C-$400F
-                "DMC_R0","DMC_R1","DMC_R2","DMC_R3",  // $4010-$4013
-                "      ","STATUS","      ","      ",  // $4014-$4017 ($4017 = FRCNT)
-            };
-            int idx = (int)addr - 0x4000;
-            const char* name = (idx >= 0 && idx < 24) ? regName[idx] : "?????";
-            if (addr == 0x4017) name = "FRCNT ";
-        }
         switch (addr) {
             // Pulse 1
             case 0x4000: pulse1.writeR0(data); break;

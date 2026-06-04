@@ -47,8 +47,8 @@ FetchContent_MakeAvailable(glew)
 add_executable (NESEmulator "NES Emulator.cpp")
 set_property(TARGET NESEmulator PROPERTY OUTPUT_NAME "NES Emulator")
 
-# Ustawienie standardu C++20
-set_property(TARGET NESEmulator PROPERTY CXX_STANDARD 20)
+# Ustawienie standardu C++23
+set_property(TARGET NESEmulator PROPERTY CXX_STANDARD 23)
 set_property(TARGET NESEmulator PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # Połącz z SDL3 statycznie

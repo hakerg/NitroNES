@@ -76,19 +76,6 @@ public:
         nextOp = (this->*nextOp)().next;
 
         sampleInterruptLatches();
-
-        if constexpr (NES::Debug::LOG_CYCLE_TRACE) {
-            NES::Debug::tracef(
-                "CPU cyc=%llu PC=%04X op=%02X bnd=%d A=%02X X=%02X Y=%02X P=%02X SP=%02X "
-                "nmiPend=%d nmiDet=%d irqLine=%d irqDet=%d intPend=%d curInt=%u stall=%u\n",
-                (unsigned long long)totalCycles, PC, opcode,
-                nextOp == &CPU6502::opFetch ? 1 : 0,
-                A, X, Y, P, S,
-                nmiPending ? 1 : 0, nmiDetected ? 1 : 0,
-                irqLine ? 1 : 0, irqDetected ? 1 : 0,
-                interruptPending ? 1 : 0,
-                (unsigned)currentInt, (unsigned)stallCycles);
-        }
     }
 
     void sampleInterruptLatches() {

@@ -18,11 +18,22 @@ public:
 	}
 	virtual ~NESCoreBase() = default;
 
-	void tick(float& outSample, double& outDt) {
-		if (!paused) clockOneCycle();
-		outSample = getAudioSample();
+	std::function<void(float sample, double dt)> onAudioSample;
+
+	double tick() {
 		const double hwClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
-		outDt = (1.0 / hwClock) / emuSpeed;
+		const double dt = (1.0 / hwClock) / emuSpeed;
+		if (!paused) clockOneCycle();
+		if (onAudioSample) onAudioSample(getAudioSample(), dt);
+		return dt;
+	}
+
+	double tickFrame() {
+		double total = 0.0;
+		do {
+			total += tick();
+		} while (!isFrameReady());
+		return total;
 	}
 
 	void   setSpeed(double spd) { emuSpeed = spd; }
@@ -41,7 +52,11 @@ public:
 	virtual void shutdown() {}
 	virtual void renderFrame() {}
 
-	// --- Eventy wejściowe (wywoływane z pętli głównej) --------------------
+	// --- Dostęp do stanu PPU ---
+	virtual bool hasPPU() const { return false; }
+	virtual int getCurrentScanline() const { return -1; }
+
+	// --- Eventy wejściowe
 	virtual void onGamepadAdded(uint32_t /*joystickId*/)   {}
 	virtual void onGamepadRemoved(uint32_t /*joystickId*/) {}
 	virtual void onSpacePressed()                          {}
@@ -49,8 +64,9 @@ public:
 	virtual void onLeftPressed()                           {}
 
 protected:
-	virtual void    clockOneCycle() = 0;
-	virtual float   getAudioSample() = 0;
+	virtual void  clockOneCycle() = 0;
+	virtual float getAudioSample() = 0;
+	virtual bool  isFrameReady() = 0;
 
 	virtual uint8_t cpuRead(uint16_t addr) = 0;
 	virtual void    cpuWrite(uint16_t addr, uint8_t data) = 0;

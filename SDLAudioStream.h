@@ -93,6 +93,9 @@ public:
 
 	bool isOpen() const { return deviceId != 0 && sdlStream != nullptr; }
 
+	// Dostęp do raw SDL_AudioStream* (dla zaawansowanych strategii sync)
+	SDL_AudioStream* getSDLStream() { return sdlStream; }
+
 protected:
 	void submitSamples(const float* samples, int count) override {
 		if (!sdlStream) return;
@@ -101,7 +104,7 @@ protected:
 
 		// Usuń nadmiar bufora SDL, jesli przekracza MAX_DELAY
 		int queued   = SDL_GetAudioStreamQueued(sdlStream);
-		int maxBytes = (int)(NES::MAX_DELAY * getSampleRate()) * (int)sizeof(float) * CHANNELS;
+		int maxBytes = (int)(NES::MAX_LAG * getSampleRate()) * (int)sizeof(float) * CHANNELS;
 		if (queued > maxBytes) SDL_ClearAudioStream(sdlStream);
 	}
 

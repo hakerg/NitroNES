@@ -26,7 +26,7 @@ public:
     }
 
     PPUBus* ppuBus = nullptr;
-    std::function<void()> onFrameEnd; // wolane gdy PPU konczy SCANLINE_VISIBLE_LAST
+    std::function<void()> onFrameComplete;
 
     bool nmiLineLow() const { return ctrl.enable_nmi && status.vertical_blank; }
 
@@ -146,6 +146,8 @@ public:
         return buf.data();
     }
 
+    bool isFrameComplete() const { return frameComplete; }
+
     // ====================================================
     //  CLOCK - pojedynczy dot PPU. Wolany 3x na cykl CPU.
     // ====================================================
@@ -188,16 +190,6 @@ public:
         // MMC3 scanline counter (bezpieczna alternatywa do A12 - hook co linia).
         if (renderingEnabled() && cycle == 260 && scanline <= NES::SCANLINE_VISIBLE_LAST) {
             if (ppuBus && ppuBus->cart) ppuBus->cart->scanline();
-        }
-
-        if constexpr (NES::Debug::LOG_CYCLE_TRACE) {
-            NES::Debug::tracef(
-                "PPU sl=%d dot=%d vbl=%d nmiOut=%d nmiLow=%d supVbl=%d\n",
-                (int)scanline, (int)cycle,
-                status.vertical_blank ? 1 : 0,
-                ctrl.enable_nmi ? 1 : 0,
-                nmiLineLow() ? 1 : 0,
-                suppressVblThisFrame ? 1 : 0);
         }
 
         advanceCycle();
@@ -272,6 +264,7 @@ private:
     bool     last_a12 = false;
     bool     suppressVblThisFrame = false;
     bool     odd_frame_skip = false;
+    bool     frameComplete = true;
 
     // ---- Open-bus / decay register ----------------------------------
     uint8_t  ppuOpenBus = 0x00;
@@ -350,13 +343,6 @@ private:
             if (scanline == NES::SCANLINE_VBLANK_START && cycle == 1) {
                 suppressVblThisFrame = true;
                 data &= 0x7F;
-            }
-            if constexpr (NES::Debug::LOG_CYCLE_TRACE) {
-                NES::Debug::tracef(
-                    "R2002 sl=%d dot=%d -> %02X (vbl=%d sup=%d)\n",
-                    (int)scanline, (int)cycle, data,
-                    (data & 0x80) ? 1 : 0,
-                    suppressVblThisFrame ? 1 : 0);
             }
             status.vertical_blank = 0;
             address_latch = 0;
@@ -666,28 +652,30 @@ private:
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         }
         if (mask.greyscale) idx &= 0x30;
+        if (x == 0 && y == 0) frameComplete = false;
         buf[y * NES::SCREEN_WIDTH + x] = emphasisLUT()[emphasis_index][idx & 0x3F];
+        if (x == NES::SCREEN_WIDTH - 1 && y == NES::SCREEN_HEIGHT - 1) frameComplete = true;
     }
 
     void advanceCycle() {
         // Zatrzaskujemy warunek pominięcia klatki na końcu cyklu 338.
         // Symuluje to sprzętowe opóźnienie (setup time/propagation delay)
         // dla bitów maski docierających do układu ucinającego cykl 340.
-        if (scanline == NES::SCANLINE_PRERENDER && cycle == 338) {
+        if (scanline == NES::SCANLINE_PRERENDER && cycle == (NES::PPU_CYCLES_PER_SCANLINE - 3)) {
             odd_frame_skip = frame_odd && renderingEnabled();
         }
 
         cycle++;
 
         // Wykonujemy pominięcie na takcie 340, korzystając z zatrzaśniętej wartości
-        if (scanline == NES::SCANLINE_PRERENDER && cycle == 340 && odd_frame_skip) {
+        if (scanline == NES::SCANLINE_PRERENDER && cycle == (NES::PPU_CYCLES_PER_SCANLINE - 1) && odd_frame_skip) {
             cycle = 0;
             scanline = NES::SCANLINE_VISIBLE_FIRST;
             odd_frame_skip = false;
         }
-        else if (cycle >= 341) {
+        else if (cycle >= NES::PPU_CYCLES_PER_SCANLINE) {
             cycle = 0;
-            if (scanline == NES::SCANLINE_VISIBLE_LAST) { if (onFrameEnd) onFrameEnd(); }
+            if (scanline == NES::SCANLINE_VISIBLE_LAST) { if (onFrameComplete) onFrameComplete(); }
             scanline++;
             if (scanline >= NES::SCANLINE_LAST) {
                 scanline = NES::SCANLINE_PRERENDER;

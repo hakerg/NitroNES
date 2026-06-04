@@ -63,12 +63,12 @@ struct NSFFile {
     }
 
     // Oblicza ile cykli CPU między wywołaniami PLAY
-    uint32_t playCyclesPerCall(bool pal = false) const {
-        uint32_t cpuClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
+    double playCyclesPerCall(bool pal = false) const {
+        double   cpuClock = pal ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
         uint16_t speed    = pal ? header.speedPAL     : header.speedNTSC;
         if (speed == 0) speed = pal ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
         // cykle = cpuClock * speed_us / 1000000
-        return (uint32_t)((uint64_t)cpuClock * speed / 1000000);
+        return cpuClock * speed / 1000000.0;
     }
 
 private:
