@@ -1,182 +1,204 @@
-﻿#pragma once
-#include <SDL3/SDL.h>
+#pragma once
 #include <vector>
-#include <memory>
-#include <iostream>
 #include <cmath>
+#include <cstring>
 
 #include "NESConst.h"
 #include "AudioFilter.h"
-#include "BlipBuffer.h"
 
 // ============================================================
-//  AudioStream - BlipBuffer jako bufor audio.
+//  AudioStream - bandlimitowany resampler sygnalu APU (Sinc-Blackman)
+//  z filtrami NES i interfejsem dla klas pochodnych (backendy audio).
 //
 //  Watek NES wola:
-//    addSample(virtualDt, value)  - buforuje lokalnie w batchBuf
-//    commitBatch()                - oproznia BlipBuffer i pushuje
-//                                   probki bezposrednio do SDL AudioStream
+//    addSample(virtualDt, value)  - resampluje probke bezposrednio
+//    commitBatch()                - filtruje i wywoluje
+//                                   submitSamples() z gotowymi probkami
+//
+//  Klasy pochodne implementuja submitSamples() (np. SDLAudioStream).
 // ============================================================
 
 class AudioStream {
 public:
-    static constexpr int CHANNELS = 1;
+	static constexpr int CHANNELS    = 1;
+	static constexpr int KERNEL_SIZE = 16;
+	static constexpr int KERNEL_HALF = KERNEL_SIZE / 2;
+	static constexpr int PHASES      = 128;
 
-    AudioStream() = default;
-    ~AudioStream() { close(); }
+	AudioStream() = default;
+	virtual ~AudioStream() = default;
 
-    bool open() {
-        if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
-            std::cerr << "[Audio] Blad inicjalizacji SDL Audio: " << SDL_GetError() << "\n";
-            return false;
-        }
+	// Inicjalizuje resampler i filtry dla podanego sampleRate.
+	// Powinna byc wywolana przez klase pochodna po ustaleniu sampleRate.
+	bool init(int rate) {
+		sampleRate = rate;
 
-        SDL_AudioSpec nativeSpec{};
-        if (!SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &nativeSpec, nullptr)) {
-            nativeSpec.freq = 48000;
-        }
-        sampleRate = nativeSpec.freq;
+		blipPrevOutput = 0.0f;
+		blipRunningSum = 0.0f;
+		buildKernel();
 
-        deviceId = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
-        if (deviceId == 0) {
-            std::cerr << "[Audio] Blad otwarcia urzadzenia audio: " << SDL_GetError() << "\n";
-            return false;
-        }
+		hpf90  = AudioFilter(FilterType::HighPass, NES::AUDIO_HP1_CUTOFF, (float)sampleRate);
+		hpf440 = AudioFilter(FilterType::HighPass, NES::AUDIO_HP2_CUTOFF, (float)sampleRate);
+		lpf14k = AudioFilter(FilterType::LowPass,  NES::AUDIO_LP_CUTOFF,  (float)sampleRate);
 
-        if (!SDL_GetAudioDeviceFormat(deviceId, &nativeSpec, nullptr)) {
-            std::cerr << "[Audio] Brak informacji o formacie urzadzenia: " << SDL_GetError() << "\n";
-            SDL_CloseAudioDevice(deviceId);
-            deviceId = 0;
-            return false;
-        }
-        sampleRate = nativeSpec.freq;
+		// Prealokacja buforów: MAX_DELAY * MAX_SPEED pokrywa najgorszy przypadek
+		// (4x przyspieszenie + pelny 20ms batch) bez realokacji w hot path.
+		const int maxSamples = (int)std::ceil(
+			NES::MAX_DELAY * NES::MAX_SPEED * sampleRate) + 16;
+		outBuf.reserve(maxSamples);
 
-        SDL_AudioSpec srcSpec{};
-        srcSpec.format   = SDL_AUDIO_F32;
-        srcSpec.channels = CHANNELS;
-        srcSpec.freq     = sampleRate;
+		// blipAccum musi pomiescic caly batch (maxSamples) plus ogon jadra
+		// Sinc (KERNEL_SIZE probek). Mniejszy rozmiar powodowalby ciche
+		// odrzucanie ogona jadra przy probkach blisko konca batcha, co
+		// zaburza bilans delt i generuje klikniecia na granicy batchow.
+		blipAccum.resize(maxSamples + KERNEL_SIZE, 0.0f);
 
-        stream = SDL_CreateAudioStream(&srcSpec, &nativeSpec);
-        if (!stream) {
-            std::cerr << "[Audio] Blad tworzenia SDL AudioStream: " << SDL_GetError() << "\n";
-            SDL_CloseAudioDevice(deviceId);
-            deviceId = 0;
-            return false;
-        }
+		timeAccum    = 0.0;
+		batchTimeAcc = 0.0;
 
-        if (!SDL_BindAudioStream(deviceId, stream)) {
-            std::cerr << "[Audio] Blad bindowania streamu: " << SDL_GetError() << "\n";
-            SDL_DestroyAudioStream(stream);
-            SDL_CloseAudioDevice(deviceId);
-            stream   = nullptr;
-            deviceId = 0;
-            return false;
-        }
+		return true;
+	}
 
-        blip = std::make_unique<BlipBuffer>(sampleRate);
+	// Wola z watku NES - resampluje probke bezposrednio.
+	void addSample(double virtualDt, float value) {
+		batchTimeAcc += virtualDt;
+		blipAddSample(timeAccum + batchTimeAcc, value);
+	}
 
-        hpf90  = AudioFilter(FilterType::HighPass, NES::AUDIO_HP1_CUTOFF, (float)sampleRate);
-        hpf440 = AudioFilter(FilterType::HighPass, NES::AUDIO_HP2_CUTOFF, (float)sampleRate);
-        lpf14k = AudioFilter(FilterType::LowPass,  NES::AUDIO_LP_CUTOFF,  (float)sampleRate);
+	// Wola z watku NES raz na batch - filtruje
+	// i przekazuje probki do submitSamples().
+	void commitBatch() {
+		if (blipAccum.empty()) return;
 
-        // Prealokacja buforów: MAX_DELAY * MAX_SPEED pokrywa najgorszy przypadek
-        // (4x przyspieszenie + pełny 20ms batch) bez realokacji w hot path.
-        const int maxCpuCycles = (int)std::ceil(
-            NES::MAX_DELAY * NES::MAX_SPEED * NES::CPU_CLOCK_NTSC) + 16;
-        const int maxSamples   = (int)std::ceil(
-            NES::MAX_DELAY * NES::MAX_SPEED * sampleRate) + 16;
-        batchBuf.reserve(maxCpuCycles);
-        outBuf.resize(maxSamples);
+		timeAccum += batchTimeAcc;
+		batchTimeAcc = 0.0;
 
-        timeAccum    = 0.0;
-        batchTimeAcc = 0.0;
-        lastEmitted  = 0.0f;
+		// Odczytaj wszystkie dostepne probki
+		int avail = blipAvailable(timeAccum);
+		if (avail <= 0) return;
 
-        SDL_ResumeAudioDevice(deviceId);
+		outBuf.resize(avail); // nie alokuje - pojemnosc zagwarantowana w init
+		int got = blipRead(outBuf.data(), avail, timeAccum);
+		if (got <= 0) return;
 
-        return true;
-    }
+		timeAccum -= (double)got / sampleRate;
 
-    void close() {
-        if (stream) {
-            SDL_DestroyAudioStream(stream);
-            stream = nullptr;
-        }
-        if (deviceId) { SDL_CloseAudioDevice(deviceId); deviceId = 0; }
-        blip.reset();
-        SDL_QuitSubSystem(SDL_INIT_AUDIO);
-    }
+		// Filtry NES + normalizacja glosnosci
+		for (int i = 0; i < got; i++) {
+			float y = outBuf[i];
+			if constexpr (NES::Debug::FILTER_HP90_EN)  y = hpf90.process(y);
+			if constexpr (NES::Debug::FILTER_HP440_EN) y = hpf440.process(y);
+			if constexpr (NES::Debug::FILTER_LP14K_EN) y = lpf14k.process(y);
+			y *= NES::AUDIO_VOLUME;
+			outBuf[i] = y;
+		}
+		submitSamples(outBuf.data(), got);
+	}
 
-    // Wola z watku NES - bez locka, tylko buforuje lokalnie.
-    void addSample(double virtualDt, float value) {
-        batchTimeAcc += virtualDt;
-        batchBuf.push_back({ batchTimeAcc, value });
-    }
+	int getSampleRate() const { return sampleRate; }
 
-    // Wola z watku NES raz na batch - wpisuje do BlipBuffer,
-    // oproznia go i pushuje probki bezposrednio do SDL AudioStream.
-    void commitBatch() {
-        if (batchBuf.empty() || !blip || !stream) return;
-
-        for (auto& [t, v] : batchBuf)
-            blip->addSample(timeAccum + t, v);
-
-        timeAccum += batchTimeAcc;
-        batchBuf.clear();
-        batchTimeAcc = 0.0;
-
-        // Odczytaj wszystkie dostepne probki z blipa
-        int avail = blip->availableSamples(timeAccum);
-        if (avail <= 0) return;
-
-        if ((int)outBuf.size() < avail) outBuf.resize(avail);
-
-        int got = blip->readSamples(outBuf.data(), avail, timeAccum);
-        if (got <= 0) return;
-
-        timeAccum -= (double)got / sampleRate;
-        if (timeAccum < 0.0) timeAccum = 0.0;
-
-        for (int i = 0; i < got; i++) {
-            float y = outBuf[i];
-            if constexpr (NES::Debug::FILTER_HP90_EN)  y = hpf90.process(y);
-            if constexpr (NES::Debug::FILTER_HP440_EN) y = hpf440.process(y);
-            if constexpr (NES::Debug::FILTER_LP14K_EN) y = lpf14k.process(y);
-            y *= NES::AUDIO_VOLUME;
-            outBuf[i] = y;
-        }
-        lastEmitted = outBuf[got - 1];
-
-        SDL_PutAudioStreamData(stream, outBuf.data(), got * (int)sizeof(float) * CHANNELS);
-
-        // Usuń nadmiar bufora SDL, jeśli przekracza MAX_DELAY
-        int queued = SDL_GetAudioStreamQueued(stream);
-        int maxBytes = (int)(NES::MAX_DELAY * sampleRate) * (int)sizeof(float) * CHANNELS;
-        if (queued > maxBytes) SDL_ClearAudioStream(stream);
-    }
-
-    bool isOpen()        const { return deviceId != 0 && stream != nullptr; }
-    int  getSampleRate() const { return sampleRate; }
+protected:
+	// Wywolywana przez commitBatch() z gotowymi probkami float32 mono.
+	// Klasy pochodne przesylaja je do backendu audio.
+	virtual void submitSamples(const float* samples, int count) = 0;
 
 private:
-    int sampleRate = 0;
+	// --- Resampler Sinc-Blackman -------------------------------------------
 
-    double timeAccum   = 0.0;
-    float  lastEmitted = 0.0f;
+	// Zarejestruj wartosc wyjscia APU w chwili relTime [s] (wzgledem
+	// ostatniego flush). Delta jest rozmywana przez jadro Sinc-Blackman
+	// z sub-probkowa precyzja fazowa.
+	void blipAddSample(double relTime, float value) {
+		float delta = value - blipPrevOutput;
+		if (delta == 0.0f) return;
+		blipPrevOutput = value;
 
-    SDL_AudioDeviceID deviceId = 0;
-    SDL_AudioStream*  stream   = nullptr;
+		double pos  = relTime * sampleRate;
+		int    ipos = (int)pos;
+		double frac = pos - ipos;
 
-    std::unique_ptr<BlipBuffer> blip;
+		int phase = (int)(frac * PHASES + 0.5);
+		if (phase > PHASES) phase = PHASES;
 
-    AudioFilter hpf90;
-    AudioFilter hpf440;
-    AudioFilter lpf14k;
+		const float* krow  = kernel[phase];
+		int          limit = (int)blipAccum.size();
+		for (int i = 0; i < KERNEL_SIZE; i++) {
+			int idx = ipos + i;
+			if (idx >= 0 && idx < limit)
+				blipAccum[idx] += krow[i] * delta;
+		}
+	}
 
-    // Lokalny batch watku NES
-    struct Entry { double t; float v; };
-    std::vector<Entry> batchBuf;
-    double             batchTimeAcc = 0.0;
+	// Ile probek jest gotowych do odczytu do chwili endRelTime [s].
+	int blipAvailable(double endRelTime) const {
+		int n = (int)(endRelTime * sampleRate);
+		if (n > (int)blipAccum.size()) n = (int)blipAccum.size();
+		return n > 0 ? n : 0;
+	}
 
-    std::vector<float> outBuf;
+	// Odczytaj probki (calkowanie akumulatora), przesuniecie bufora w lewo.
+	int blipRead(float* out, int maxSamples, double endRelTime) {
+		int count = blipAvailable(endRelTime);
+		if (count > maxSamples) count = maxSamples;
+		if (count <= 0) return 0;
+
+		for (int i = 0; i < count; i++) {
+			blipRunningSum += blipAccum[i];
+			out[i]          = blipRunningSum;
+		}
+
+		int tail = (int)blipAccum.size() - count;
+		std::memmove(blipAccum.data(), blipAccum.data() + count, tail * sizeof(float));
+		std::fill(blipAccum.begin() + tail, blipAccum.end(), 0.0f);
+
+		return count;
+	}
+
+	// Buduje jadro Sinc-Blackman znormalizowane per-faze.
+	void buildKernel() {
+		static constexpr float PI = 3.14159265358979f;
+
+		for (int phase = 0; phase <= PHASES; phase++) {
+			float sum = 0.0f;
+			for (int i = 0; i < KERNEL_SIZE; i++) {
+				float x = (float)(i - KERNEL_HALF + 1) - (float)phase / PHASES;
+				float sinc = (std::abs(x) < 1e-6f)
+					? 1.0f
+					: std::sin(PI * x) / (PI * x);
+
+				float n      = (float)i;
+				float N      = (float)(KERNEL_SIZE - 1);
+				float window = 0.42f
+							 - 0.5f  * std::cos(2.0f * PI * n / N)
+							 + 0.08f * std::cos(4.0f * PI * n / N);
+
+				kernel[phase][i] = sinc * window;
+				sum += kernel[phase][i];
+			}
+			if (sum != 0.0f)
+				for (int i = 0; i < KERNEL_SIZE; i++)
+					kernel[phase][i] /= sum;
+		}
+	}
+
+	// --- Pola -----------------------------------------------------------
+
+	int    sampleRate = 0;
+	double timeAccum  = 0.0;
+
+	// Resampler
+	std::vector<float> blipAccum;
+	float              blipPrevOutput = 0.0f;
+	float              blipRunningSum = 0.0f;
+	float              kernel[PHASES + 1][KERNEL_SIZE] = {};
+
+	// Filtry NES
+	AudioFilter hpf90;
+	AudioFilter hpf440;
+	AudioFilter lpf14k;
+
+	// Akumulator czasu biezacego batcha
+	double batchTimeAcc = 0.0;
+
+	std::vector<float> outBuf;
 };

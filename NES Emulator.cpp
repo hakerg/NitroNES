@@ -3,7 +3,7 @@
 #include "NSFPlayer.h"
 #include "NESSystem.h"
 #include "OpenGLRenderer.h"
-#include "AudioStream.h"
+#include "SDLAudioStream.h"
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <fstream>
@@ -15,6 +15,7 @@
 #include <atomic>
 #include <windows.h>
 #include "PrecisionSleeper.h"
+#include "FrameTimer.h"
 
 #pragma comment(lib, "winmm.lib")
 
@@ -121,7 +122,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	// 3. Audio.
-	AudioStream audioStream;
+	SDLAudioStream audioStream;
 	if (!audioStream.open()) std::cerr << "Ostrzezenie: brak audio\n";
 
 	PrecisionSleeper sleeper;
@@ -139,9 +140,7 @@ int wmain(int argc, wchar_t* argv[])
 		else                         return 1.0;
 	};
 
-	Uint64 freq = SDL_GetPerformanceFrequency();
-	Uint64 prev = SDL_GetPerformanceCounter();
-	double lag = 0.0;
+	FrameTimer frameTimer(NES::MAX_DELAY);
 
 	auto processEvent = [&](const SDL_Event& ev) {
 		switch (ev.type) {
@@ -200,22 +199,14 @@ int wmain(int argc, wchar_t* argv[])
 
 		core->setSpeed(calcSpeed());
 
-		Uint64 now = SDL_GetPerformanceCounter();
-		double elapsed = (double)(now - prev) / (double)freq;
-		lag += elapsed;
-		if (lag > NES::MAX_DELAY) lag = NES::MAX_DELAY; // limit spiral-of-lag
-		prev = now;
-
-		{
-			float sample = 0.0f;
-			double dt = 0.0;
-			while (lag > 0.0) {
-				core->tick(sample, dt);
-				audioStream.addSample(dt, sample);
-				lag -= dt;
-			}
-			audioStream.commitBatch();
+		float sample = 0.0f;
+		double dt = 0.0;
+		while (frameTimer.shouldTick()) {
+			core->tick(sample, dt);
+			audioStream.addSample(dt, sample);
+			frameTimer.addTime(dt);
 		}
+		audioStream.commitBatch();
 
 		sleeper.sleep(0.001);
 	}

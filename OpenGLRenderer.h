@@ -3,7 +3,7 @@
 #include <iostream>
 #include <GL/glew.h>
 
-#include "NESConst.h"
+#include "NESCoordUtils.h"
 
 // Enkapsuluje inicjalizacje GLEW, teksture OpenGL i renderowanie klatki PPU.
 // Nie zalezy od SDL ani windows.h – moze byc uzywany z dowolnym kontekstem GL.
@@ -59,13 +59,8 @@ public:
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		// Cel: zachowanie PAR i overscan.
-		const float targetAspect =
-			(float)(NES::SCREEN_WIDTH * NES::PAR_NUM) / (float)(NES::VISIBLE_H * NES::PAR_DEN);
-		float dstW = (float)winW;
-		float dstH = dstW / targetAspect;
-		if (dstH > (float)winH) { dstH = (float)winH; dstW = dstH * targetAspect; }
-		float dstX = ((float)winW - dstW) * 0.5f;
-		float dstY = ((float)winH - dstH) * 0.5f;
+		float dstX, dstY, dstW, dstH;
+		NES::calcDestRect(winW, winH, dstX, dstY, dstW, dstH);
 
 		// NDC.
 		float x0 =  (dstX            / (float)winW) * 2.0f - 1.0f;
