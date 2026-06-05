@@ -126,15 +126,16 @@ private:
 		if (!self || !self->syncCtx) return;
 
 		SyncContext& ctx = *self->syncCtx;
-		if (ctx.core->isPaused()) return;
 
 		int samplesNeeded = additional_amount / (int)sizeof(float);
 		if (samplesNeeded <= 0) return;
 
 		std::lock_guard<std::mutex> lock(ctx.tickMutex);
-		ctx.core->setSpeed(ctx.getSpeed());
-		while ((int)self->outBuf.size() < samplesNeeded) {
-			ctx.core->tick();
+		if (!ctx.core->isPaused()) {
+			ctx.core->setSpeed(ctx.getSpeed());
+			while ((int)self->outBuf.size() < samplesNeeded) {
+				ctx.core->tick();
+			}
 		}
 		self->flush();
 	}

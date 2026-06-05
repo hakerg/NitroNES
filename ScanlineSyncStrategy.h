@@ -44,16 +44,14 @@ public:
 	}
 
 	void run() override {
-		SDL_Event ev;
-		while (SDL_PollEvent(&ev)) {
-			ctx->handleEvent(ev);
-		}
+		tick();
+		sleeper.sleep(0.001);
+	}
 
+private:
+	void tick() {
 		int monitorScanline = 0;
-		if (ctx->core->isPaused() || !detector.getScanLine(monitorScanline)) {
-			sleeper.sleep(0.001);
-			return;
-		}
+		if (!detector.getScanLine(monitorScanline)) return;
 
 		int winW = 0, winH = 0;
 		SDL_GetWindowSizeInPixels(ctx->window, &winW, &winH);
@@ -71,21 +69,21 @@ public:
 		double speed = ctx->getSpeed();
 		double nesRefreshHz = NES::REFRESH_RATE_NTSC_ON * speed;
 		double monitorRefreshHz = detector.getRefreshHz();
+
+		std::lock_guard<std::mutex> lock(ctx->tickMutex);
+		SDL_Event ev;
+		while (SDL_PollEvent(&ev)) {
+			ctx->handleEvent(ev);
+		}
+		if (ctx->core->isPaused()) return;
+		ctx->core->setSpeed(monitorRefreshHz > 0.0 ? speed * (monitorRefreshHz / nesRefreshHz) : speed);
 		int currentNesScanline = ctx->core->getCurrentScanline();
-		{
-			std::lock_guard<std::mutex> lock(ctx->tickMutex);
-			ctx->core->setSpeed(monitorRefreshHz > 0.0 ? speed * (monitorRefreshHz / nesRefreshHz) : speed);
-			while (currentNesScanline != targetNesScanline) {
-				ctx->core->tick();
-				currentNesScanline = ctx->core->getCurrentScanline();
-			}
+		while (currentNesScanline != targetNesScanline) {
+			ctx->core->tick();
+			currentNesScanline = ctx->core->getCurrentScanline();
 		}
 		ctx->core->renderFrame();
-
-		sleeper.sleep(0.001);
 	}
-
-private:
 	MonitorRefreshRateDetector detector;
 	HWND hwnd;
 	PrecisionSleeper sleeper;

@@ -82,8 +82,6 @@ int wmain(int argc, wchar_t* argv[])
 	int winW = 0, winH = 0;
 	core->defaultWindowSize(winW, winH);
 
-	// Single-buffer OpenGL: glFlush() bezposrednio aktualizuje front buffer
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
 
 	Uint32 winFlags = SDL_WINDOW_OPENGL;
@@ -95,7 +93,9 @@ int wmain(int argc, wchar_t* argv[])
 	SDL_GLContext glCtx = SDL_GL_CreateContext(window);
 	if (!glCtx) {
 		std::cerr << "Blad kontekstu GL: " << SDL_GetError() << "\n";
-		SDL_DestroyWindow(window); SDL_Quit(); return 1;
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
 	}
 	SDL_GL_MakeCurrent(window, glCtx);
 	SDL_GL_SetSwapInterval(0);
@@ -104,7 +104,10 @@ int wmain(int argc, wchar_t* argv[])
 	OpenGLRenderer glRenderer;
 	if (!glRenderer.init()) {
 		std::cerr << "Blad inicjalizacji renderera GL\n";
-		SDL_GL_DestroyContext(glCtx); SDL_DestroyWindow(window); SDL_Quit(); return 1;
+		SDL_GL_DestroyContext(glCtx);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
 	}
 
 	// Przekaz renderer i HWND do NESSystem (jesli core nim jest).
@@ -113,6 +116,7 @@ int wmain(int argc, wchar_t* argv[])
 			int w = 0, h = 0;
 			SDL_GetWindowSizeInPixels(window, &w, &h);
 			glRenderer.renderFrame(fb, w, h);
+			SDL_GL_SwapWindow(window);
 		};
 	}
 
@@ -130,7 +134,7 @@ int wmain(int argc, wchar_t* argv[])
 	bool   padFast   = false; // RT
 	bool   padSlow   = false; // LT
 	SDL_JoystickID speedPadId = 0; // pad aktualnie kontrolujący prędkość (0 = brak)
-	bool   useScanlineSync = false; // B - przełączanie strategii sync
+	bool   useScanlineSync = true; // B - przełączanie strategii sync
 
 	auto calcSpeed = [&]() -> double {
 		if      (keyFast || padFast) return 4.0;

@@ -90,9 +90,6 @@ public:
 		glEnd();
 
 		glDisable(GL_TEXTURE_2D);
-
-		// Single buffer: glFlush wymusza dotarcie polecen do front buffera.
-		glFlush();
 	}
 
 private:
