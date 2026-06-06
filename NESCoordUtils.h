@@ -14,20 +14,29 @@ namespace NES {
 		dstY = ((float)winH - dstH) * 0.5f;
 	}
 
-	inline void windowToNES(int winW, int winH, float wx, float wy, float& nx, float& ny) {
+	inline void monitorToNES(int renderAreaX, int renderAreaY, int winW, int winH,
+		float monitorX, float monitorY, float& nesX, float& nesY) {
 		float dstX, dstY, dstW, dstH;
 		calcDestRect(winW, winH, dstX, dstY, dstW, dstH);
 
-		nx = (wx - dstX) / dstW * (float)SCREEN_WIDTH;
-		ny = (wy - dstY) / dstH * (float)VISIBLE_H + (float)OVERSCAN_TOP;
+		float localWx = monitorX - (float)renderAreaX;
+		float localWy = monitorY - (float)renderAreaY;
+
+		nesX = (localWx - dstX) / dstW * (float)SCREEN_WIDTH;
+		nesY = (localWy - dstY) / dstH * (float)VISIBLE_H + (float)OVERSCAN_TOP;
 	}
 
-	inline void nesToWindow(int winW, int winH, float nx, float ny, float& wx, float& wy) {
+	inline void nesToMonitor(int renderAreaX, int renderAreaY, int winW, int winH,
+		float nesX, float nesY, float& monitorX, float& monitorY) {
+
 		float dstX, dstY, dstW, dstH;
 		calcDestRect(winW, winH, dstX, dstY, dstW, dstH);
 
-		wx = dstX + (nx / (float)SCREEN_WIDTH) * dstW;
-		wy = dstY + ((ny - (float)OVERSCAN_TOP) / (float)VISIBLE_H) * dstH;
+		float localWx = (nesX / (float)SCREEN_WIDTH) * dstW + dstX;
+		float localWy = ((nesY - (float)OVERSCAN_TOP) / (float)VISIBLE_H) * dstH + dstY;
+
+		monitorX = localWx + (float)renderAreaX;
+		monitorY = localWy + (float)renderAreaY;
 	}
 
 } // namespace NES

@@ -50,6 +50,23 @@ public:
 		return refreshHz;
 	}
 
+	bool isDuplicateMode() const {
+		ensureCurrentMonitor();
+		return duplicateMode;
+	}
+
+	bool waitForVBlank() const {
+		ensureCurrentMonitor();
+		if (!adapterHandle) return false;
+
+		D3DKMT_WAITFORVERTICALBLANKEVENT we{};
+		we.hAdapter = adapterHandle;
+		we.hDevice = 0; // Opcjonalne, nie jest wymagane do samego VBlank
+		we.VidPnSourceId = vidPnSourceId;
+
+		return D3DKMTWaitForVerticalBlankEvent(&we) == 0; // NTSTATUS 0 oznacza sukces
+	}
+
 private:
 	void ensureCurrentMonitor() const {
 		HMONITOR hmon = trackedHwnd
@@ -59,6 +76,7 @@ private:
 
 		closeAdapter();
 		refreshHz = 0.0;
+		duplicateMode = false;
 		cachedMon = hmon;
 		if (!hmon) return;
 
@@ -67,6 +85,8 @@ private:
 	}
 
 	void updateRefreshFromCCD(HMONITOR hmon) const {
+		duplicateMode = false;
+
 		MONITORINFOEXW mi{};
 		mi.cbSize = sizeof(mi);
 		if (!GetMonitorInfoW(hmon, (MONITORINFO*)&mi)) return;
@@ -85,6 +105,7 @@ private:
 
 		paths.resize(pathCount);
 
+		const DISPLAYCONFIG_PATH_INFO* matchedPath = nullptr;
 		for (const auto& path : paths) {
 			DISPLAYCONFIG_SOURCE_DEVICE_NAME srcName{};
 			srcName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
@@ -92,25 +113,38 @@ private:
 			srcName.header.adapterId = path.sourceInfo.adapterId;
 			srcName.header.id = path.sourceInfo.id;
 			if (DisplayConfigGetDeviceInfo(&srcName.header) != ERROR_SUCCESS) continue;
-
 			if (wcscmp(srcName.viewGdiDeviceName, mi.szDevice) != 0) continue;
+			matchedPath = &path;
+			break;
+		}
 
-			UINT32 modeIdx = path.targetInfo.modeInfoIdx;
-			if (modeIdx != DISPLAYCONFIG_PATH_MODE_IDX_INVALID && modeIdx < modes.size()) {
-				if (modes[modeIdx].infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET) {
-					const DISPLAYCONFIG_RATIONAL& r = modes[modeIdx].targetMode.targetVideoSignalInfo.vSyncFreq;
-					if (r.Denominator != 0) {
-						refreshHz = (double)r.Numerator / (double)r.Denominator;
-						return;
-					}
+		if (!matchedPath) return;
+
+		// Tryb powielenia: ten sam VidPN source podlaczony do wiecej niz jednego targetu
+		int sourceCount = 0;
+		for (const auto& path : paths) {
+			if (path.sourceInfo.adapterId.LowPart == matchedPath->sourceInfo.adapterId.LowPart &&
+				path.sourceInfo.adapterId.HighPart == matchedPath->sourceInfo.adapterId.HighPart &&
+				path.sourceInfo.id == matchedPath->sourceInfo.id) {
+				sourceCount++;
+			}
+		}
+		duplicateMode = (sourceCount > 1);
+
+		UINT32 modeIdx = matchedPath->targetInfo.modeInfoIdx;
+		if (modeIdx != DISPLAYCONFIG_PATH_MODE_IDX_INVALID && modeIdx < modes.size()) {
+			if (modes[modeIdx].infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET) {
+				const DISPLAYCONFIG_RATIONAL& r = modes[modeIdx].targetMode.targetVideoSignalInfo.vSyncFreq;
+				if (r.Denominator != 0) {
+					refreshHz = (double)r.Numerator / (double)r.Denominator;
+					return;
 				}
 			}
+		}
 
-			const DISPLAYCONFIG_RATIONAL& r = path.targetInfo.refreshRate;
-			if (r.Denominator == 0) continue;
-
+		const DISPLAYCONFIG_RATIONAL& r = matchedPath->targetInfo.refreshRate;
+		if (r.Denominator != 0) {
 			refreshHz = (double)r.Numerator / (double)r.Denominator;
-			return;
 		}
 	}
 
@@ -148,4 +182,5 @@ private:
 	mutable UINT64   adapterHandle = 0;
 	mutable UINT     vidPnSourceId = 0;
 	mutable double   refreshHz     = 0.0;
+	mutable bool     duplicateMode = false;
 };

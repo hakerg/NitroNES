@@ -121,7 +121,8 @@ public:
 
     void reset() {
         fine_x = address_latch = ppu_data_buffer = 0;
-        scanline = cycle = 0;
+        scanline = NES::SCANLINE_PRERENDER;
+        cycle = 0;
         bg_next_tile_id = bg_next_tile_attrib = 0;
         bg_next_tile_lsb = bg_next_tile_msb = 0;
         bg_shifter_pattern_lo = bg_shifter_pattern_hi = 0;
@@ -145,8 +146,6 @@ public:
     const uint32_t* getFramebuffer() const {
         return buf.data();
     }
-
-    bool isFrameComplete() const { return frameComplete; }
 
     // ====================================================
     //  CLOCK - pojedynczy dot PPU. Wolany 3x na cykl CPU.
@@ -264,7 +263,6 @@ private:
     bool     last_a12 = false;
     bool     suppressVblThisFrame = false;
     bool     odd_frame_skip = false;
-    bool     frameComplete = true;
 
     // ---- Open-bus / decay register ----------------------------------
     uint8_t  ppuOpenBus = 0x00;
@@ -652,9 +650,7 @@ private:
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         }
         if (mask.greyscale) idx &= 0x30;
-        if (x == 0 && y == 0) frameComplete = false;
         buf[y * NES::SCREEN_WIDTH + x] = emphasisLUT()[emphasis_index][idx & 0x3F];
-        if (x == NES::SCREEN_WIDTH - 1 && y == NES::SCREEN_HEIGHT - 1) frameComplete = true;
     }
 
     void advanceCycle() {
@@ -677,8 +673,9 @@ private:
             cycle = 0;
             if (scanline == NES::SCANLINE_VISIBLE_LAST) { if (onFrameComplete) onFrameComplete(); }
             scanline++;
-            if (scanline >= NES::SCANLINE_LAST) {
-                scanline = NES::SCANLINE_PRERENDER;
+
+            if (scanline >= NES::TOTAL_SCANLINES) {
+                scanline = NES::SCANLINE_VISIBLE_FIRST;
                 frame_odd = !frame_odd;
                 decayOpenBus();
             }

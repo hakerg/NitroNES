@@ -21,9 +21,21 @@ public:
     NESSystem() {
         ppu.ppuBus = &ppuBus;
         cpu.setIrqAckCallback([this]() { if (cart) cart->irqClear(); });
+
+        controller2.key_A      = SDL_SCANCODE_Z;
+        controller2.key_B      = SDL_SCANCODE_X;
+        controller2.key_TurboA = SDL_SCANCODE_A;
+        controller2.key_TurboB = SDL_SCANCODE_S;
+        controller2.key_Select = SDL_SCANCODE_UNKNOWN;
+        controller2.key_Start  = SDL_SCANCODE_UNKNOWN;
+        controller2.key_Up     = SDL_SCANCODE_UP;
+        controller2.key_Down   = SDL_SCANCODE_DOWN;
+        controller2.key_Left   = SDL_SCANCODE_LEFT;
+        controller2.key_Right  = SDL_SCANCODE_RIGHT;
         ppu.onFrameComplete = [this]() {
             controller.tickFrame();
             controller2.tickFrame();
+            if (onFrameComplete) onFrameComplete();
         };
     }
 
@@ -96,8 +108,6 @@ public:
         outAudioSample = apu.getOutputSample() + (cart ? cart->audioOutput() : 0.0f);
     }
 
-
-
     void renderFrame() override {
         if (onRenderFrame) onRenderFrame(ppu.getFramebuffer());
     }
@@ -108,11 +118,6 @@ public:
 
     int getCurrentScanline() const override {
         return ppu.getScanline();
-    }
-
-protected:
-    bool isFrameReady() override {
-        return ppu.isFrameComplete();
     }
 
 private:

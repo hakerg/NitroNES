@@ -162,9 +162,6 @@ public:
 		outAudioSample = apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
 	}
 
-protected:
-	bool isFrameReady() override { return true; }
-
 private:
 	// Trampoline pod $5000: zarzadzanie wywolaniem PLAY.
 	void trampolineMaintenance() {

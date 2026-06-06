@@ -8,11 +8,11 @@ if (POLICY CMP0141)
 endif()
 
 project ("NES Emulator" CXX C)
-
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT NESEmulator)
 
 # --- AUTOMATYCZNE POBIERANIE SDL3 ---
 include(FetchContent)
+
 FetchContent_Declare(
   SDL3
   GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -30,33 +30,44 @@ set(SDL_STATIC ON  CACHE BOOL "" FORCE)
 # Pobierz i dołącz SDL3 do projektu
 FetchContent_MakeAvailable(SDL3)
 
-# --- GLEW (loader nowoczesnego OpenGL) ---
+# --- AUTOMATYCZNE POBIERANIE DEAR IMGUI ---
 FetchContent_Declare(
-  glew
-  GIT_REPOSITORY https://github.com/Perlmint/glew-cmake.git
+  imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
   GIT_TAG        master
 )
-set(glew-cmake_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(glew-cmake_BUILD_STATIC ON  CACHE BOOL "" FORCE)
-set(ONLY_LIBS                ON  CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glew)
+FetchContent_MakeAvailable(imgui)
+
 # ------------------------------------
 # ------------------------------------
 
-# Dodaj źródło do pliku wykonywalnego tego projektu.
-add_executable (NESEmulator "NES Emulator.cpp")
+# Dodaj główne źródło pliku wykonywalnego
+add_executable(NESEmulator "NES Emulator.cpp")
 set_property(TARGET NESEmulator PROPERTY OUTPUT_NAME "NES Emulator")
 
 # Ustawienie standardu C++23
 set_property(TARGET NESEmulator PROPERTY CXX_STANDARD 23)
 set_property(TARGET NESEmulator PROPERTY CXX_STANDARD_REQUIRED ON)
 
+# Dodaj pliki źródłowe ImGui oraz backendy (SDL3 + SDL_Renderer) do kompilacji
+target_sources(NESEmulator PRIVATE
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
+
+# Dodaj ścieżki include, żeby kompilator widział nagłówki <imgui.h> oraz <imgui_impl_...h>
+target_include_directories(NESEmulator PRIVATE
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+
 # Połącz z SDL3 statycznie
 target_link_libraries(NESEmulator PRIVATE SDL3::SDL3-static)
-
-# OpenGL (single-buffer rendering)
-find_package(OpenGL REQUIRED)
-target_link_libraries(NESEmulator PRIVATE OpenGL::GL libglew_static)
 
 # --- Flagi optymalizacji Release (MSVC) ---
 if(MSVC)

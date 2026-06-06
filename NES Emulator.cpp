@@ -2,7 +2,6 @@
 #include "NESCoreBase.h"
 #include "NSFPlayer.h"
 #include "NESSystem.h"
-#include "OpenGLRenderer.h"
 #include "SDLAudioStream.h"
 #include <SDL3/SDL.h>
 #include <iostream>
@@ -14,7 +13,6 @@
 #include <thread>
 #include <atomic>
 #include <windows.h>
-#include "PrecisionSleeper.h"
 #include "SyncStrategy.h"
 #include "TimerSyncStrategy.h"
 #include "ScanlineSyncStrategy.h"
@@ -31,23 +29,6 @@ static bool isNesRomFile(const std::string& path) {
 	if (ifs.gcount() < 4) return false;
 	if (m[0] == 'N' && m[1] == 'E' && m[2] == 'S' && m[3] == 'M') return false;
 	return m[0] == 'N' && m[1] == 'E' && m[2] == 'S' && m[3] == 0x1A;
-}
-
-static void toggleFullscreen(SDL_Window* window) {
-	bool isFs = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
-	if (!isFs) {
-		SDL_DisplayID display = SDL_GetDisplayForWindow(window);
-		const SDL_DisplayMode* desktop = SDL_GetDesktopDisplayMode(display);
-
-		if (desktop) {
-			SDL_SetWindowFullscreenMode(window, desktop);
-		}
-		SDL_HideCursor();
-	}
-	else {
-		SDL_ShowCursor();
-	}
-	SDL_SetWindowFullscreen(window, !isFs);
 }
 
 int wmain(int argc, wchar_t* argv[])
@@ -73,6 +54,9 @@ int wmain(int argc, wchar_t* argv[])
 
 	if (!core->loadFile(romPath)) return 1;
 
+	// Wymagane do scanline sync, żeby ClientToScreen i GetMonitorInfo zwracały fizyczne piksele
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
 	// 2. SDL + okno.
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
 		std::cerr << "Blad SDL3: " << SDL_GetError() << "\n";
@@ -82,41 +66,57 @@ int wmain(int argc, wchar_t* argv[])
 	int winW = 0, winH = 0;
 	core->defaultWindowSize(winW, winH);
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-
-	Uint32 winFlags = SDL_WINDOW_OPENGL;
+	Uint32 winFlags = 0;
 	if (core->windowResizable()) winFlags |= SDL_WINDOW_RESIZABLE;
-	SDL_Window* window = SDL_CreateWindow(core->windowTitle(filename).c_str(),
-		winW, winH, winFlags);
+	SDL_Window* window = SDL_CreateWindow(core->windowTitle(filename).c_str(), winW, winH, winFlags);
 	if (!window) { std::cerr << "Blad okna: " << SDL_GetError() << "\n"; SDL_Quit(); return 1; }
 
-	SDL_GLContext glCtx = SDL_GL_CreateContext(window);
-	if (!glCtx) {
-		std::cerr << "Blad kontekstu GL: " << SDL_GetError() << "\n";
-		SDL_DestroyWindow(window);
-		SDL_Quit();
-		return 1;
-	}
-	SDL_GL_MakeCurrent(window, glCtx);
-	SDL_GL_SetSwapInterval(0);
-
-	// Renderer OpenGL – init po aktywowaniu kontekstu GL.
-	OpenGLRenderer glRenderer;
-	if (!glRenderer.init()) {
-		std::cerr << "Blad inicjalizacji renderera GL\n";
-		SDL_GL_DestroyContext(glCtx);
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
+	if (!renderer) {
+		std::cerr << "Blad renderera: " << SDL_GetError() << "\n";
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return 1;
 	}
 
-	// Przekaz renderer i HWND do NESSystem (jesli core nim jest).
+	SDL_SetRenderVSync(renderer, 0);
+
+	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, NES::SCREEN_WIDTH, NES::SCREEN_HEIGHT);
+	if (!texture) {
+		std::cerr << "Blad tekstury: " << SDL_GetError() << "\n";
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
+	}
+	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+
 	if (auto* nesSystem = dynamic_cast<NESSystem*>(core.get())) {
 		nesSystem->onRenderFrame = [&](const uint32_t* fb) {
+			if (!fb) return;
+
+			SDL_UpdateTexture(texture, nullptr, fb, NES::SCREEN_WIDTH * sizeof(uint32_t));
+
+			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+			SDL_RenderClear(renderer);
+
 			int w = 0, h = 0;
 			SDL_GetWindowSizeInPixels(window, &w, &h);
-			glRenderer.renderFrame(fb, w, h);
-			SDL_GL_SwapWindow(window);
+
+			float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
+			NES::calcDestRect(w, h, dstX, dstY, dstW, dstH);
+
+			SDL_FRect srcRect = {
+				0.0f,
+				static_cast<float>(NES::OVERSCAN_TOP),
+				static_cast<float>(NES::SCREEN_WIDTH),
+				static_cast<float>(NES::VISIBLE_H)
+			};
+
+			SDL_FRect dstRect = { dstX, dstY, dstW, dstH };
+
+			SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
+			SDL_RenderPresent(renderer);
 		};
 	}
 
@@ -128,13 +128,15 @@ int wmain(int argc, wchar_t* argv[])
 		audioStream.addNESSample(dt, sample);
 	};
 
-	bool   running   = true;
-	bool   keyFast   = false; // TAB
-	bool   keySlow   = false; // Shift+TAB
-	bool   padFast   = false; // RT
-	bool   padSlow   = false; // LT
+	bool running = true;
+	bool keyFast = false; // TAB
+	bool keySlow = false; // Shift+TAB
+	bool padFast = false; // RT
+	bool padSlow = false; // LT
 	SDL_JoystickID speedPadId = 0; // pad aktualnie kontrolujący prędkość (0 = brak)
-	bool   useScanlineSync = true; // B - przełączanie strategii sync
+
+	Uint64 lastMouseMoveTime = SDL_GetTicks();
+	bool cursorVisible = true;
 
 	auto calcSpeed = [&]() -> double {
 		if      (keyFast || padFast) return 4.0;
@@ -143,6 +145,14 @@ int wmain(int argc, wchar_t* argv[])
 	};
 
 	auto processEvent = [&](const SDL_Event& ev) {
+		if (ev.type == SDL_EVENT_MOUSE_MOTION) {
+			lastMouseMoveTime = SDL_GetTicks();
+			if (!cursorVisible) {
+				SDL_ShowCursor();
+				cursorVisible = true;
+			}
+			return;
+		}
 		switch (ev.type) {
 		case SDL_EVENT_QUIT:
 			running = false;
@@ -155,18 +165,21 @@ int wmain(int argc, wchar_t* argv[])
 			if (ev.key.scancode == SDL_SCANCODE_TAB) {
 				bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
 				if (shift) { keySlow = true;  keyFast = false; }
-				else       { keyFast = true;  keySlow = false; }
+				else { keyFast = true;  keySlow = false; }
 				return;
 			}
 			switch (ev.key.scancode) {
-				case SDL_SCANCODE_ESCAPE: running = false;            return;
-				case SDL_SCANCODE_P:      core->togglePause();        return;
-				case SDL_SCANCODE_F11:    toggleFullscreen(window);   return;
-				case SDL_SCANCODE_SPACE:  core->onSpacePressed();     return;
-				case SDL_SCANCODE_RIGHT:  core->onRightPressed();     return;
-				case SDL_SCANCODE_LEFT:   core->onLeftPressed();      return;
-				case SDL_SCANCODE_B:      useScanlineSync = !useScanlineSync; return;
-				default: return;
+			case SDL_SCANCODE_ESCAPE: running = false;            return;
+			case SDL_SCANCODE_P:      core->togglePause();        return;
+			case SDL_SCANCODE_F11: {
+				bool isFs = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+				SDL_SetWindowFullscreen(window, !isFs);
+				return;
+			}
+			case SDL_SCANCODE_SPACE:  core->onSpacePressed();     return;
+			case SDL_SCANCODE_RIGHT:  core->onRightPressed();     return;
+			case SDL_SCANCODE_LEFT:   core->onLeftPressed();      return;
+			default: return;
 			}
 		case SDL_EVENT_KEY_UP:
 			if (ev.key.scancode == SDL_SCANCODE_TAB) { keyFast = false; keySlow = false; }
@@ -213,19 +226,32 @@ int wmain(int argc, wchar_t* argv[])
 		SyncStrategy* activeStrategy;
 
 		if (core->hasPPU()) {
-			activeStrategy = (useScanlineSync && scanlineStrategy.canUse()) ? static_cast<SyncStrategy*>(&scanlineStrategy) : &timerStrategy;
-		} else {
+			if (scanlineStrategy.canUse()) {
+				activeStrategy = static_cast<SyncStrategy*>(&scanlineStrategy);
+			}
+			else {
+				activeStrategy = &timerStrategy;
+			}
+		}
+		else {
 			activeStrategy = &audioStrategy;
 		}
 
 		activeStrategy->run();
+
+		if (cursorVisible && SDL_GetTicks() - lastMouseMoveTime >= 1000) {
+			SDL_HideCursor();
+			cursorVisible = false;
+		}
 	}
 
 	audioStream.close();
 	core->shutdown();
-	glRenderer.shutdown();
-	SDL_GL_DestroyContext(glCtx);
+
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
+
 	return 0;
 }

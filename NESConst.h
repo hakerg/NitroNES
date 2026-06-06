@@ -38,11 +38,10 @@ namespace NES {
     static constexpr int SCREEN_HEIGHT = 240;
 
     // --- Skanline PPU ---
-    static constexpr int SCANLINE_PRERENDER = -1;
     static constexpr int SCANLINE_VISIBLE_FIRST = 0;
     static constexpr int SCANLINE_VISIBLE_LAST = 239;
     static constexpr int SCANLINE_VBLANK_START = 241;
-    static constexpr int SCANLINE_LAST = 261;
+    static constexpr int SCANLINE_PRERENDER = 261;
     static constexpr int TOTAL_SCANLINES = 262;
     static constexpr int PPU_CYCLES_PER_SCANLINE = 341;
     static constexpr int PPU_CYCLES_PER_FRAME = TOTAL_SCANLINES * PPU_CYCLES_PER_SCANLINE;

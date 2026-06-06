@@ -41,10 +41,10 @@ public:
 	SDL_Scancode key_TurboB  = SDL_SCANCODE_KP_6;
 	SDL_Scancode key_Select  = SDL_SCANCODE_SPACE;
 	SDL_Scancode key_Start   = SDL_SCANCODE_RETURN;
-	SDL_Scancode key_Up      = SDL_SCANCODE_W;
-	SDL_Scancode key_Down    = SDL_SCANCODE_S;
-	SDL_Scancode key_Left    = SDL_SCANCODE_A;
-	SDL_Scancode key_Right   = SDL_SCANCODE_D;
+	SDL_Scancode key_Up      = SDL_SCANCODE_R;
+	SDL_Scancode key_Down    = SDL_SCANCODE_F;
+	SDL_Scancode key_Left    = SDL_SCANCODE_D;
+	SDL_Scancode key_Right   = SDL_SCANCODE_G;
 
 	// Podepnij/odpnij pada SDL (nullptr = tylko klawiatura).
 	void attachGamepad(SDL_Gamepad* gp) { sdlGamepad = gp; }

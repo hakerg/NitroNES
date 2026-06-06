@@ -32,10 +32,14 @@ public:
 	}
 
 	double tickFrame() {
+		bool frameReady = false;
+		onFrameComplete = [&frameReady]() { frameReady = true; };
 		double total = 0.0;
 		do {
-			total += tick();
-		} while (!isFrameReady());
+			double dt = tick();
+			total += dt;
+		} while (!frameReady);
+		onFrameComplete = nullptr;
 		return total;
 	}
 
@@ -68,7 +72,6 @@ public:
 
 protected:
 	virtual void clockOneCycle(float& outAudioSample) = 0;
-	virtual bool isFrameReady() = 0;
 
 	virtual uint8_t cpuRead(uint16_t addr) = 0;
 	virtual void    cpuWrite(uint16_t addr, uint8_t data) = 0;
@@ -79,4 +82,5 @@ protected:
 	bool    pal = false;
 	double  emuSpeed = 1.0;
 	bool    paused = false;
+	std::function<void()> onFrameComplete;
 };

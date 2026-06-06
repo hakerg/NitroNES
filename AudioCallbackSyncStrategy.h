@@ -1,6 +1,5 @@
 #pragma once
 #include "SyncStrategy.h"
-#include "PrecisionSleeper.h"
 #include <SDL3/SDL.h>
 #include <mutex>
 
@@ -8,12 +7,11 @@ class AudioCallbackSyncStrategy : public SyncStrategy {
 public:
 	AudioCallbackSyncStrategy(SyncContext& context)
 		: SyncStrategy(context)
-		, sleeper()
 	{}
 
 	void run() override {
 		tick();
-		sleeper.sleep(0.001);
+		SDL_Delay(1);
 	}
 
 private:
@@ -23,7 +21,6 @@ private:
 		while (SDL_PollEvent(&ev)) {
 			ctx->handleEvent(ev);
 		}
+		ctx->core->renderFrame();
 	}
-
-	PrecisionSleeper sleeper;
 };
