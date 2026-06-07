@@ -134,9 +134,8 @@ public:
 		return std::string("NSF Player - ") + nsfName() + " | "
 			 + std::string(nsfHeader.artist, ::strnlen(nsfHeader.artist, 32));
 	}
-	void defaultWindowSize(int& w, int& h) const override { w = 480; h = 120; }
 
-	void onSpacePressed() override { togglePause(); }
+	void onSpacePressed() override { paused = !paused; }
 	void onRightPressed() override { nextSong(); }
 	void onLeftPressed()  override { prevSong(); }
 

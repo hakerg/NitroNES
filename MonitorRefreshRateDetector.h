@@ -50,23 +50,6 @@ public:
 		return refreshHz;
 	}
 
-	bool isDuplicateMode() const {
-		ensureCurrentMonitor();
-		return duplicateMode;
-	}
-
-	bool waitForVBlank() const {
-		ensureCurrentMonitor();
-		if (!adapterHandle) return false;
-
-		D3DKMT_WAITFORVERTICALBLANKEVENT we{};
-		we.hAdapter = adapterHandle;
-		we.hDevice = 0; // Opcjonalne, nie jest wymagane do samego VBlank
-		we.VidPnSourceId = vidPnSourceId;
-
-		return D3DKMTWaitForVerticalBlankEvent(&we) == 0; // NTSTATUS 0 oznacza sukces
-	}
-
 private:
 	void ensureCurrentMonitor() const {
 		HMONITOR hmon = trackedHwnd
@@ -76,7 +59,6 @@ private:
 
 		closeAdapter();
 		refreshHz = 0.0;
-		duplicateMode = false;
 		cachedMon = hmon;
 		if (!hmon) return;
 
@@ -85,8 +67,6 @@ private:
 	}
 
 	void updateRefreshFromCCD(HMONITOR hmon) const {
-		duplicateMode = false;
-
 		MONITORINFOEXW mi{};
 		mi.cbSize = sizeof(mi);
 		if (!GetMonitorInfoW(hmon, (MONITORINFO*)&mi)) return;
@@ -119,17 +99,6 @@ private:
 		}
 
 		if (!matchedPath) return;
-
-		// Tryb powielenia: ten sam VidPN source podlaczony do wiecej niz jednego targetu
-		int sourceCount = 0;
-		for (const auto& path : paths) {
-			if (path.sourceInfo.adapterId.LowPart == matchedPath->sourceInfo.adapterId.LowPart &&
-				path.sourceInfo.adapterId.HighPart == matchedPath->sourceInfo.adapterId.HighPart &&
-				path.sourceInfo.id == matchedPath->sourceInfo.id) {
-				sourceCount++;
-			}
-		}
-		duplicateMode = (sourceCount > 1);
 
 		UINT32 modeIdx = matchedPath->targetInfo.modeInfoIdx;
 		if (modeIdx != DISPLAYCONFIG_PATH_MODE_IDX_INVALID && modeIdx < modes.size()) {
@@ -182,5 +151,4 @@ private:
 	mutable UINT64   adapterHandle = 0;
 	mutable UINT     vidPnSourceId = 0;
 	mutable double   refreshHz     = 0.0;
-	mutable bool     duplicateMode = false;
 };

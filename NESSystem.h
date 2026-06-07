@@ -61,11 +61,6 @@ public:
     std::string windowTitle(const std::string& filename) const override {
         return "NES Emulator - " + filename;
     }
-    void defaultWindowSize(int& w, int& h) const override {
-        w = (NES::SCREEN_WIDTH * NES::PAR_NUM * 3 + NES::PAR_DEN / 2) / NES::PAR_DEN;
-        h = NES::VISIBLE_H * 3;
-    }
-    bool windowResizable() const override { return true; }
 
     void shutdown() override {
         controller.closeAndDetachGamepad();

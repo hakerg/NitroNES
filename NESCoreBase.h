@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <mutex>
 #include <string>
 
 #include "NESConst.h"
@@ -11,6 +12,10 @@
 
 class NESCoreBase {
 public:
+	bool    pal = false;
+	double  speed = 1.0;
+	bool    paused = false;
+
 	NESCoreBase()
 		: cpu([this](uint16_t a) { return cpuRead(a); },
 			  [this](uint16_t a, uint8_t d) { cpuWrite(a, d); }) {
@@ -20,41 +25,38 @@ public:
 
 	std::function<void(float sample, double dt)> onAudioSample;
 
-	double tick() {
-		const double hwClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
-		const double dt = (1.0 / hwClock) / emuSpeed;
-		if (!paused) {
-			float audioSample = 0.0f;
-			clockOneCycle(audioSample);
-			if (onAudioSample) onAudioSample(audioSample, dt);
-		}
-		return dt;
+	double getCPUClockRate() {
+		return pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
 	}
 
-	double tickFrame() {
+	void tickFrame(double& outDT) {
+		outDT = 0.0;
+		if (paused) return;
+
+		std::lock_guard<std::mutex> lock(tickMutex);
 		bool frameReady = false;
 		onFrameComplete = [&frameReady]() { frameReady = true; };
-		double total = 0.0;
 		do {
-			double dt = tick();
-			total += dt;
+			double dt;
+			tick(dt);
+			outDT += dt;
 		} while (!frameReady);
 		onFrameComplete = nullptr;
-		return total;
 	}
 
-	void   setSpeed(double spd) { emuSpeed = spd; }
-	double getSpeed() const { return emuSpeed; }
+	void tickWhile(std::function<bool()> condition) {
+		if (paused) return;
 
-	void togglePause()      { paused = !paused; }
-	void setPaused(bool p)  { paused = p; }
-	bool isPaused() const   { return paused; }
+		std::lock_guard<std::mutex> lock(tickMutex);
+		while (!paused && condition()) {
+			double dt;
+			tick(dt);
+		}
+	}
 
 	virtual bool loadFile(const std::string& path) = 0;
 
 	virtual std::string windowTitle(const std::string& filename) const = 0;
-	virtual void        defaultWindowSize(int& w, int& h) const = 0;
-	virtual bool        windowResizable() const { return false; }
 
 	virtual void shutdown() {}
 	virtual void renderFrame() {}
@@ -79,8 +81,18 @@ protected:
 	CPU6502 cpu;
 	APU2A03 apu;
 	std::array<uint8_t, 2048> cpuRam;
-	bool    pal = false;
-	double  emuSpeed = 1.0;
-	bool    paused = false;
 	std::function<void()> onFrameComplete;
+
+private:
+	std::mutex tickMutex;
+
+	void tick(double& outDT) {
+		outDT = (1.0 / getCPUClockRate()) / speed;
+
+		if (!paused) {
+			float audioSample = 0.0f;
+			clockOneCycle(audioSample);
+			if (onAudioSample) onAudioSample(audioSample, outDT);
+		}
+	}
 };

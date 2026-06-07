@@ -6,43 +6,42 @@
 
 class TimerSyncStrategy : public SyncStrategy {
 public:
-	TimerSyncStrategy(SyncContext& context, double maxLag)
-		: SyncStrategy(context)
-		, freq(SDL_GetPerformanceFrequency())
-		, prev(SDL_GetPerformanceCounter())
-		, lag(0.0)
-		, maxLag(maxLag)
-	{}
+    TimerSyncStrategy(SyncContext& context)
+        : SyncStrategy(context)
+        , freq(SDL_GetPerformanceFrequency())
+        , prev(SDL_GetPerformanceCounter())
+        , lag(0.0)
+    {
+    }
 
-	void run() override {
-		tick();
-		SDL_Delay(1);
-	}
+    void run() override {
+        Uint64 now = SDL_GetPerformanceCounter();
+        double elapsed = (double)(now - prev) / (double)freq;
+        prev = now;
+        lag += elapsed;
+        if (lag > NES::MAX_LAG) lag = NES::MAX_LAG;
 
+        bool shouldRender = false;
+
+        if (ctx->getCore()->paused) {
+            shouldRender = true;
+        }
+        else {
+            ctx->updateSpeed(true);
+            while (lag > 0.0) {
+                double dt;
+                ctx->getCore()->tickFrame(dt);
+                lag -= dt;
+                shouldRender = true;
+            }
+        }
+
+        if (shouldRender) {
+            ctx->getCore()->renderFrame();
+        }
+    }
 private:
-	void tick() {
-		Uint64 now = SDL_GetPerformanceCounter();
-		double elapsed = (double)(now - prev) / (double)freq;
-		prev = now;
-		lag += elapsed;
-		if (lag > maxLag) lag = maxLag;
-
-		std::lock_guard<std::mutex> lock(ctx->tickMutex);
-		SDL_Event ev;
-		while (SDL_PollEvent(&ev)) {
-			ctx->handleEvent(ev);
-		}
-		if (ctx->core->isPaused()) return;
-		ctx->core->setSpeed(ctx->getSpeed());
-		while (lag > 0.0) {
-			double dt = ctx->core->tickFrame();
-			lag -= dt;
-			ctx->core->renderFrame();
-		}
-	}
-
-	Uint64 freq;
-	Uint64 prev;
-	double lag;
-	double maxLag;
+    Uint64 freq;
+    Uint64 prev;
+    double lag;
 };
