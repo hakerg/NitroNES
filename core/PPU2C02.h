@@ -2,14 +2,18 @@
 #include <cstdint>
 #include <array>
 #include <cstring>
-#include <functional>
-#include "PPUBus.h"
+#include "Cartridge.h"
 #include "NESConst.h"
+
+class IFrameConsumer {
+public:
+    virtual ~IFrameConsumer() = default;
+    virtual void onFrameComplete() = 0;
+};
 
 class PPU2C02 {
 public:
-
-    PPU2C02() {
+    explicit PPU2C02(IFrameConsumer& frameConsumer) : frameConsumer(frameConsumer) {
         buf.fill(0xFF000000);
         // Power-up zawartosc palety - wartosci zmierzone na fizycznym NES
         // (test blargg/power_up_palette). NES nie zeruje palety przy resecie;
@@ -23,10 +27,11 @@ public:
         std::memcpy(palScreen.data(), kPowerUpPalette, sizeof(kPowerUpPalette));
         std::memset(OAM, 0, sizeof(OAM));
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
+        nameTable[0].fill(0x00);
+        nameTable[1].fill(0x00);
     }
 
-    PPUBus* ppuBus = nullptr;
-    std::function<void()> onFrameComplete;
+    Cartridge* cart = nullptr;
 
     bool nmiLineLow() const { return ctrl.enable_nmi && status.vertical_blank; }
 
@@ -107,7 +112,16 @@ public:
             uint8_t v = palScreen[paletteIndex(addr)];
             return mask.greyscale ? (v & 0x30) : v;
         }
-        return ppuBus ? ppuBus->read(addr) : 0x00;
+        if (cart && cart->ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
+        if (addr >= 0x2000 && addr <= 0x3EFF) {
+            addr &= 0x0FFF;
+            Mirroring m = cart ? cart->getMirroring() : Mirroring::HORIZONTAL;
+            if (m == Mirroring::VERTICAL)      return nameTable[(addr & 0x0400) >> 10][addr & 0x03FF];
+            if (m == Mirroring::HORIZONTAL)    return nameTable[(addr & 0x0800) >> 11][addr & 0x03FF];
+            if (m == Mirroring::ONESCREEN_LO)  return nameTable[0][addr & 0x03FF];
+            if (m == Mirroring::ONESCREEN_HI)  return nameTable[1][addr & 0x03FF];
+        }
+        return 0x00;
     }
 
     void ppuWrite(uint16_t addr, uint8_t data) {
@@ -116,7 +130,15 @@ public:
             palScreen[paletteIndex(addr)] = data;
             return;
         }
-        if (ppuBus) ppuBus->write(addr, data);
+        if (cart && cart->ppuWrite(addr, data)) return;
+        if (addr >= 0x2000 && addr <= 0x3EFF) {
+            addr &= 0x0FFF;
+            Mirroring m = cart ? cart->getMirroring() : Mirroring::HORIZONTAL;
+            if (m == Mirroring::VERTICAL)      { nameTable[(addr & 0x0400) >> 10][addr & 0x03FF] = data; return; }
+            if (m == Mirroring::HORIZONTAL)    { nameTable[(addr & 0x0800) >> 11][addr & 0x03FF] = data; return; }
+            if (m == Mirroring::ONESCREEN_LO)  { nameTable[0][addr & 0x03FF] = data; return; }
+            if (m == Mirroring::ONESCREEN_HI)  { nameTable[1][addr & 0x03FF] = data; return; }
+        }
     }
 
     void reset() {
@@ -188,7 +210,7 @@ public:
 
         // MMC3 scanline counter (bezpieczna alternatywa do A12 - hook co linia).
         if (renderingEnabled() && cycle == 260 && scanline <= NES::SCANLINE_VISIBLE_LAST) {
-            if (ppuBus && ppuBus->cart) ppuBus->cart->scanline();
+            if (cart) cart->scanline();
         }
 
         advanceCycle();
@@ -200,6 +222,12 @@ public:
 private:
     // ----------------------------------------------------------
     //  Rejestry
+    // ----------------------------------------------------------
+    //  VRAM (Nametables) - 2KB wbudowane w PPU
+    // ----------------------------------------------------------
+    std::array<std::array<uint8_t, 1024>, 2> nameTable{};
+    uint8_t ppuReadBuf = 0x00; // bufor pomocniczy dla ppuRead (wynik cart->ppuRead)
+
     // ----------------------------------------------------------
     union PPUCTRL {
         struct {
@@ -300,6 +328,8 @@ private:
     // kazdym zapisie PPUMASK - unika rekonstrukcji co piksel w renderPixel().
     uint8_t  emphasis_index = 0;
 
+    IFrameConsumer& frameConsumer;
+
     // ----------------------------------------------------------
     //  Helpery
     // ----------------------------------------------------------
@@ -371,7 +401,7 @@ private:
             // pod paleta - linie adresowe wystawiaja vram_addr na bus, a
             // paleta jest tylko wewnetrzna, wiec bus zwraca nametable mirror
             // (addr & 0x2FFF).
-            ppu_data_buffer = ppuBus ? ppuBus->read(busAddr & 0x2FFF) : 0x00;
+            ppu_data_buffer = ppuRead(busAddr & 0x2FFF);
             if (!bReadOnly) refreshOpenBus(0x3F, pal);
         }
         else {
@@ -671,7 +701,7 @@ private:
         }
         else if (cycle >= NES::PPU_CYCLES_PER_SCANLINE) {
             cycle = 0;
-            if (scanline == NES::SCANLINE_VISIBLE_LAST) { if (onFrameComplete) onFrameComplete(); }
+            if (scanline == NES::SCANLINE_VISIBLE_LAST) { frameConsumer.onFrameComplete(); }
             scanline++;
 
             if (scanline >= NES::TOTAL_SCANLINES) {
@@ -765,8 +795,8 @@ private:
     uint8_t busRead(uint16_t addr) {
         addr &= 0x3FFF;
         const bool a12 = (addr & 0x1000) != 0;
-        if (a12 && !last_a12 && ppuBus && ppuBus->cart) {
-            ppuBus->cart->clockA12(true);
+        if (a12 && !last_a12 && cart) {
+            cart->clockA12(true);
         }
         last_a12 = a12;
         return ppuRead(addr);

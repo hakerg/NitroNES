@@ -6,42 +6,24 @@
 #include <cmath>
 #include <memory>
 #include <iostream>
-#include <functional>
 
 #include "NESConst.h"
 #include "NESCoreBase.h"
 #include "Cartridge.h"
-#include "PPUBus.h"
 #include "PPU2C02.h"
-#include "NESController.h"
+
+class INESSystemHost {
+public:
+    virtual ~INESSystemHost() = default;
+    virtual void renderFrame(const uint32_t* frameBuffer) = 0;
+    virtual uint8_t readController(int port) = 0;
+};
 
 // Rdzen NES: PPU, kontrolery, beam racer, render tekstury PPU.
-class NESSystem : public NESCoreBase {
+class NESSystem : public NESCoreBase, public ICPUBus {
 public:
-    NESSystem() {
-        ppu.ppuBus = &ppuBus;
-        cpu.setIrqAckCallback([this]() { if (cart) cart->irqClear(); });
-
-        controller2.key_A      = SDL_SCANCODE_Z;
-        controller2.key_B      = SDL_SCANCODE_X;
-        controller2.key_TurboA = SDL_SCANCODE_A;
-        controller2.key_TurboB = SDL_SCANCODE_S;
-        controller2.key_Select = SDL_SCANCODE_UNKNOWN;
-        controller2.key_Start  = SDL_SCANCODE_UNKNOWN;
-        controller2.key_Up     = SDL_SCANCODE_UP;
-        controller2.key_Down   = SDL_SCANCODE_DOWN;
-        controller2.key_Left   = SDL_SCANCODE_LEFT;
-        controller2.key_Right  = SDL_SCANCODE_RIGHT;
-        ppu.onFrameComplete = [this]() {
-            controller.tickFrame();
-            controller2.tickFrame();
-            if (onFrameComplete) onFrameComplete();
-        };
-    }
-
-    // Callback renderowania – wolany po kazdej klatce PPU.
-    // Sygnatura: (const uint32_t* fb)
-    std::function<void(const uint32_t*)> onRenderFrame;
+    explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost) :
+        NESCoreBase(*this, host), ppu(*this), nesHost(nesHost) {}
 
     // --- NESCoreBase API --------------------------------------------------
     bool loadFile(const std::string& path) override {
@@ -51,33 +33,11 @@ public:
             cart.reset();
             return false;
         }
-        ppuBus.cart = cart.get();
+        ppu.cart = cart.get();
         pal = false;
         apu.setPAL(pal);
         reset();
         return true;
-    }
-
-    std::string windowTitle(const std::string& filename) const override {
-        return "NES Emulator - " + filename;
-    }
-
-    void shutdown() override {
-        controller.closeAndDetachGamepad();
-        controller2.closeAndDetachGamepad();
-    }
-
-    void onGamepadAdded(uint32_t joystickId) override {
-        if (!controller.gamepad()) {
-            if (SDL_Gamepad* gp = SDL_OpenGamepad(joystickId)) controller.attachGamepad(gp);
-        } else if (!controller2.gamepad()) {
-            if (SDL_Gamepad* gp = SDL_OpenGamepad(joystickId)) controller2.attachGamepad(gp);
-        }
-    }
-
-    void onGamepadRemoved(uint32_t joystickId) override {
-        if (controller.gamepadID() == joystickId)  { controller.closeAndDetachGamepad();  return; }
-        if (controller2.gamepadID() == joystickId) { controller2.closeAndDetachGamepad(); return; }
     }
 
     void clockOneCycle(float& outAudioSample) override {
@@ -104,7 +64,7 @@ public:
     }
 
     void renderFrame() override {
-        if (onRenderFrame) onRenderFrame(ppu.getFramebuffer());
+        nesHost.renderFrame(ppu.getFramebuffer());
     }
 
     bool hasPPU() const override {
@@ -113,14 +73,6 @@ public:
 
     int getCurrentScanline() const override {
         return ppu.getScanline();
-    }
-
-private:
-    void reset() {
-        cpuRam.fill(0x00);
-        if (cart) cart->reset();
-        ppu.reset();
-        cpu.reset();
     }
 
 protected:
@@ -173,8 +125,8 @@ protected:
             if (addr == 0x4016) {
                 controllerStrobe = (data & 0x01) != 0;
                 if (controllerStrobe) {
-                    controllerShift = controller.readState();
-                    controllerShift2 = controller2.readState();
+                    controllerShift  = nesHost.readController(0);
+                    controllerShift2 = nesHost.readController(1);
                 }
                 return;
             }
@@ -184,15 +136,26 @@ protected:
         if (cart) cart->cpuWrite(addr, data);
     }
 
+    void cpuIrqAck() override {
+        if (cart) cart->irqClear();
+    }
+
     PPU2C02 ppu;
-    PPUBus  ppuBus;
     std::unique_ptr<Cartridge> cart;
 
     uint8_t openBus = 0x00;
 
-    NESController controller;
-    NESController controller2;
-    uint8_t controllerShift = 0x00;
+    uint8_t controllerShift  = 0x00;
     uint8_t controllerShift2 = 0x00;
     bool    controllerStrobe = false;
+
+private:
+    INESSystemHost& nesHost;
+
+    void reset() {
+        cpuRam.fill(0x00);
+        if (cart) cart->reset();
+        ppu.reset();
+        cpu.reset();
+    }
 };

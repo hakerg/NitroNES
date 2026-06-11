@@ -14,12 +14,12 @@
 #include "mappers/MapperRegistry.h"
 #include "mappers/AllMappers.h"
 
-class NSFPlayer : public NESCoreBase {
+class NSFPlayer : public NESCoreBase, public ICPUBus {
 public:
 	static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000; // Adres pulapki (JMP $5000)
 	static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
 
-	NSFPlayer() {
+	explicit NSFPlayer(IEmulatorHost& host) : NESCoreBase(*this, host) {
 		extRam.fill(0x00);
 		prgRom.assign(32768, 0x00);
 	}
@@ -96,7 +96,7 @@ public:
 		cpu.reset();
 		cpu.A = songNum - 1;
 		cpu.X = pal ? 1 : 0;
-		cpu.P = FLAG_I | FLAG_U;
+		cpu.P = CPU6502::FLAG_I | CPU6502::FLAG_U;
 		cpu.S = 0xFD;
 
 		// JSR do INIT via trampoline: ustawiamy PC na INIT, push adres powrotu
@@ -130,15 +130,6 @@ public:
 		return load(nsf);
 	}
 
-	std::string windowTitle(const std::string& /*filename*/) const override {
-		return std::string("NSF Player - ") + nsfName() + " | "
-			 + std::string(nsfHeader.artist, ::strnlen(nsfHeader.artist, 32));
-	}
-
-	void onSpacePressed() override { paused = !paused; }
-	void onRightPressed() override { nextSong(); }
-	void onLeftPressed()  override { prevSong(); }
-
 	void clockOneCycle(float& outAudioSample) override {
 		trampolineMaintenance();
 		if (expChip) expChip->clock();
@@ -159,6 +150,48 @@ public:
 		}
 
 		outAudioSample = apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
+	}
+
+protected:
+	// --- Pamiec CPU --------------------------------------------------------
+	uint8_t cpuRead(uint16_t addr) override {
+		if (addr <= 0x07FF) return cpuRam[addr];
+		// PPU stub: NSF rip czesto czeka na VBlank (LDA $2002 / BPL -).
+		// Zwracamy 0x80 zeby symulowac stale ustawiona flage VBlank.
+		if (addr >= 0x2000 && addr <= 0x3FFF) return 0x80;
+		if (addr >= 0x4000 && addr <= 0x4017) return apu.cpuRead(addr);
+		if (addr >= 0x5000 && addr <= 0x5002) return trampoline[addr - 0x5000];
+		if (addr >= 0x6000 && addr <= 0x7FFF) return extRam[addr - 0x6000];
+		if (addr >= 0x8000) {
+			if (isBankswitched()) {
+				uint8_t  bankIdx = (addr - 0x8000) / 4096;
+				uint16_t offset = (addr - 0x8000) % 4096;
+				uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
+				if (romAddr < bankRom.size()) return bankRom[romAddr];
+				return 0x00;
+			}
+			return prgRom[addr - 0x8000];
+		}
+		return 0x00;
+	}
+
+	void cpuWrite(uint16_t addr, uint8_t data) override {
+		if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
+		if (addr >= 0x2000 && addr <= 0x3FFF) return; // PPU stub
+		if (addr >= 0x4000 && addr <= 0x4017) { apu.cpuWrite(addr, data); return; }
+		if (addr >= 0x6000 && addr <= 0x7FFF) { extRam[addr - 0x6000] = data; return; }
+		if (addr >= NES::NSF_BANK_BASE && addr <= 0x5FFF) {
+			banks[addr - NES::NSF_BANK_BASE] = data;
+			return;
+		}
+		if (expChip && addr >= 0x8000) {
+			uint32_t dummy = 0;
+			expChip->cpuMapWrite(addr, dummy, data);
+		}
+	}
+
+	void cpuIrqAck() override {
+		// NSF zwykle nie ma specjalnej logiki przerwań sprzętowych
 	}
 
 private:
@@ -202,43 +235,6 @@ private:
 		uint16_t speed = palMode ? nsfHeader.speedPAL   : nsfHeader.speedNTSC;
 		if (speed == 0) speed = palMode ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
 		return clk * speed / 1000000.0;
-	}
-
-	// --- Pamiec CPU --------------------------------------------------------
-	uint8_t cpuRead(uint16_t addr) override {
-		if (addr <= 0x07FF) return cpuRam[addr];
-		// PPU stub: NSF rip czesto czeka na VBlank (LDA $2002 / BPL -).
-		// Zwracamy 0x80 zeby symulowac stale ustawiona flage VBlank.
-		if (addr >= 0x2000 && addr <= 0x3FFF) return 0x80;
-		if (addr >= 0x4000 && addr <= 0x4017) return apu.cpuRead(addr);
-		if (addr >= 0x5000 && addr <= 0x5002) return trampoline[addr - 0x5000];
-		if (addr >= 0x6000 && addr <= 0x7FFF) return extRam[addr - 0x6000];
-		if (addr >= 0x8000) {
-			if (isBankswitched()) {
-				uint8_t  bankIdx = (addr - 0x8000) / 4096;
-				uint16_t offset  = (addr - 0x8000) % 4096;
-				uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
-				if (romAddr < bankRom.size()) return bankRom[romAddr];
-				return 0x00;
-			}
-			return prgRom[addr - 0x8000];
-		}
-		return 0x00;
-	}
-
-	void cpuWrite(uint16_t addr, uint8_t data) override {
-		if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
-		if (addr >= 0x2000 && addr <= 0x3FFF) return; // PPU stub
-		if (addr >= 0x4000 && addr <= 0x4017) { apu.cpuWrite(addr, data); return; }
-		if (addr >= 0x6000 && addr <= 0x7FFF) { extRam[addr - 0x6000] = data; return; }
-		if (addr >= NES::NSF_BANK_BASE && addr <= 0x5FFF) {
-			banks[addr - NES::NSF_BANK_BASE] = data;
-			return;
-		}
-		if (expChip && addr >= 0x8000) {
-			uint32_t dummy = 0;
-			expChip->cpuMapWrite(addr, dummy, data);
-		}
 	}
 
 	void loadBankswitched(const std::vector<uint8_t>& data) {

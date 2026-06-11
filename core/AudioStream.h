@@ -5,6 +5,15 @@
 #include "NESConst.h"
 #include "AudioFilter.h"
 
+class NESCoreBase;
+
+struct AudioSettings {
+	float volume = 2.5f;
+	bool useFilter90 = true;
+	bool useFilter440 = true;
+	bool useFilter14k = true;
+};
+
 class AudioStream {
 public:
 	static constexpr int CHANNELS = 1;
@@ -12,7 +21,7 @@ public:
 	static constexpr int KERNEL_HALF = KERNEL_SIZE / 2;
 	static constexpr int PHASES = 128;
 
-	AudioStream() = default;
+	AudioStream(AudioSettings& settings) : settings(settings) {}
 	virtual ~AudioStream() = default;
 
 	bool init(int rate) {
@@ -32,7 +41,7 @@ public:
 		return true;
 	}
 
-	void addNESSample(double virtualDt, float value) {
+	void addNESSample(float value, double virtualDt) {
 		timeAccum += virtualDt * sampleRate;
 
 		float delta = value - blipPrevOutput;
@@ -71,10 +80,10 @@ private:
 		blipRunningSum += blipAccum[0];
 
 		float y = blipRunningSum;
-		y = hpf90.process(y);
-		y = hpf440.process(y);
-		y = lpf14k.process(y);
-		y *= NES::AUDIO_VOLUME;
+		if (settings.useFilter90) y = hpf90.process(y);
+		if (settings.useFilter440) y = hpf440.process(y);
+		if (settings.useFilter14k) y = lpf14k.process(y);
+		y *= settings.volume;
 		submitSample(y);
 
 		int size = (int)blipAccum.size();
@@ -107,6 +116,8 @@ private:
 					kernel[phase][i] /= sum;
 		}
 	}
+
+	AudioSettings& settings;
 
 	int    sampleRate = 0;
 	double timeAccum = 0.0;

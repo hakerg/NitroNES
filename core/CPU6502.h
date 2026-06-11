@@ -1,17 +1,18 @@
 #pragma once
 #include <cstdint>
-#include <functional>
 #include "NESConst.h"
 
-// 6502 status flags
-static constexpr uint8_t FLAG_C = 0x01;
-static constexpr uint8_t FLAG_Z = 0x02;
-static constexpr uint8_t FLAG_I = 0x04;
-static constexpr uint8_t FLAG_D = 0x08;
-static constexpr uint8_t FLAG_B = 0x10;
-static constexpr uint8_t FLAG_U = 0x20;
-static constexpr uint8_t FLAG_V = 0x40;
-static constexpr uint8_t FLAG_N = 0x80;
+class ICPUBus {
+public:
+    virtual ~ICPUBus() = default;
+
+    // Podstawowe operacje na magistrali
+    virtual uint8_t cpuRead(uint16_t addr) = 0;
+    virtual void    cpuWrite(uint16_t addr, uint8_t data) = 0;
+
+    // Czyszczenie/potwierdzenie przerwań (zastępuje irqAck)
+    virtual void    cpuIrqAck() = 0;
+};
 
 // ============================================================
 //  CPU6502 - cycle-accurate continuation-passing FSM.
@@ -22,8 +23,15 @@ static constexpr uint8_t FLAG_N = 0x80;
 // ============================================================
 class CPU6502 {
 public:
-    using ReadFn  = std::function<uint8_t(uint16_t)>;
-    using WriteFn = std::function<void(uint16_t, uint8_t)>;
+    // 6502 status flags
+    static constexpr uint8_t FLAG_C = 0x01;
+    static constexpr uint8_t FLAG_Z = 0x02;
+    static constexpr uint8_t FLAG_I = 0x04;
+    static constexpr uint8_t FLAG_D = 0x08;
+    static constexpr uint8_t FLAG_B = 0x10;
+    static constexpr uint8_t FLAG_U = 0x20;
+    static constexpr uint8_t FLAG_V = 0x40;
+    static constexpr uint8_t FLAG_N = 0x80;
 
     uint16_t PC = 0;
     uint8_t  S  = 0xFD;
@@ -40,15 +48,15 @@ private:
     struct Step { MicroOp next; };
 
 public:
-    CPU6502(ReadFn r, WriteFn w) : busRead(std::move(r)), busWrite(std::move(w)) {
+    CPU6502(ICPUBus& busInterface) : bus(busInterface) {
         nextOp = &CPU6502::opFetch;
     }
 
     void reset() {
         S = 0xFD;
         P = FLAG_I | FLAG_U;
-        uint16_t lo = busRead(0xFFFC);
-        uint16_t hi = busRead(0xFFFD);
+        uint16_t lo = bus.cpuRead(0xFFFC);
+        uint16_t hi = bus.cpuRead(0xFFFD);
         PC = lo | (hi << 8);
         nextOp = &CPU6502::opFetch;
         nmiPending = false;
@@ -95,14 +103,11 @@ public:
         irqDetected = level;
     }
 
-    void setIrqAckCallback(std::function<void()> fn) { irqAck = std::move(fn); }
     void addStall(uint16_t n) { stallCycles += n; }
     bool isAtInstructionBoundary() const { return nextOp == &CPU6502::opFetch; }
 
 private:
-    ReadFn busRead;
-    WriteFn busWrite;
-    std::function<void()> irqAck;
+    ICPUBus& bus;
 
     MicroOp nextOp = nullptr;
 
@@ -147,8 +152,8 @@ private:
     void setZN(uint8_t v) {
         P = (P & ~(FLAG_Z | FLAG_N)) | (v == 0 ? FLAG_Z : 0) | (v & 0x80);
     }
-    void push(uint8_t v) { busWrite(0x0100 | S, v); S--; }
-    uint8_t pull()       { S++; return busRead(0x0100 | S); }
+    void push(uint8_t v) { bus.cpuWrite(0x0100 | S, v); S--; }
+    uint8_t pull()       { S++; return bus.cpuRead(0x0100 | S); }
 
     // ============================================================
     //  Mikro-op'y
@@ -162,13 +167,13 @@ private:
                 currentInt  = IntKind::NMI;
             } else {
                 currentInt = IntKind::IRQ;
-                if (irqAck) irqAck();
+                bus.cpuIrqAck();
             }
             opcode = 0x00;
             return STEP(&CPU6502::brk1_dummy);
         }
         irqInhibitSnapshot = (P & FLAG_I) != 0; // snapshot przed wykonaniem instrukcji
-        opcode = busRead(PC++);
+        opcode = bus.cpuRead(PC++);
         return decodeAndDispatch();
     }
 
@@ -372,7 +377,7 @@ inline CPU6502::Step CPU6502::afterAddressing() {
 }
 
 inline CPU6502::Step CPU6502::readAndExec_() {
-    fetched = busRead(addr);
+    fetched = bus.cpuRead(addr);
     doExecRead();
     return DONE();
 }
@@ -403,16 +408,16 @@ inline void CPU6502::doExecRead() {
 }
 
 inline CPU6502::Step CPU6502::rmw_read() {
-    fetched = busRead(addr);
+    fetched = bus.cpuRead(addr);
     return STEP(&CPU6502::rmw_dummyWrite);
 }
 inline CPU6502::Step CPU6502::rmw_dummyWrite() {
-    busWrite(addr, fetched);
+    bus.cpuWrite(addr, fetched);
     doExecRmw();
     return STEP(&CPU6502::rmw_finalWrite);
 }
 inline CPU6502::Step CPU6502::rmw_finalWrite() {
-    busWrite(addr, tmp);
+    bus.cpuWrite(addr, tmp);
     return DONE();
 }
 inline void CPU6502::doExecRmw() {
@@ -438,32 +443,32 @@ inline CPU6502::Step CPU6502::writeStep_() {
         storeKind == StoreKind::SHA || storeKind == StoreKind::SHS) {
         if (pageCross) addr = ((uint16_t)val << 8) | (addr & 0xFF);
     }
-    busWrite(addr, val);
+    bus.cpuWrite(addr, val);
     return DONE();
 }
 
 inline CPU6502::Step CPU6502::am_imm_exec() {
-    fetched = busRead(PC++);
+    fetched = bus.cpuRead(PC++);
     doExecRead();
     return DONE();
 }
 inline CPU6502::Step CPU6502::am_imp_exec() {
-    busRead(PC);
+    bus.cpuRead(PC);
     return DONE();
 }
 
-inline CPU6502::Step CPU6502::am_zp_1()  { addr = busRead(PC++); return afterAddressing(); }
-inline CPU6502::Step CPU6502::am_zpx_1() { ptr = busRead(PC++); return STEP(&CPU6502::am_zpx_2); }
-inline CPU6502::Step CPU6502::am_zpx_2() { busRead(ptr); addr = (ptr + X) & 0xFF; return afterAddressing(); }
-inline CPU6502::Step CPU6502::am_zpy_1() { ptr = busRead(PC++); return STEP(&CPU6502::am_zpy_2); }
-inline CPU6502::Step CPU6502::am_zpy_2() { busRead(ptr); addr = (ptr + Y) & 0xFF; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_zp_1()  { addr = bus.cpuRead(PC++); return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_zpx_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_zpx_2); }
+inline CPU6502::Step CPU6502::am_zpx_2() { bus.cpuRead(ptr); addr = (ptr + X) & 0xFF; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_zpy_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_zpy_2); }
+inline CPU6502::Step CPU6502::am_zpy_2() { bus.cpuRead(ptr); addr = (ptr + Y) & 0xFF; return afterAddressing(); }
 
-inline CPU6502::Step CPU6502::am_abs_1() { addr = busRead(PC++); return STEP(&CPU6502::am_abs_2); }
-inline CPU6502::Step CPU6502::am_abs_2() { addr |= busRead(PC++) << 8; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_abs_1() { addr = bus.cpuRead(PC++); return STEP(&CPU6502::am_abs_2); }
+inline CPU6502::Step CPU6502::am_abs_2() { addr |= bus.cpuRead(PC++) << 8; return afterAddressing(); }
 
-inline CPU6502::Step CPU6502::am_abx_1() { addr = busRead(PC++); return STEP(&CPU6502::am_abx_2); }
+inline CPU6502::Step CPU6502::am_abx_1() { addr = bus.cpuRead(PC++); return STEP(&CPU6502::am_abx_2); }
 inline CPU6502::Step CPU6502::am_abx_2() {
-    uint8_t high = busRead(PC++);
+    uint8_t high = bus.cpuRead(PC++);
     origHigh = high;
     uint16_t base = (high << 8) | (addr & 0xFF);
     uint16_t eff  = base + X;
@@ -474,13 +479,13 @@ inline CPU6502::Step CPU6502::am_abx_2() {
     return afterAddressing();
 }
 inline CPU6502::Step CPU6502::am_abx_3_fixup() {
-    busRead(addr - (pageCross ? 0x100 : 0));
+    bus.cpuRead(addr - (pageCross ? 0x100 : 0));
     return afterAddressing();
 }
 
-inline CPU6502::Step CPU6502::am_aby_1() { addr = busRead(PC++); return STEP(&CPU6502::am_aby_2); }
+inline CPU6502::Step CPU6502::am_aby_1() { addr = bus.cpuRead(PC++); return STEP(&CPU6502::am_aby_2); }
 inline CPU6502::Step CPU6502::am_aby_2() {
-    uint8_t high = busRead(PC++);
+    uint8_t high = bus.cpuRead(PC++);
     origHigh = high;
     uint16_t base = (high << 8) | (addr & 0xFF);
     uint16_t eff  = base + Y;
@@ -491,19 +496,19 @@ inline CPU6502::Step CPU6502::am_aby_2() {
     return afterAddressing();
 }
 inline CPU6502::Step CPU6502::am_aby_3_fixup() {
-    busRead(addr - (pageCross ? 0x100 : 0));
+    bus.cpuRead(addr - (pageCross ? 0x100 : 0));
     return afterAddressing();
 }
 
-inline CPU6502::Step CPU6502::am_izx_1() { ptr = busRead(PC++); return STEP(&CPU6502::am_izx_2); }
-inline CPU6502::Step CPU6502::am_izx_2() { busRead(ptr); ptr = (ptr + X) & 0xFF; return STEP(&CPU6502::am_izx_3); }
-inline CPU6502::Step CPU6502::am_izx_3() { addr = busRead(ptr); return STEP(&CPU6502::am_izx_4); }
-inline CPU6502::Step CPU6502::am_izx_4() { addr |= busRead((ptr + 1) & 0xFF) << 8; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_izx_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_izx_2); }
+inline CPU6502::Step CPU6502::am_izx_2() { bus.cpuRead(ptr); ptr = (ptr + X) & 0xFF; return STEP(&CPU6502::am_izx_3); }
+inline CPU6502::Step CPU6502::am_izx_3() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_izx_4); }
+inline CPU6502::Step CPU6502::am_izx_4() { addr |= bus.cpuRead((ptr + 1) & 0xFF) << 8; return afterAddressing(); }
 
-inline CPU6502::Step CPU6502::am_izy_1() { ptr = busRead(PC++); return STEP(&CPU6502::am_izy_2); }
-inline CPU6502::Step CPU6502::am_izy_2() { addr = busRead(ptr); return STEP(&CPU6502::am_izy_3); }
+inline CPU6502::Step CPU6502::am_izy_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_izy_2); }
+inline CPU6502::Step CPU6502::am_izy_2() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_izy_3); }
 inline CPU6502::Step CPU6502::am_izy_3() {
-    uint16_t high = busRead((ptr + 1) & 0xFF);
+    uint16_t high = bus.cpuRead((ptr + 1) & 0xFF);
     origHigh = (uint8_t)high;
     uint16_t base = (high << 8) | (addr & 0xFF);
     uint16_t eff  = base + Y;
@@ -514,12 +519,12 @@ inline CPU6502::Step CPU6502::am_izy_3() {
     return afterAddressing();
 }
 inline CPU6502::Step CPU6502::am_izy_4_fixup() {
-    busRead(addr - (pageCross ? 0x100 : 0));
+    bus.cpuRead(addr - (pageCross ? 0x100 : 0));
     return afterAddressing();
 }
 
 inline CPU6502::Step CPU6502::am_rel_1() {
-    branchOffset = busRead(PC++);
+    branchOffset = bus.cpuRead(PC++);
     // Cykl 2 (operand fetch) - spec: "interrupts are always polled before
     // the second CPU cycle (the operand fetch)". Polling musi zajsc dla
     // OBYDWU sciezek (taken i not-taken). Dla not-taken DONE() i polluje,
@@ -532,7 +537,7 @@ inline CPU6502::Step CPU6502::am_rel_1() {
     return STEP(&CPU6502::am_rel_2_taken);
 }
 inline CPU6502::Step CPU6502::am_rel_2_taken() {
-    busRead(PC);
+    bus.cpuRead(PC);
     uint16_t oldPC = PC;
     uint8_t  oldL  = PC & 0xFF;
     uint8_t  newL  = oldL + branchOffset;
@@ -552,7 +557,7 @@ inline CPU6502::Step CPU6502::am_rel_2_taken() {
     return STEP(&CPU6502::am_rel_3_pagefix);
 }
 inline CPU6502::Step CPU6502::am_rel_3_pagefix() {
-    busRead(PC);
+    bus.cpuRead(PC);
     PC += pageCross ? (uint16_t)(-0x100) : 0x100;
     // Cykl 4 (PCH fixup) - polling przez DONE(): snapshot z poczatku
     // tego cyklu odpowiada stanowi IRQ z φ2 cyklu 3 - zgodnie ze spec
@@ -560,23 +565,23 @@ inline CPU6502::Step CPU6502::am_rel_3_pagefix() {
     return DONE();
 }
 
-inline CPU6502::Step CPU6502::am_ind_1() { ptr = busRead(PC++); return STEP(&CPU6502::am_ind_2); }
-inline CPU6502::Step CPU6502::am_ind_2() { ptr |= busRead(PC++) << 8; return STEP(&CPU6502::am_ind_3); }
-inline CPU6502::Step CPU6502::am_ind_3() { addr = busRead(ptr); return STEP(&CPU6502::am_ind_4); }
+inline CPU6502::Step CPU6502::am_ind_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_ind_2); }
+inline CPU6502::Step CPU6502::am_ind_2() { ptr |= bus.cpuRead(PC++) << 8; return STEP(&CPU6502::am_ind_3); }
+inline CPU6502::Step CPU6502::am_ind_3() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_ind_4); }
 inline CPU6502::Step CPU6502::am_ind_4() {
     uint16_t hiAddr = (ptr & 0xFF00) | ((ptr + 1) & 0xFF); // sprzetowy bug JMP (ind)
-    addr |= busRead(hiAddr) << 8;
+    addr |= bus.cpuRead(hiAddr) << 8;
     PC = addr;
     return DONE();
 }
 
-inline CPU6502::Step CPU6502::jmpAbs1_low()  { addr = busRead(PC++); return STEP(&CPU6502::jmpAbs2_high); }
-inline CPU6502::Step CPU6502::jmpAbs2_high() { addr |= busRead(PC++) << 8; PC = addr; return DONE(); }
+inline CPU6502::Step CPU6502::jmpAbs1_low()  { addr = bus.cpuRead(PC++); return STEP(&CPU6502::jmpAbs2_high); }
+inline CPU6502::Step CPU6502::jmpAbs2_high() { addr |= bus.cpuRead(PC++) << 8; PC = addr; return DONE(); }
 
 // ---- BRK / IRQ / NMI ----
 inline CPU6502::Step CPU6502::brk1_dummy() {
-    if (currentInt == IntKind::SoftwareBRK) busRead(PC++);
-    else                                    busRead(PC);
+    if (currentInt == IntKind::SoftwareBRK) bus.cpuRead(PC++);
+    else                                    bus.cpuRead(PC);
     return STEP(&CPU6502::brk2_pushPCH);
 }
 inline CPU6502::Step CPU6502::brk2_pushPCH() { push((PC >> 8) & 0xFF); return STEP(&CPU6502::brk3_pushPCL); }
@@ -596,9 +601,9 @@ inline CPU6502::Step CPU6502::brk4_pushP() {
     irqInhibitSnapshot = true;
     return STEP(&CPU6502::brk5_readLow);
 }
-inline CPU6502::Step CPU6502::brk5_readLow()  { addr = busRead(intVector()); return STEP(&CPU6502::brk6_readHigh); }
+inline CPU6502::Step CPU6502::brk5_readLow()  { addr = bus.cpuRead(intVector()); return STEP(&CPU6502::brk6_readHigh); }
 inline CPU6502::Step CPU6502::brk6_readHigh() {
-    addr |= busRead(intVector() + 1) << 8;
+    addr |= bus.cpuRead(intVector() + 1) << 8;
     PC = addr;
     currentInt = IntKind::None;
     // Spec: po zakonczeniu sekwencji przerwania (BRK/IRQ/NMI) co najmniej
@@ -609,33 +614,33 @@ inline CPU6502::Step CPU6502::brk6_readHigh() {
     return DONE_NOPOLL();
 }
 
-inline CPU6502::Step CPU6502::rti1_dummyRead() { busRead(PC); return STEP(&CPU6502::rti2_incS); }
-inline CPU6502::Step CPU6502::rti2_incS()      { busRead(0x0100 | S); return STEP(&CPU6502::rti3_pullP); }
+inline CPU6502::Step CPU6502::rti1_dummyRead() { bus.cpuRead(PC); return STEP(&CPU6502::rti2_incS); }
+inline CPU6502::Step CPU6502::rti2_incS()      { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::rti3_pullP); }
 inline CPU6502::Step CPU6502::rti3_pullP()     { P = (pull() & ~FLAG_B) | FLAG_U; irqInhibitSnapshot = (P & FLAG_I) != 0; return STEP(&CPU6502::rti4_pullPCL); }
 inline CPU6502::Step CPU6502::rti4_pullPCL()   { addr = pull(); return STEP(&CPU6502::rti5_pullPCH); }
 inline CPU6502::Step CPU6502::rti5_pullPCH()   { addr |= pull() << 8; PC = addr; return DONE(); }
 
-inline CPU6502::Step CPU6502::rts1_dummyRead() { busRead(PC); return STEP(&CPU6502::rts2_incS); }
-inline CPU6502::Step CPU6502::rts2_incS()      { busRead(0x0100 | S); return STEP(&CPU6502::rts3_pullPCL); }
+inline CPU6502::Step CPU6502::rts1_dummyRead() { bus.cpuRead(PC); return STEP(&CPU6502::rts2_incS); }
+inline CPU6502::Step CPU6502::rts2_incS()      { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::rts3_pullPCL); }
 inline CPU6502::Step CPU6502::rts3_pullPCL()   { addr = pull(); return STEP(&CPU6502::rts4_pullPCH); }
 inline CPU6502::Step CPU6502::rts4_pullPCH()   { addr |= pull() << 8; PC = addr; return STEP(&CPU6502::rts5_incPC); }
-inline CPU6502::Step CPU6502::rts5_incPC()     { busRead(PC); PC++; return DONE(); }
+inline CPU6502::Step CPU6502::rts5_incPC()     { bus.cpuRead(PC); PC++; return DONE(); }
 
-inline CPU6502::Step CPU6502::jsr1_readLow()  { addr = busRead(PC++); return STEP(&CPU6502::jsr2_internal); }
-inline CPU6502::Step CPU6502::jsr2_internal() { busRead(0x0100 | S); return STEP(&CPU6502::jsr3_pushPCH); }
+inline CPU6502::Step CPU6502::jsr1_readLow()  { addr = bus.cpuRead(PC++); return STEP(&CPU6502::jsr2_internal); }
+inline CPU6502::Step CPU6502::jsr2_internal() { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::jsr3_pushPCH); }
 inline CPU6502::Step CPU6502::jsr3_pushPCH()  { push((PC >> 8) & 0xFF); return STEP(&CPU6502::jsr4_pushPCL); }
 inline CPU6502::Step CPU6502::jsr4_pushPCL()  { push(PC & 0xFF); return STEP(&CPU6502::jsr5_readHigh); }
-inline CPU6502::Step CPU6502::jsr5_readHigh() { addr |= busRead(PC) << 8; PC = addr; return DONE(); }
+inline CPU6502::Step CPU6502::jsr5_readHigh() { addr |= bus.cpuRead(PC) << 8; PC = addr; return DONE(); }
 
-inline CPU6502::Step CPU6502::pha1_dummy() { busRead(PC); return STEP(&CPU6502::pha2_push); }
+inline CPU6502::Step CPU6502::pha1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::pha2_push); }
 inline CPU6502::Step CPU6502::pha2_push()  { push(A); return DONE(); }
-inline CPU6502::Step CPU6502::php1_dummy() { busRead(PC); return STEP(&CPU6502::php2_push); }
+inline CPU6502::Step CPU6502::php1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::php2_push); }
 inline CPU6502::Step CPU6502::php2_push()  { push(P | FLAG_B | FLAG_U); return DONE(); }
-inline CPU6502::Step CPU6502::pla1_dummy() { busRead(PC); return STEP(&CPU6502::pla2_incS); }
-inline CPU6502::Step CPU6502::pla2_incS()  { busRead(0x0100 | S); return STEP(&CPU6502::pla3_pull); }
+inline CPU6502::Step CPU6502::pla1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::pla2_incS); }
+inline CPU6502::Step CPU6502::pla2_incS()  { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::pla3_pull); }
 inline CPU6502::Step CPU6502::pla3_pull()  { A = pull(); setZN(A); return DONE(); }
-inline CPU6502::Step CPU6502::plp1_dummy() { busRead(PC); return STEP(&CPU6502::plp2_incS); }
-inline CPU6502::Step CPU6502::plp2_incS()  { busRead(0x0100 | S); return STEP(&CPU6502::plp3_pull); }
+inline CPU6502::Step CPU6502::plp1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::plp2_incS); }
+inline CPU6502::Step CPU6502::plp2_incS()  { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::plp3_pull); }
 inline CPU6502::Step CPU6502::plp3_pull()  { P = (pull() & ~FLAG_B) | FLAG_U; return DONE(); }
 
 inline CPU6502::Step CPU6502::jam_loop() {

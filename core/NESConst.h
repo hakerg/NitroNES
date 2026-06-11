@@ -18,7 +18,6 @@ namespace NES {
     static constexpr double PPU_CLOCK_PAL = MASTER_CLOCK_PAL / 5.0;
 
     // --- Audio ---
-    static constexpr float    AUDIO_VOLUME = 2.5f;
     static constexpr float    AUDIO_HP1_CUTOFF = 90.0f;
     static constexpr float    AUDIO_HP2_CUTOFF = 440.0f;
     static constexpr float    AUDIO_LP_CUTOFF = 14000.0f;
@@ -55,7 +54,4 @@ namespace NES {
     static constexpr double REFRESH_RATE_NTSC_OFF = PPU_CLOCK_NTSC / PPU_CYCLES_PER_FRAME;
     static constexpr double REFRESH_RATE_NTSC_ON  = PPU_CLOCK_NTSC / (PPU_CYCLES_PER_FRAME - 0.5);
 
-    // --- Timing ---
-    static constexpr double MAX_LAG = 0.04; // s
-
-} // namespace NES
+    } // namespace NES
