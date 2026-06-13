@@ -61,3 +61,13 @@ target_include_directories(NESEmulator PRIVATE
 
 # Połącz z SDL3 statycznie
 target_link_libraries(NESEmulator PRIVATE SDL3::SDL3-static)
+target_link_options(NESEmulator PRIVATE -static-libgcc -static-libstdc++ -static)
+
+# ------------------------------------
+# Testy automatyczne
+# ------------------------------------
+add_executable(nes_tests tests/nes_test_main.cpp)
+set_property(TARGET nes_tests PROPERTY CXX_STANDARD 23)
+set_property(TARGET nes_tests PROPERTY CXX_STANDARD_REQUIRED ON)
+target_include_directories(nes_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_options(nes_tests PRIVATE -static-libgcc -static-libstdc++ -static)
