@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include "NESConst.h"
 
 class ICPUBus {
 public:
@@ -34,11 +33,11 @@ public:
     static constexpr uint8_t FLAG_N = 0x80;
 
     uint16_t PC = 0;
-    uint8_t  S  = 0xFD;
+    uint8_t  S  = 0x00;
     uint8_t  A  = 0;
     uint8_t  X  = 0;
     uint8_t  Y  = 0;
-    uint8_t  P  = FLAG_I | FLAG_U;
+    uint8_t  P  = FLAG_U | FLAG_B;
 
     uint64_t totalCycles = 0;
 
@@ -53,8 +52,9 @@ public:
     }
 
     void reset() {
-        S = 0xFD;
-        P = FLAG_I | FLAG_U;
+        S -= 3;
+        P |= FLAG_I;
+
         uint16_t lo = bus.cpuRead(0xFFFC);
         uint16_t hi = bus.cpuRead(0xFFFD);
         PC = lo | (hi << 8);

@@ -15,18 +15,15 @@ public:
 		AppAudioStream& audio,
 		AppSettings& settings)
 		: IFileSession(path, audio, window, settings)
-		, nsf(host)
-	{
-		if (!nsf.loadFile(path))
-			throw std::runtime_error("[NSFSession] Nie udalo sie zaladowac: " + path);
-	}
+		, nsf(host, path)
+	{}
 
 	~NSFSession() override { nsf.shutdown(); }
 
 	NESCoreBase& core() const override { return nsf; }
 
 	void processKeyDown(AppKey key) override {
-		std::lock_guard<std::mutex> lock(coreMutex);
+		std::lock_guard lock(coreMutex);
 
 		switch (key) {
 		case AppKey::NsfTogglePause: nsf.paused = !nsf.paused; break;

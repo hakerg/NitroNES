@@ -19,10 +19,11 @@ class NESHeadlessSystem
     , public  NESSystem
 {
 public:
-    NESHeadlessSystem()
+    explicit NESHeadlessSystem(const std::string& path)
         : NESSystem(
             static_cast<IEmulatorHost&>(*this),
-            static_cast<INESSystemHost&>(*this)) {}
+            static_cast<INESSystemHost&>(*this),
+            path) {}
 
     void dumpNametable(uint8_t dst[960], int nt = 0) {
         uint16_t base = (nt == 0) ? 0x2000u : 0x2400u;

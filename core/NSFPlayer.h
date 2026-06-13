@@ -3,25 +3,26 @@
 #include <array>
 #include <vector>
 #include <string>
-#include <iostream>
 #include <memory>
-#include <filesystem>
 
 #include "NESConst.h"
 #include "NESCoreBase.h"
 #include "NSFLoader.h"
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
-#include "mappers/AllMappers.h"
 
 class NSFPlayer : public NESCoreBase, public ICPUBus {
 public:
 	static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000; // Adres pulapki (JMP $5000)
 	static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
 
-	explicit NSFPlayer(IEmulatorHost& host) : NESCoreBase(*this, host) {
+	explicit NSFPlayer(IEmulatorHost& host, const std::string& path) : NESCoreBase(*this, host) {
 		extRam.fill(0x00);
 		prgRom.assign(32768, 0x00);
+		NSFFile nsf;
+		if (!NSFLoader::load(path, nsf))
+			throw std::runtime_error("[NSF] Nie udalo sie zaladowac: " + path);
+		load(nsf);
 	}
 
 	bool load(const NSFFile& nsf) {
@@ -124,11 +125,6 @@ public:
 	uint8_t getTotalSongs()   const { return nsfHeader.totalSongs; }
 
 	// --- NESCoreBase API --------------------------------------------------
-	bool loadFile(const std::string& path) override {
-		NSFFile nsf;
-		if (!NSFLoader::load(path, nsf)) return false;
-		return load(nsf);
-	}
 
 	void clockOneCycle(float& outAudioSample) override {
 		trampolineMaintenance();
@@ -151,6 +147,8 @@ public:
 
 		outAudioSample = apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
 	}
+
+	void reset() override { initSong(currentSong); }
 
 protected:
 	// --- Pamiec CPU --------------------------------------------------------
@@ -195,7 +193,6 @@ protected:
 	}
 
 private:
-	// Trampoline pod $5000: zarzadzanie wywolaniem PLAY.
 	void trampolineMaintenance() {
 		if (callDone && playTimer <= 0.0) {
 			if (!cpu.isAtInstructionBoundary()) return;
@@ -206,14 +203,6 @@ private:
 			cpu.PC = nsfHeader.playAddr;
 
 			playTimer += playCycles;
-			playRunCycles = 0.0;
-		}
-		else if (!callDone) {
-			if (++playRunCycles > playCycles * 4.0 && playCycles > 0.0) {
-				if (!cpu.isAtInstructionBoundary()) return;
-				cpu.PC = TRAMPOLINE_ADDR;
-				playRunCycles = 0;
-			}
 		}
 	}
 
@@ -260,7 +249,6 @@ private:
 	double    cpuClock    = NES::CPU_CLOCK_NTSC;
 	double    playCycles    = 0.0;
 	double    playTimer     = 0.0;
-	double    playRunCycles = 0.0;  // ile cykli aktualne PLAY juz sie wykonuje
 	bool      callDone    = true;
 	uint8_t   currentSong = 1;
 

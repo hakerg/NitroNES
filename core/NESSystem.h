@@ -1,13 +1,8 @@
 ﻿#pragma once
-#include <cstdint>
 #include <array>
-#include <atomic>
-#include <cstring>
-#include <cmath>
 #include <memory>
-#include <iostream>
+#include <stdexcept>
 
-#include "NESConst.h"
 #include "NESCoreBase.h"
 #include "Cartridge.h"
 #include "PPU2C02.h"
@@ -19,25 +14,24 @@ public:
     virtual uint8_t readController(int port) = 0;
 };
 
-// Rdzen NES: PPU, kontrolery, beam racer, render tekstury PPU.
 class NESSystem : public NESCoreBase, public ICPUBus {
 public:
-    explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost) :
-        NESCoreBase(*this, host), ppu(*this), nesHost(nesHost) {}
-
-    // --- NESCoreBase API --------------------------------------------------
-    bool loadFile(const std::string& path) override {
+    explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost, const std::string& path)
+        : NESCoreBase(*this, host), ppu(*this), nesHost(nesHost) {
         cart = std::make_unique<Cartridge>(path);
         if (!cart->isImageValid()) {
-            std::cerr << "[NES] Nie udalo sie zaladowac pliku .nes\n";
             cart.reset();
-            return false;
+            throw std::runtime_error("[NES] Nie udalo sie zaladowac: " + path);
         }
         ppu.cart = cart.get();
         pal = false;
         apu.setPAL(pal);
+        // Power-on: CPU w stanie pre-reset → reset() da S=$FD, P=$34
+        cpuRam.fill(0x00);
+        cpu.A = 0; cpu.X = 0; cpu.Y = 0;
+        cpu.S = 0x00;
+        cpu.P = CPU6502::FLAG_U | CPU6502::FLAG_B;
         reset();
-        return true;
     }
 
     void clockOneCycle(float& outAudioSample) override {
@@ -45,7 +39,6 @@ public:
         ppu.clock();
         if (cart) cart->clock();
         apu.clock();
-
         cpu.tick();
         ppu.clock();
 
@@ -63,6 +56,13 @@ public:
         outAudioSample = apu.getOutputSample() + (cart ? cart->audioOutput() : 0.0f);
     }
 
+    void reset() override {
+        if (cart) cart->reset();
+        apu.reset();
+        ppu.reset();
+        cpu.reset();
+    }
+
     void renderFrame() override {
         nesHost.renderFrame(ppu.getFramebuffer());
     }
@@ -75,7 +75,6 @@ public:
         return ppu.getScanline();
     }
 
-protected:
     uint8_t cpuRead(uint16_t addr) override {
         uint8_t data;
         if (addr < 0x2000) {
@@ -140,6 +139,7 @@ protected:
         if (cart) cart->irqClear();
     }
 
+protected:
     PPU2C02 ppu;
     std::unique_ptr<Cartridge> cart;
 
@@ -151,11 +151,4 @@ protected:
 
 private:
     INESSystemHost& nesHost;
-
-    void reset() {
-        cpuRam.fill(0x00);
-        if (cart) cart->reset();
-        ppu.reset();
-        cpu.reset();
-    }
 };

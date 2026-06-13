@@ -496,6 +496,19 @@ public:
         setPAL(false);
     }
 
+    void reset() {
+        pulse1.enabled  = false;  pulse1.lengthCounter  = 0;
+        pulse2.enabled  = false;  pulse2.lengthCounter  = 0;
+        triangle.enabled = false; triangle.lengthCounter = 0;
+        noise.enabled   = false;  noise.lengthCounter   = 0;
+        dmc.bytesRemaining   = 0;
+        dmc.irqPending       = false;
+
+        frameIRQPending = false;
+
+        cpuWrite(0x4017, val4017);
+    }
+
     // Przełącza tryb taktowania kanałów (tabele okresów + progi frame countera).
     // Wywołaj raz przy ładowaniu ROM-u / NSF (przed `clock()`).
     void setPAL(bool enable) {

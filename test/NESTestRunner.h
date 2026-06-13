@@ -1,31 +1,32 @@
 #pragma once
 #include "NESHeadlessSystem.h"
 #include <string>
-#include <algorithm>
 
 class NESTestRunner {
 public:
-    explicit NESTestRunner(std::string romPath)
-        : romPath(std::move(romPath)) {}
+    explicit NESTestRunner(const std::string& romPath)
+        : nes(romPath) {}
 
     std::string run(int frames = 30 * 60) {
-        NESHeadlessSystem nes;
+        runFrames(frames);
+        return readScreen();
+    }
 
-        if (!nes.loadFile(romPath))
-            return "Nie udalo sie zaladowac: " + romPath;
+    void reset() {
+        nes.reset();
+    }
 
+private:
+    NESHeadlessSystem nes;
+
+    void runFrames(int frames) {
         for (int f = 0; f < frames; ++f) {
             double dt;
             nes.tickFrame(dt);
         }
-
-        return readScreen(nes);
     }
 
-private:
-    std::string romPath;
-
-    static std::string readScreen(NESHeadlessSystem& nes) {
+    std::string readScreen() {
         uint8_t tiles[960]{};
         nes.dumpNametable(tiles, 0);
 

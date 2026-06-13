@@ -7,7 +7,7 @@
 
 class SDLAudioStream : public AppAudioStream {
 public:
-	SDLAudioStream(AudioSettings& settings) : AppAudioStream(settings) {
+	explicit SDLAudioStream(AudioSettings& settings) : AppAudioStream(settings) {
 		if (!open())
 			std::cerr << "[Audio] Ostrzezenie: brak audio\n";
 	}
@@ -15,13 +15,7 @@ public:
 
 	bool isOpen() const { return deviceId != 0 && sdlStream != nullptr; }
 
-	SDL_AudioStream* getSDLStream() { return sdlStream; }
-
-protected:
-	void submitSample(float sample) override {
-		std::lock_guard<std::mutex> lock(outMutex);
-		outBuf.push_back(sample);
-	}
+	SDL_AudioStream* getSDLStream() const { return sdlStream; }
 
 	void attachSession(IFileSession& s) override {
 		session = &s;
@@ -31,6 +25,12 @@ protected:
 	void detachSession() override {
 		SDL_SetAudioStreamGetCallback(sdlStream, nullptr, nullptr);
 		session = nullptr;
+	}
+
+protected:
+	void submitSample(float sample) override {
+		std::lock_guard lock(outMutex);
+		outBuf.push_back(sample);
 	}
 
 private:
@@ -84,15 +84,7 @@ private:
 			return false;
 		}
 
-		if (!AudioStream::init(nativeSpec.freq)) {
-			SDL_DestroyAudioStream(sdlStream);
-			SDL_CloseAudioDevice(deviceId);
-			sdlStream = nullptr;
-			deviceId = 0;
-			SDL_QuitSubSystem(SDL_INIT_AUDIO);
-			return false;
-		}
-
+		init(nativeSpec.freq);
 		SDL_ResumeAudioDevice(deviceId);
 		return true;
 	}
@@ -109,8 +101,8 @@ private:
 		}
 	}
 
-	static void SDLCALL audioCallback(void* userdata, SDL_AudioStream* /*stream*/,
-		int additional_amount, int /*total_amount*/) {
+	static void SDLCALL audioCallback(void* userdata, SDL_AudioStream* stream,
+		int additional_amount, int total_amount) {
 		auto* self = static_cast<SDLAudioStream*>(userdata);
 		if (!self) return;
 
@@ -127,8 +119,16 @@ private:
 			session->coreMutex.unlock();
 		}
 
-		std::lock_guard<std::mutex> lock(outMutex);
-		SDL_PutAudioStreamData(sdlStream, outBuf.data(), (int)(outBuf.size() * sizeof(float)));
+		if (samplesNeeded > 0) {
+			overflowCount = 0;
+		} else {
+			overflowCount++;
+		}
+
+		std::lock_guard lock(outMutex);
+		if (overflowCount < 2) {
+			SDL_PutAudioStreamData(sdlStream, outBuf.data(), (int)(outBuf.size() * sizeof(float)));
+		}
 		outBuf.clear();
 	}
 
@@ -137,4 +137,5 @@ private:
 	SDL_AudioStream* sdlStream = nullptr;
 	std::vector<float> outBuf;
 	std::mutex outMutex;
+	int overflowCount = 0;
 };

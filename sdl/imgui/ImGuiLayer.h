@@ -77,7 +77,8 @@ public:
 					}
 					ImGui::Separator();
 					ImGui::Checkbox(tr("emulation.pause"), &core.paused);
-					if (ImGui::MenuItem(tr("emulation.reset"))) {}
+					if (ImGui::MenuItem(tr("emulation.reset"))) handler->onReset();
+
 					ImGui::EndMenu();
 				}
 			}

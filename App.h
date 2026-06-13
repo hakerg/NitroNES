@@ -63,6 +63,11 @@ protected:
 		session = makeSession(p);
 	}
 
+	void onReset() override {
+		std::lock_guard lock(session->coreMutex);
+		session->core().reset();
+	}
+
 	void onQuit() override {
 		running = false;
 	}

@@ -1,9 +1,5 @@
 ﻿#pragma once
-#include <cstdint>
 #include <array>
-#include <atomic>
-#include <string>
-
 #include "NESConst.h"
 #include "CPU6502.h"
 #include "APU2A03.h"
@@ -28,14 +24,17 @@ public:
 	}
 	virtual ~NESCoreBase() = default;
 
-	double getCPUClockRate() {
+	double getCPUClockRate() const {
 		return pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
 	}
 
 	void tickFrame(double& outDT) {
-		outDT = 0.0;
-		if (paused) return;
+		if (paused) {
+			outDT = 0.1;
+			return;
+		}
 
+		outDT = 0.0;
 		frameReady = false;
 		do {
 			double dt;
@@ -48,13 +47,13 @@ public:
 	void tickWhile(ConditionFunc condition) {
 		if (paused) return;
 
-		while (!paused && condition()) {
+		while (condition()) {
 			double dt;
 			tick(dt);
 		}
 	}
 
-	virtual bool loadFile(const std::string& path) = 0;
+	virtual void reset() {}
 	virtual void shutdown() {}
 	virtual void renderFrame() {}
 
@@ -62,13 +61,13 @@ public:
 	virtual bool hasPPU() const { return false; }
 	virtual int getCurrentScanline() const { return -1; }
 
-protected:
-	virtual void clockOneCycle(float& outAudioSample) = 0;
-
 	void onFrameComplete() override {
 		frameReady = true;
 		host.onFrameReady();
 	}
+
+protected:
+	virtual void clockOneCycle(float& outAudioSample) = 0;
 
 	CPU6502 cpu;
 	APU2A03 apu;
@@ -79,7 +78,7 @@ private:
 	bool frameReady = false;
 
 	void tick(double& outDT) {
-		outDT = (1.0 / getCPUClockRate()) / speed;
+		outDT = 1.0 / (getCPUClockRate() * speed);
 
 		if (!paused) {
 			float audioSample = 0.0f;

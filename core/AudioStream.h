@@ -24,7 +24,7 @@ public:
 	AudioStream(AudioSettings& settings) : settings(settings) {}
 	virtual ~AudioStream() = default;
 
-	bool init(int rate) {
+	void init(int rate) {
 		sampleRate = rate;
 
 		blipPrevOutput = 0.0f;
@@ -37,8 +37,6 @@ public:
 
 		blipAccum.resize(KERNEL_SIZE + 1, 0.0f);
 		timeAccum = 0.0;
-
-		return true;
 	}
 
 	void addNESSample(float value, double virtualDt) {
@@ -102,8 +100,8 @@ private:
 					? 1.0f
 					: std::sin(PI * x) / (PI * x);
 
-				float n = (float)i;
-				float N = (float)(KERNEL_SIZE - 1);
+				auto n = (float)i;
+				auto N = (float)(KERNEL_SIZE - 1);
 				float window = 0.42f
 					- 0.5f * std::cos(2.0f * PI * n / N)
 					+ 0.08f * std::cos(4.0f * PI * n / N);

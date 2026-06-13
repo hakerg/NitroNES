@@ -20,12 +20,9 @@ public:
 		IEmulatorHost& host,
 		AppAudioStream& audio)
 		: IFileSession(path, audio, window, settings)
-		, nes(host, *this)
+		, nes(host, *this, path)
 		, input(input)
-	{
-		if (!nes.loadFile(path))
-			throw std::runtime_error("[NESSession] Nie udalo sie zaladowac: " + path);
-	}
+	{}
 
 	~NESSession() override { nes.shutdown(); }
 
@@ -39,8 +36,6 @@ public:
 
 		nes.renderFrame();
 	}
-
-protected:
 	void renderFrame(const uint32_t* frameBuffer) override {
 		window.presentNESFrame(frameBuffer, *this);
 	}
@@ -65,7 +60,7 @@ private:
 		updateSpeed(baseSpeed);
 		while (timerLag > 0.0) {
 			double dt;
-			std::lock_guard<std::mutex> lock(coreMutex);
+			std::lock_guard lock(coreMutex);
 			nes.tickFrame(dt);
 			timerLag -= dt;
 		}
@@ -75,27 +70,26 @@ private:
 		int monitorScanline = 0;
 		if (!window.getScanLine(monitorScanline)) { runTimerSync(baseSpeed); return; }
 
-		MonitorGeometry geo = window.getMonitorGeometry();
-		if (geo.width <= 0 || geo.height <= 0) { runTimerSync(baseSpeed); return; }
-
 		double monitorHz = window.getRefreshHz();
 		if (monitorHz <= 0.0) { runTimerSync(baseSpeed); return; }
 
-		int winW = 0, winH = 0;
-		window.getPixelSize(winW, winH);
+		int geoW = 0, geoH = 0;
+		window.getMonitorGeometry(geoW, geoH);
+		if (geoW <= 0 || geoH <= 0) { runTimerSync(baseSpeed); return; }
 
-		double delta = (settings.scanlineBufferMs / 1000.0) * monitorHz * geo.height;
+		double delta = (settings.scanlineBufferMs / 1000.0) * monitorHz * geoH;
 		double predicted = monitorScanline + delta;
 
-		float nesX = 0.0f, nesY = 0.0f;
-		NES::monitorToNES(geo.x, geo.y, winW, winH, 0.0f, (float)predicted, nesX, nesY);
+		float dstX, dstY, dstW, dstH;
+		NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH);
+		float nesY = ((float)predicted - dstY) / dstH * (float)NES::VISIBLE_H + (float)NES::OVERSCAN_TOP;
 
 		int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
 		if (target < 0) target += NES::TOTAL_SCANLINES;
 
 		updateSpeed(baseSpeed);
-		std::lock_guard<std::mutex> lock(coreMutex);
-		nes.tickWhile([&]() { return nes.getCurrentScanline() != target; });
+		std::lock_guard lock(coreMutex);
+		nes.tickWhile([&] { return nes.getCurrentScanline() != target; });
 	}
 
 	static constexpr double MAX_LAG = 0.02;

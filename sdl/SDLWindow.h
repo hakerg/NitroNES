@@ -71,7 +71,7 @@ public:
 	uint64_t getTicks() const override { return SDL_GetTicks(); }
 	void delay(uint32_t ms) override { SDL_Delay(ms); }
 
-	void getPixelSize(int& w, int& h) const override {
+	void getPixelSize(int& w, int& h) const {
 		SDL_GetWindowSizeInPixels(window, &w, &h);
 	}
 
@@ -127,22 +127,16 @@ public:
 		return 60.0;
 	}
 
-	MonitorGeometry getMonitorGeometry() const override {
-		MonitorGeometry geo{};
+	void getMonitorGeometry(int& w, int& h) const override {
+		w = 0; h = 0;
 		SDL_DisplayID displayID = SDL_GetDisplayForWindow(window);
-		if (displayID == 0) return geo;
+		if (displayID == 0) return;
 
 		SDL_Rect bounds;
-		if (!SDL_GetDisplayBounds(displayID, &bounds)) return geo;
+		if (!SDL_GetDisplayBounds(displayID, &bounds)) return;
 
-		int wx = 0, wy = 0;
-		SDL_GetWindowPosition(window, &wx, &wy);
-
-		geo.x = wx - bounds.x;
-		geo.y = wy - bounds.y;
-		geo.width = bounds.w;
-		geo.height = bounds.h;
-		return geo;
+		w = bounds.w;
+		h = bounds.h;
 	}
 
 private:

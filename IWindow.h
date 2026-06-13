@@ -8,13 +8,6 @@
 class IFileSession;
 struct AppSettings;
 
-struct MonitorGeometry {
-	int x = 0;
-	int y = 0;
-	int width = 0;
-	int height = 0;
-};
-
 class IWindow {
 public:
 	virtual ~IWindow() = default;
@@ -39,5 +32,5 @@ public:
 	// --- Sprzęt i Synchronizacja ---
 	virtual bool getScanLine(int& outRaw) const = 0;
 	virtual double getRefreshHz() const = 0;
-	virtual MonitorGeometry getMonitorGeometry() const = 0;
+	virtual void getMonitorGeometry(int& w, int& h) const = 0;
 };

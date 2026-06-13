@@ -42,7 +42,7 @@ public:
 	// Zwraca true gdy scanline sync jest włączony i możliwy do użycia.
 	bool canUseScanlineSync(double baseSpeed) const {
 		int tmp = 0;
-		return settings.allowScanlineSync && window.getScanLine(tmp);
+		return baseSpeed == 1.0 && settings.allowScanlineSync && window.getScanLine(tmp);
 	}
 
 	// Zwraca mnożnik dopasowania do monitora (np. 0.997), lub 0 gdy niemożliwe.
