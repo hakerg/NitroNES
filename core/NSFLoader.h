@@ -83,7 +83,7 @@ class NSFLoader {
 public:
     // Wczytuje plik NSF. Zwraca false jeśli plik jest nieprawidłowy.
     static bool load(const std::string& path, NSFFile& out) {
-        std::ifstream f(std::filesystem::u8path(path), std::ios::binary);
+        std::ifstream f(std::filesystem::path(path), std::ios::binary);
         if (!f.is_open()) {
             std::cerr << "[NSF] Nie można otworzyć pliku: " << path << "\n";
             return false;

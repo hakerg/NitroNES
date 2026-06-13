@@ -5,6 +5,6 @@ struct AppSettings {
 	bool allowScanlineSync = false;
 	bool vsync = false;
 	bool matchRefreshRate = true;
-	int scanlineBufferMs = 8;
+	int scanlineBufferMs = 10;
 	AudioSettings audioSettings;
 };

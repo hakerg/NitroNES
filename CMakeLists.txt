@@ -1,14 +1,7 @@
 ﻿# CMakeLists.txt: projekt CMake dla elementu NES Emulator
 cmake_minimum_required (VERSION 3.24)
 
-# Włącz przeładowywanie kodu XAML na gorąco dla kompilatorów MSVC, jeśli jest to obsługiwane.
-if (POLICY CMP0141)
-  cmake_policy(SET CMP0141 NEW)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
-endif()
-
 project ("NES Emulator" CXX C)
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT NESEmulator)
 
 # --- AUTOMATYCZNE POBIERANIE SDL3 ---
 include(FetchContent)
@@ -68,15 +61,3 @@ target_include_directories(NESEmulator PRIVATE
 
 # Połącz z SDL3 statycznie
 target_link_libraries(NESEmulator PRIVATE SDL3::SDL3-static)
-
-# --- Flagi optymalizacji Release (MSVC) ---
-if(MSVC)
-    target_compile_options(NESEmulator PRIVATE
-        $<$<CONFIG:Release>:/O2 /Oi /Gy /GL>
-    )
-    target_link_options(NESEmulator PRIVATE
-        $<$<CONFIG:Release>:/LTCG /OPT:REF /OPT:ICF>
-        "$<IF:$<CONFIG:Release>,/SUBSYSTEM:WINDOWS,/SUBSYSTEM:CONSOLE>"
-        /ENTRY:wmainCRTStartup
-    )
-endif()

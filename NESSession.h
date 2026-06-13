@@ -62,10 +62,10 @@ private:
 			return;
 		}
 
-		std::lock_guard<std::mutex> lock(coreMutex);
 		updateSpeed(baseSpeed);
 		while (timerLag > 0.0) {
 			double dt;
+			std::lock_guard<std::mutex> lock(coreMutex);
 			nes.tickFrame(dt);
 			timerLag -= dt;
 		}
@@ -93,8 +93,8 @@ private:
 		int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
 		if (target < 0) target += NES::TOTAL_SCANLINES;
 
-		std::lock_guard<std::mutex> lock(coreMutex);
 		updateSpeed(baseSpeed);
+		std::lock_guard<std::mutex> lock(coreMutex);
 		nes.tickWhile([&]() { return nes.getCurrentScanline() != target; });
 	}
 

@@ -6,22 +6,25 @@
 #include "sdl/windows/WindowAPI.h"
 #include <SDL3/SDL.h>
 #include <windows.h>
-#include <iostream>
+#include <shellapi.h>
 #include <string>
 #include <filesystem>
 
 #pragma comment(lib, "winmm.lib")
 
-int wmain(int argc, wchar_t* argv[]) {
-    SetConsoleOutputCP(CP_UTF8);
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    int argc;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
     if (argc < 2) {
-        std::cerr << "Uzycie: NESEmulator <plik.nsf | plik.nes>\n";
+        MessageBoxW(NULL, L"Usage: NESEmulator <file.nsf | file.nes>", L"Error", MB_OK | MB_ICONERROR);
+        LocalFree(argv);
         return 1;
     }
 
     std::wstring wPath = argv[1];
+    LocalFree(argv);
+
     auto u8 = std::filesystem::path(wPath).u8string();
     std::string romPath(u8.begin(), u8.end());
 
@@ -36,7 +39,8 @@ int wmain(int argc, wchar_t* argv[]) {
         app.run();
     }
     catch (const std::exception& e) {
-        std::cerr << "Blad: " << e.what() << "\n";
+        std::string msg = std::string("Error: ") + e.what();
+        MessageBoxA(NULL, msg.c_str(), "Error", MB_OK | MB_ICONERROR);
         return 1;
     }
 

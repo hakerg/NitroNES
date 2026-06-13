@@ -1,7 +1,7 @@
 #pragma once
 #include "../ISDLWindowAPI.h"
 #include <windows.h>
-#include <d3dkmthk.h>
+#include "d3dkmthk.h"
 
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")

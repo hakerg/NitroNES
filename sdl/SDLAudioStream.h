@@ -3,7 +3,7 @@
 #include <iostream>
 #include <mutex>
 #include <vector>
-#include "AppAudioStream.h"
+#include "../AppAudioStream.h"
 
 class SDLAudioStream : public AppAudioStream {
 public:
@@ -19,6 +19,7 @@ public:
 
 protected:
 	void submitSample(float sample) override {
+		std::lock_guard<std::mutex> lock(outMutex);
 		outBuf.push_back(sample);
 	}
 
@@ -120,9 +121,13 @@ private:
 	void flush(int samplesNeeded) {
 		if (!sdlStream) return;
 
-		std::lock_guard<std::mutex> lock(session->coreMutex);
+		while (outBuf.size() < samplesNeeded) {
+			if (!session->coreMutex.try_lock()) continue;
+			session->core().tickWhile([&] { return outBuf.size() < samplesNeeded; });
+			session->coreMutex.unlock();
+		}
 
-		session->core().tickWhile([&] { return outBuf.size() < samplesNeeded; });
+		std::lock_guard<std::mutex> lock(outMutex);
 		SDL_PutAudioStreamData(sdlStream, outBuf.data(), (int)(outBuf.size() * sizeof(float)));
 		outBuf.clear();
 	}
@@ -131,4 +136,5 @@ private:
 	SDL_AudioDeviceID deviceId = 0;
 	SDL_AudioStream* sdlStream = nullptr;
 	std::vector<float> outBuf;
+	std::mutex outMutex;
 };

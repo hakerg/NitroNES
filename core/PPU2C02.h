@@ -698,6 +698,8 @@ private:
             cycle = 0;
             scanline = NES::SCANLINE_VISIBLE_FIRST;
             odd_frame_skip = false;
+            frame_odd = !frame_odd;
+            decayOpenBus();
         }
         else if (cycle >= NES::PPU_CYCLES_PER_SCANLINE) {
             cycle = 0;

@@ -23,6 +23,7 @@ public:
 		ImGuiIO& io = ImGui::GetIO();
 		io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 20.0f);
 		io.Fonts->Build();
+		io.IniFilename = nullptr;
 	}
 
 	~ImGuiLayer() {
