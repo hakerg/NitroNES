@@ -2,7 +2,7 @@
 
 #include "MapperBase.h"
 #include "MapperRegistry.h"
-#include "../audio/VRC6Audio.h"
+#include "../audio_extensions/VRC6Audio.h"
 #include <array>
 
 // ============================================================================
