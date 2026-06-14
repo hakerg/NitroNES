@@ -45,8 +45,6 @@ private:
     struct Step;
     using MicroOp = Step (CPU6502::*)();
     struct Step { MicroOp next; };
-    bool shxQuirkCycle3 = false; // RDY aktywne 2 cykle przed zapisem (High byte fetch)
-    bool shxQuirkCycle4 = false; // RDY aktywne 1 cykl przed zapisem (dummy read)
 
 public:
     CPU6502(ICPUBus& busInterface) : bus(busInterface) {
@@ -78,13 +76,18 @@ public:
         irqAtStartOfCycle = irqDetected;
 
         if (stallCycles > 0) {
-            // Detekcja: 2 cykle przed zapisem (cykl pobierania górnego bajtu adresu)
+            // Degrader: Transformacja instrukcji SH* w zepsute odpowiedniki
             if (nextOp == &CPU6502::am_abx_2 || nextOp == &CPU6502::am_aby_2 || nextOp == &CPU6502::am_izy_3) {
-                shxQuirkCycle3 = true;
+                if (storeKind == StoreKind::SHX) storeKind = StoreKind::SHX_c3;
+                else if (storeKind == StoreKind::SHY) storeKind = StoreKind::SHY_c3;
+                else if (storeKind == StoreKind::SHA) storeKind = StoreKind::SHA_c3;
+                else if (storeKind == StoreKind::SHS) storeKind = StoreKind::SHS_c3;
             }
-            // Detekcja: 1 cykl przed zapisem (cykl dummy read)
             else if (nextOp == &CPU6502::am_abx_3_fixup || nextOp == &CPU6502::am_aby_3_fixup || nextOp == &CPU6502::am_izy_4_fixup) {
-                shxQuirkCycle4 = true;
+                if (storeKind == StoreKind::SHX) storeKind = StoreKind::SHX_c4;
+                else if (storeKind == StoreKind::SHY) storeKind = StoreKind::SHY_c4;
+                else if (storeKind == StoreKind::SHA) storeKind = StoreKind::SHA_c4;
+                else if (storeKind == StoreKind::SHS) storeKind = StoreKind::SHS_c4;
             }
 
             stallCycles--;
@@ -170,9 +173,6 @@ private:
     //  Mikro-op'y
     // ============================================================
     Step opFetch() {
-        shxQuirkCycle3 = false;
-        shxQuirkCycle4 = false;
-
         if (interruptPending) {
             interruptPending = false;
             if (nmiPending) {
@@ -352,7 +352,14 @@ private:
     RmwKind rmwKind = RmwKind::ASL;
     void doExecRmw();
 
-    enum class StoreKind : uint8_t { STA, STX, STY, SAX, SHX, SHY, SHA, SHS };
+    enum class StoreKind : uint8_t {
+        STA, STX, STY, SAX,
+        SHX, SHY, SHA, SHS,
+        // -- Warianty sprzętowo zdegradowane przez uderzenie linii RDY --
+        SHX_c3, SHY_c3, SHA_c3, SHS_c3, // Stall 2 cykle przed zapisem
+        SHX_c4, SHY_c4, SHA_c4, SHS_c4  // Stall 1 cykl przed zapisem
+    };
+
     StoreKind storeKind = StoreKind::STA;
     uint8_t storeValue() {
         switch (storeKind) {
@@ -360,10 +367,18 @@ private:
             case StoreKind::STX: return X;
             case StoreKind::STY: return Y;
             case StoreKind::SAX: return A & X;
+
+            // Standardowe, zdrowe działanie:
             case StoreKind::SHX: return X & ((uint8_t)(origHigh + 1));
             case StoreKind::SHY: return Y & ((uint8_t)(origHigh + 1));
             case StoreKind::SHA: return A & X & ((uint8_t)(origHigh + 1));
             case StoreKind::SHS: S = A & X; return S & ((uint8_t)(origHigh + 1));
+
+            // Quirk zepsutej wartości (gubi maskę H+1):
+            case StoreKind::SHX_c3: case StoreKind::SHX_c4: return X;
+            case StoreKind::SHY_c3: case StoreKind::SHY_c4: return Y;
+            case StoreKind::SHA_c3: case StoreKind::SHA_c4: return A & X;
+            case StoreKind::SHS_c3: case StoreKind::SHS_c4: S = A & X; return S;
         }
         return 0;
     }
@@ -452,30 +467,17 @@ inline void CPU6502::doExecRmw() {
 }
 
 inline CPU6502::Step CPU6502::writeStep_() {
-    uint8_t val = storeValue(); // Zwraca np. X & (origHigh + 1) z Twojego switcha
+    uint8_t val = storeValue();
 
-    // Quirk dla niestabilnych SHX, SHY, SHA, SHS
-    if (storeKind == StoreKind::SHX || storeKind == StoreKind::SHY ||
-        storeKind == StoreKind::SHA || storeKind == StoreKind::SHS) {
+    // Sprawdzamy czy to jakakolwiek instrukcja SH* (zdrowa lub zepsuta)
+    bool isAnySh = (storeKind >= StoreKind::SHX);
 
-        // 1. Degradacja wartości:
-        // Jeśli DMA uderzyło w cykl 3 lub 4, CPU "zapomina" wymnożyć z (H+1).
-        // Instrukcje zachowują się jak STX, STY i SAX.
-        if (shxQuirkCycle3 || shxQuirkCycle4) {
-            if (storeKind == StoreKind::SHX) {
-                val = X;
-            } else if (storeKind == StoreKind::SHY) {
-                val = Y;
-            } else if (storeKind == StoreKind::SHA || storeKind == StoreKind::SHS) {
-                val = A & X; // S zostało zaktualizowane bezpiecznie wcześniej w storeValue()
-            }
-        }
+    // Sprawdzamy czy to specyficzny wariant stallu w cyklu 3 (chroni przed zepsuciem adresu)
+    bool isShC3 = (storeKind >= StoreKind::SHX_c3 && storeKind <= StoreKind::SHS_c3);
 
-        // 2. Uszkodzenie adresu (zastąpienie górnego bajtu adresowego zapisywaną wartością):
-        // Występuje normalnie przy przekroczeniu strony...
-        // ...ALE jeśli DMA uderzyło 2 cykle przed zapisem (shxQuirkCycle3), krzem
-        // nagle "naprawia się" i NIE psuje docelowego adresu.
-        if (pageCross && !shxQuirkCycle3) {
+    if (isAnySh) {
+        // Psujemy adres TYLKO wtedy, gdy przekroczono stronę i sprzęt NIE został wstrzymany 2 cykle wcześniej
+        if (pageCross && !isShC3) {
             addr = ((uint16_t)val << 8) | (addr & 0xFF);
         }
     }

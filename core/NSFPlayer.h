@@ -152,7 +152,7 @@ public:
 
 protected:
 	// --- Pamiec CPU --------------------------------------------------------
-	uint8_t cpuRead(uint16_t addr) override {
+	uint8_t cpuRead(uint16_t addr) override { // TODO: merge common addresses with nes into the core
 		uint8_t data;
 		if (addr <= 0x07FF) {
 			data = cpuRam[addr];
