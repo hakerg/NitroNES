@@ -95,8 +95,6 @@ protected:
 		dma.oamPage    = (uint16_t)page << 8;
 	}
 
-	bool isGetCycle() const { return getCycle; }
-
 	CPU6502 cpu;
 	APU2A03 apu;
 	std::array<uint8_t, 2048> cpuRam;
@@ -108,7 +106,7 @@ private:
 	bool   cyclesEnabled = false;
 	double pendingDT     = 0.0;
 
-	bool getCycle = true;
+	bool isPutCycle = true;
 
 	struct DMA {
 		bool     oamPending = false;  uint16_t oamPage = 0;
@@ -121,7 +119,7 @@ private:
 		PPU2C02* ppu = getPPU();
 		if (ppu) { ppu->clock(); ppu->clock(); }
 		clockMapper();
-		apu.clock(getCycle);
+		apu.clock(isPutCycle);
 
 		access();
 
@@ -132,9 +130,9 @@ private:
 			dma.dmcAddr    = apu.dmcSampleAddress();
 		}
 
-		onCpuCycle(getCycle);
+		onCpuCycle(isPutCycle);
 
-		getCycle = !getCycle;
+		isPutCycle = !isPutCycle;
 
 		double dt = 1.0 / (getCPUClockRate() * speed);
 		pendingDT += dt;
@@ -152,7 +150,7 @@ private:
 		if (dma.dmcPending) {
 			dmaIdle(cpuAddr);
 			dmaIdle(cpuAddr);
-			if (!getCycle) dmaIdle(cpuAddr);
+			if (!isPutCycle) dmaIdle(cpuAddr);
 
 			isDMAAccess = true;
 			uint8_t b = dmaGet(dma.dmcAddr);
@@ -164,7 +162,7 @@ private:
 
 		if (dma.oamPending) {
 			dmaIdle(cpuAddr);
-			if (!getCycle) dmaIdle(cpuAddr);
+			if (!isPutCycle) dmaIdle(cpuAddr);
 			PPU2C02* ppu = getPPU();
 
 			isDMAAccess = true;

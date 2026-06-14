@@ -530,8 +530,7 @@ public:
     }
     bool isPAL() const { return palMode; }
 
-    // Stan linii IRQ APU (frame counter + DMC). Sprzętowo to OR obu źródeł.
-    bool irqAsserted() const { return frameIRQPending || dmc.irqPending; }
+    bool irqAsserted() const { return (frameIRQPending && !frameIRQInhibit) || dmc.irqPending; }
 
     PulseChannel    pulse1;
     PulseChannel    pulse2;
@@ -597,7 +596,7 @@ public:
                 if (frameIRQInhibit) frameIRQPending = false;
 
                 {
-                    bool isAPUCycle = !apuGetPhase;
+                    bool isAPUCycle = !isPutCycle;
                     delay4017 = isAPUCycle ? 2 : 3;
                 }
                 break;
@@ -607,7 +606,7 @@ public:
     // --- Odczyt przez CPU ($4015 Status) ---
     uint8_t cpuRead(uint16_t addr, uint8_t openBus) {
         if (addr == 0x4015) {
-            uint8_t status = openBus & 0x20; // bit 5 — open bus (nienapędzany przez APU)
+            uint8_t status = openBus & 0x20; // bit 5 — open bus
             if (pulse1.lengthCounter   > 0) status |= 0x01;
             if (pulse2.lengthCounter   > 0) status |= 0x02;
             if (triangle.lengthCounter > 0) status |= 0x04;
@@ -615,29 +614,30 @@ public:
             if (dmc.bytesRemaining     > 0) status |= 0x10;
             if (frameIRQPending)            status |= 0x40;
             if (dmc.irqPending)             status |= 0x80;
-            if (apuGetPhase) frameIRQPending  = false;
-            else             frameIRQReadClear = true;
+
+            if (!isPutCycle) {
+                frameIRQPending   = false;
+                frameIRQReadClear = false;
+            } else {
+                frameIRQReadClear = true;
+            }
             return status;
         }
         return 0x00;
     }
 
-    void clock(bool getCycle) {
-        apuGetPhase = getCycle;
+    void clock(bool putCycle) {
+        isPutCycle = putCycle;
 
-        if (apuGetPhase && frameIRQReadClear) {
+        if (isPutCycle && frameIRQReadClear) {
             frameIRQPending   = false;
             frameIRQReadClear = false;
         }
 
         frameCounter++;
-
         serviceFrameCounterWrite();
-
         triangle.clockTimer();
-
-        if (apuGetPhase) clockChannelTimers();
-
+        if (isPutCycle) clockChannelTimers();
         clockFrameSequencer();
     }
 
@@ -669,15 +669,16 @@ private:
             else if (frameCounter == fcStep[1]) { clockQuarterFrame(); clockHalfFrame(); }
             else if (frameCounter == fcStep[2]) { clockQuarterFrame(); }
             else if (frameCounter == fcStep[3] - 1) {
-                if (!frameIRQInhibit) frameIRQPending = true;
+                frameIRQPending = true;
             }
             else if (frameCounter == fcStep[3]) {
                 clockQuarterFrame();
                 clockHalfFrame();
-                if (!frameIRQInhibit) frameIRQPending = true;
+                frameIRQPending = true;
             }
             else if (frameCounter == fcStep[3] + 1) {
-                if (!frameIRQInhibit) frameIRQPending = true;
+                if (frameIRQInhibit) frameIRQPending = false;
+                else                 frameIRQPending = true;
                 frameCounter = 0;
             }
         }
@@ -715,7 +716,7 @@ public:
     }
 
 private:
-    bool     apuGetPhase    = true;
+    bool     isPutCycle    = true;
     bool     frameIRQReadClear = false;
     uint32_t frameCounter   = 0;
     uint8_t  frameMode      = 0;   // 0 = 4-step, 1 = 5-step
