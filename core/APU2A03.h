@@ -401,6 +401,8 @@ struct DMCChannel {
     // Wskaźnik na bieżącą tabelę okresów (NTSC / PAL). Ustawiany przez APU.
     const uint16_t* periodTable = DMC_PERIOD_TABLE_NTSC;
 
+    uint8_t  enableDelay   = 0; // Licznik opóźnienia po zapisie do $4015
+
     void writeR0(uint8_t data) {
         irqEnabled = (data >> 7) & 0x01;
         loopFlag   = (data >> 6) & 0x01;
@@ -425,10 +427,8 @@ struct DMCChannel {
         bytesRemaining = sampleLength;
     }
 
-    // Wywoływane przez APU gdy potrzebuje załadować bajt próbki z pamięci.
-    // Zwraca adres, który należy odczytać z CPU Bus (DMA).
     bool needsDMAFetch() const {
-        return sampleBufferEmpty && bytesRemaining > 0;
+        return sampleBufferEmpty && bytesRemaining > 0 && enableDelay == 0;
     }
 
     void loadSampleBuffer(uint8_t data) {
@@ -582,11 +582,15 @@ public:
                 if (!pulse2.enabled)   pulse2.lengthCounter   = 0;
                 if (!triangle.enabled) triangle.lengthCounter = 0;
                 if (!noise.enabled)    noise.lengthCounter    = 0;
+
                 if (!(data & 0x10)) {
                     dmc.bytesRemaining = 0;
+                    dmc.enableDelay = 0;
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
+                    dmc.enableDelay = isPutCycle ? 3 : 4;
                 }
+
                 dmc.irqPending = false;
                 break;
             // Frame Counter ($4017)
@@ -628,6 +632,10 @@ public:
 
     void clock(bool putCycle) {
         isPutCycle = putCycle;
+
+        if (dmc.enableDelay > 0) {
+            dmc.enableDelay--;
+        }
 
         if (isPutCycle && frameIRQReadClear) {
             frameIRQPending   = false;
