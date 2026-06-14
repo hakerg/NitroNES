@@ -15,16 +15,6 @@ class PPU2C02 {
 public:
     explicit PPU2C02(IFrameConsumer& frameConsumer) : frameConsumer(frameConsumer) {
         buf.fill(0xFF000000);
-        // Power-up zawartosc palety - wartosci zmierzone na fizycznym NES
-        // (test blargg/power_up_palette). NES nie zeruje palety przy resecie;
-        // zawiera ona "smieci" o powtarzalnym wzorze zaleznym od konstrukcji.
-        static constexpr uint8_t kPowerUpPalette[32] = {
-            0x09,0x01,0x00,0x01, 0x00,0x02,0x02,0x0D,
-            0x08,0x10,0x08,0x24, 0x00,0x00,0x04,0x2C,
-            0x09,0x01,0x34,0x03, 0x00,0x04,0x00,0x14,
-            0x08,0x3A,0x00,0x02, 0x00,0x20,0x2C,0x08,
-        };
-        std::memcpy(palScreen.data(), kPowerUpPalette, sizeof(kPowerUpPalette));
         std::memset(OAM, 0, sizeof(OAM));
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         nameTable[0].fill(0x00);
@@ -157,6 +147,7 @@ public:
         odd_frame_skip = false;
         sprite_count = 0;
         bSpriteZeroHitPossible = bSpriteZeroBeingRendered = false;
+        sprite_overflow_cycle = -1;
         suppressVblThisFrame = false;
         ppuOpenBus = 0x00;
         for (int i = 0; i < 8; ++i) ppuOpenBusDecay[i] = 0;
@@ -182,6 +173,7 @@ public:
                 status.vertical_blank = 0;
                 status.sprite_zero_hit = 0;
                 status.sprite_overflow = 0;
+                sprite_overflow_cycle = -1;
                 std::memset(sprite_shifter_pattern_lo, 0, sizeof(sprite_shifter_pattern_lo));
                 std::memset(sprite_shifter_pattern_hi, 0, sizeof(sprite_shifter_pattern_hi));
             }
@@ -195,8 +187,14 @@ public:
             }
             if (prerender && cycle >= 280 && cycle < 305) TransferAddressY();
 
-            // Uproszczone fazy sprite: evaluation cycle=257, pattern fetch cycle=340.
-            if (visible && cycle == 257) evaluateSprites();
+            if (visible && cycle == 64) {
+                sprite_overflow_cycle = renderingEnabled() ? computeSpriteOverflowCycle() : -1;
+            }
+            if (visible && sprite_overflow_cycle >= 65 && cycle == sprite_overflow_cycle) {
+                status.sprite_overflow = 1;
+            }
+
+            if (visible && cycle == 257 && renderingEnabled()) evaluateSprites();
             if (visible && cycle == 340) loadSpritePatterns();
         }
 
@@ -316,6 +314,7 @@ private:
     uint8_t  sprite_shifter_pattern_hi[8]{};
     bool     bSpriteZeroHitPossible = false;
     bool     bSpriteZeroBeingRendered = false;
+    int16_t  sprite_overflow_cycle = -1;
 
     // ---- Paleta / framebuffer ---------------------------------------
     std::array<uint8_t, 32>          palScreen;
@@ -526,9 +525,38 @@ private:
         vram_addr.coarse_y = tram_addr.coarse_y;
     }
 
-    // ----------------------------------------------------------
-    //  Sprite evaluation / fetch
-    // ----------------------------------------------------------
+    int16_t computeSpriteOverflowCycle() const {
+        const int spriteH = ctrl.sprite_size ? 16 : 8;
+        int dot = 65;
+        int count = 0;
+        int m = 0; // indeks bajtu w sprite podczas bug-mode (0=Y, 1=tile, 2=attr, 3=X)
+        for (int n = 0; n < 64; n++) {
+            if (dot > 256) break;
+            if (count < 8) {
+                // Normalna ewaluacja: zawsze bajt 0 (Y)
+                const int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4];
+                const bool inRange = (diff >= 0 && diff < spriteH);
+                if (inRange) {
+                    count++;
+                    dot += 8; // kopiowanie 4 bajtow x 2 doty/bajt
+                } else {
+                    dot += 2; // tylko odczyt Y
+                }
+            } else {
+                // Hardware bug: porownaj bajt m sprite'a n (nie zawsze Y)
+                const int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4 + m];
+                const bool inRange = (diff >= 0 && diff < spriteH);
+                if (inRange) {
+                    return (int16_t)dot; // 9. sprite w zakresie -> overflow
+                }
+                // Bug: inkrementuj m (mod 4), n inkrementuje przez petlę for
+                m = (m + 1) & 3;
+                dot += 2;
+            }
+        }
+        return -1;
+    }
+
     void evaluateSprites() {
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         sprite_count = 0;
@@ -546,10 +574,6 @@ private:
                 if (n == 0) bSpriteZeroHitPossible = true;
                 std::memcpy(&spriteScanline[sprite_count * 4], &OAM[n * 4], 4);
                 sprite_count++;
-            }
-            else {
-                status.sprite_overflow = 1;
-                break;
             }
         }
     }

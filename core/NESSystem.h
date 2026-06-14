@@ -85,7 +85,8 @@ public:
         }
         else if (addr < 0x4020) {
             if (addr == 0x4015) {
-                data = apu.cpuRead(addr);
+                // $4015 nie aktualizuje open bus — zwracamy wynik bez zapisu do openBus
+                return apu.cpuRead(addr, openBus);
             }
             else if (addr == 0x4016) {
                 uint8_t bit = (controllerShift & 0x80) ? 1 : 0;

@@ -607,9 +607,9 @@ public:
     }
 
     // --- Odczyt przez CPU ($4015 Status) ---
-    uint8_t cpuRead(uint16_t addr) {
+    uint8_t cpuRead(uint16_t addr, uint8_t openBus = 0x00) {
         if (addr == 0x4015) {
-            uint8_t status = 0;
+            uint8_t status = openBus & 0x20; // bit 5 — open bus (nienapędzany przez APU)
             if (pulse1.lengthCounter   > 0) status |= 0x01;
             if (pulse2.lengthCounter   > 0) status |= 0x02;
             if (triangle.lengthCounter > 0) status |= 0x04;

@@ -153,27 +153,47 @@ public:
 protected:
 	// --- Pamiec CPU --------------------------------------------------------
 	uint8_t cpuRead(uint16_t addr) override {
-		if (addr <= 0x07FF) return cpuRam[addr];
+		uint8_t data;
+		if (addr <= 0x07FF) {
+			data = cpuRam[addr];
+		}
 		// PPU stub: NSF rip czesto czeka na VBlank (LDA $2002 / BPL -).
 		// Zwracamy 0x80 zeby symulowac stale ustawiona flage VBlank.
-		if (addr >= 0x2000 && addr <= 0x3FFF) return 0x80;
-		if (addr >= 0x4000 && addr <= 0x4017) return apu.cpuRead(addr);
-		if (addr >= 0x5000 && addr <= 0x5002) return trampoline[addr - 0x5000];
-		if (addr >= 0x6000 && addr <= 0x7FFF) return extRam[addr - 0x6000];
-		if (addr >= 0x8000) {
+		else if (addr >= 0x2000 && addr <= 0x3FFF) {
+			data = 0x80;
+		}
+		else if (addr >= 0x4000 && addr <= 0x4017) {
+			if (addr == 0x4015) {
+				// $4015 nie aktualizuje open bus — zwracamy wynik bez zapisu do openBus
+				return apu.cpuRead(addr, openBus);
+			}
+			data = apu.cpuRead(addr, openBus);
+		}
+		else if (addr >= 0x5000 && addr <= 0x5002) {
+			data = trampoline[addr - 0x5000];
+		}
+		else if (addr >= 0x6000 && addr <= 0x7FFF) {
+			data = extRam[addr - 0x6000];
+		}
+		else if (addr >= 0x8000) {
 			if (isBankswitched()) {
 				uint8_t  bankIdx = (addr - 0x8000) / 4096;
-				uint16_t offset = (addr - 0x8000) % 4096;
+				uint16_t offset  = (addr - 0x8000) % 4096;
 				uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
-				if (romAddr < bankRom.size()) return bankRom[romAddr];
-				return 0x00;
+				data = (romAddr < bankRom.size()) ? bankRom[romAddr] : 0x00;
+			} else {
+				data = prgRom[addr - 0x8000];
 			}
-			return prgRom[addr - 0x8000];
 		}
-		return 0x00;
+		else {
+			data = openBus;
+		}
+		openBus = data;
+		return data;
 	}
 
 	void cpuWrite(uint16_t addr, uint8_t data) override {
+		openBus = data;
 		if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
 		if (addr >= 0x2000 && addr <= 0x3FFF) return; // PPU stub
 		if (addr >= 0x4000 && addr <= 0x4017) { apu.cpuWrite(addr, data); return; }
@@ -252,6 +272,7 @@ private:
 	bool      callDone    = true;
 	uint8_t   currentSong = 1;
 
+	uint8_t   openBus     = 0x00; // Ostatnia wartość na szynie danych CPU
 
 	std::array<uint8_t, 8192>  extRam;    // 0x6000-0x7FFF
 	std::vector<uint8_t>       prgRom;    // 0x8000-0xFFFF (32 KB, na stercie)
