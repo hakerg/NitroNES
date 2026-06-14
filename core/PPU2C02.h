@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 #include <array>
 #include <cstring>
 #include "Cartridge.h"
@@ -46,7 +45,13 @@ public:
         break;
         case 2: break; // PPUSTATUS - tylko do odczytu
         case 3: oamAddr = data; break;
-        case 4: OAM[oamAddr++] = data; break;
+        case 4:
+            if (renderingEnabled() && (scanline <= NES::SCANLINE_VISIBLE_LAST || scanline == NES::SCANLINE_PRERENDER)) {
+                oamAddr = (oamAddr + 4) & 0xFC;
+            } else {
+                OAM[oamAddr++] = data;
+            }
+            break;
         case 5: // PPUSCROLL
             if (!address_latch) {
                 fine_x = data & 0x07;
@@ -166,9 +171,8 @@ public:
     void clock() {
         const bool visible = (scanline >= NES::SCANLINE_VISIBLE_FIRST && scanline <= NES::SCANLINE_VISIBLE_LAST);
         const bool prerender = (scanline == NES::SCANLINE_PRERENDER);
-        const bool rendering = visible || prerender;
 
-        if (rendering) {
+        if (visible || prerender) {
             if (prerender && cycle == 1) {
                 status.vertical_blank = 0;
                 status.sprite_zero_hit = 0;
@@ -196,6 +200,8 @@ public:
 
             if (visible && cycle == 257 && renderingEnabled()) evaluateSprites();
             if (visible && cycle == 340) loadSpritePatterns();
+
+            if (renderingEnabled() && cycle >= 257 && cycle <= 320) oamAddr = 0;
         }
 
         // VBL flag set (dot 1 linii 241).
@@ -379,6 +385,11 @@ private:
     }
 
     uint8_t readOAMData(bool bReadOnly) {
+        if (renderingEnabled() && scanline <= NES::SCANLINE_VISIBLE_LAST
+            && ((cycle >= 1 && cycle <= 64) || (cycle >= 257 && cycle <= 320))) {
+            if (!bReadOnly) refreshOpenBus(0xFF, 0xFF);
+            return 0xFF;
+        }
         // Bity 2..4 atrybutu sprite (offset 2 w krotce OAM) zawsze czytaja 0.
         uint8_t data = OAM[oamAddr];
         if ((oamAddr & 0x03) == 0x02) data &= 0xE3;
@@ -565,14 +576,19 @@ private:
         bSpriteZeroHitPossible = false;
 
         const int spriteH = ctrl.sprite_size ? 16 : 8;
+        uint8_t addr = oamAddr;
 
-        for (uint8_t n = 0; n < 64; ++n) {
-            int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4 + 0];
+        for (int n = 0; n < 64; ++n, addr += 4) {
+            int16_t diff = (int16_t)scanline - (int16_t)OAM[addr];
             if (diff < 0 || diff >= spriteH) continue;
 
             if (sprite_count < 8) {
                 if (n == 0) bSpriteZeroHitPossible = true;
-                std::memcpy(&spriteScanline[sprite_count * 4], &OAM[n * 4], 4);
+                for (int k = 0; k < 4; k++) {
+                    uint8_t b = OAM[(uint8_t)(addr + k)];
+                    if (((addr + k) & 0x03) == 0x02) b &= 0xE3;
+                    spriteScanline[sprite_count * 4 + k] = b;
+                }
                 sprite_count++;
             }
         }

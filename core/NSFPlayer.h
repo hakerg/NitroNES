@@ -11,12 +11,12 @@
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
 
-class NSFPlayer : public NESCoreBase, public ICPUBus {
+class NSFPlayer : public NESCoreBase {
 public:
 	static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000; // Adres pulapki (JMP $5000)
 	static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
 
-	explicit NSFPlayer(IEmulatorHost& host, const std::string& path) : NESCoreBase(*this, host) {
+	explicit NSFPlayer(IEmulatorHost& host, const std::string& path) : NESCoreBase(host) {
 		extRam.fill(0x00);
 		prgRom.assign(32768, 0x00);
 		NSFFile nsf;
@@ -126,33 +126,23 @@ public:
 
 	// --- NESCoreBase API --------------------------------------------------
 
-	void clockOneCycle(float& outAudioSample) override {
-		trampolineMaintenance();
-		if (expChip) expChip->clock();
-		apu.clock();
-		cpu.setIRQ(false);
-		cpu.tick();
-
-		playTimer -= 1.0;
-
-		if (!callDone && cpu.PC == TRAMPOLINE_ADDR) {
-			callDone = true;
-		}
-
-		if (apu.dmcNeedsSample()) {
-			uint8_t s = cpuRead(apu.dmcSampleAddress());
-			apu.loadDMCSample(s);
-			cpu.addStall(4);
-		}
-
-		outAudioSample = apu.getOutputSample() + (expChip ? expChip->audioOutput() : 0.0f);
-	}
-
 	void reset() override { initSong(currentSong); }
 
 protected:
-	// --- Pamiec CPU --------------------------------------------------------
-	uint8_t cpuRead(uint16_t addr) override { // TODO: merge common addresses with nes into the core
+	void onPreStep() override {
+		trampolineMaintenance();
+		playTimer -= 1.0;
+		if (!callDone && cpu.PC == TRAMPOLINE_ADDR) {
+			callDone = true;
+		}
+	}
+
+	bool coreIRQLine() override { return false; }
+
+	void  clockMapper() override { if (expChip) expChip->clock(); }
+	float mapperAudio() const override { return expChip ? expChip->audioOutput() : 0.0f; }
+
+	uint8_t memRead(uint16_t addr) override {
 		uint8_t data;
 		if (addr <= 0x07FF) {
 			data = cpuRam[addr];
@@ -192,7 +182,7 @@ protected:
 		return data;
 	}
 
-	void cpuWrite(uint16_t addr, uint8_t data) override {
+	void memWrite(uint16_t addr, uint8_t data) override {
 		openBus = data;
 		if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
 		if (addr >= 0x2000 && addr <= 0x3FFF) return; // PPU stub
@@ -208,9 +198,6 @@ protected:
 		}
 	}
 
-	void cpuIrqAck() override {
-		// NSF zwykle nie ma specjalnej logiki przerwań sprzętowych
-	}
 
 private:
 	void trampolineMaintenance() {

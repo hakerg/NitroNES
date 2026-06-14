@@ -14,10 +14,10 @@ public:
     virtual uint8_t readController(int port) = 0;
 };
 
-class NESSystem : public NESCoreBase, public ICPUBus {
+class NESSystem : public NESCoreBase {
 public:
     explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost, const std::string& path)
-        : NESCoreBase(*this, host), ppu(*this), nesHost(nesHost) {
+        : NESCoreBase(host), ppu(*this), nesHost(nesHost) {
         cart = std::make_unique<Cartridge>(path);
         if (!cart->isImageValid()) {
             cart.reset();
@@ -34,28 +34,6 @@ public:
         reset();
     }
 
-    void clockOneCycle(float& outAudioSample) override {
-        ppu.clock();
-        ppu.clock();
-        if (cart) cart->clock();
-        apu.clock();
-        cpu.tick();
-        ppu.clock();
-
-        bool nmiLow = ppu.nmiLineLow();
-        bool irqLvl = apu.irqAsserted() || (cart && cart->irqState());
-        cpu.setNMILine(nmiLow);
-        cpu.setIRQ(irqLvl);
-
-        if (apu.dmcNeedsSample()) {
-            uint8_t s = cpuRead(apu.dmcSampleAddress());
-            apu.loadDMCSample(s);
-            cpu.addStall(4);
-        }
-
-        outAudioSample = apu.getOutputSample() + (cart ? cart->audioOutput() : 0.0f);
-    }
-
     void reset() override {
         if (cart) cart->reset();
         apu.reset();
@@ -67,15 +45,10 @@ public:
         nesHost.renderFrame(ppu.getFramebuffer());
     }
 
-    bool hasPPU() const override {
-        return true;
-    }
+    const PPU2C02* getPPU() const override { return &ppu; }
 
-    int getCurrentScanline() const override {
-        return ppu.getScanline();
-    }
-
-    uint8_t cpuRead(uint16_t addr) override {
+protected:
+    uint8_t memRead(uint16_t addr) override {
         uint8_t data;
         if (addr < 0x2000) {
             data = cpuRam[addr & 0x07FF];
@@ -90,12 +63,12 @@ public:
             }
             else if (addr == 0x4016) {
                 uint8_t bit = (controllerShift & 0x80) ? 1 : 0;
-                if (!controllerStrobe) controllerShift <<= 1;
+                if (!controllerStrobe) controllerShift = (controllerShift << 1) | 0x01;
                 data = (openBus & 0xE0) | bit;
             }
             else if (addr == 0x4017) {
                 uint8_t bit = (controllerShift2 & 0x80) ? 1 : 0;
-                if (!controllerStrobe) controllerShift2 <<= 1;
+                if (!controllerStrobe) controllerShift2 = (controllerShift2 << 1) | 0x01;
                 data = (openBus & 0xE0) | bit;
             }
             else {
@@ -109,25 +82,17 @@ public:
         return data;
     }
 
-    void cpuWrite(uint16_t addr, uint8_t data) override {
+    void memWrite(uint16_t addr, uint8_t data) override {
         openBus = data;
         if (addr < 0x2000) { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000) { ppu.cpuWrite(addr, data); return; }
         if (addr < 0x4020) {
             if (addr == 0x4014) {
-                uint16_t base = (uint16_t)data << 8;
-                for (int b = 0; b < 256; b++)
-                    ppu.oamDMAWrite(cpuRead(base + b));
-                uint16_t stall = 513 + (~cpu.totalCycles & 1);
-                cpu.addStall(stall);
+                scheduleOAMDMA(data);
                 return;
             }
             if (addr == 0x4016) {
                 controllerStrobe = (data & 0x01) != 0;
-                if (controllerStrobe) {
-                    controllerShift  = nesHost.readController(0);
-                    controllerShift2 = nesHost.readController(1);
-                }
                 return;
             }
             apu.cpuWrite(addr, data);
@@ -136,11 +101,18 @@ public:
         if (cart) cart->cpuWrite(addr, data);
     }
 
-    void cpuIrqAck() override {
-        if (cart) cart->irqClear();
+    void  clockMapper() override { if (cart) cart->clock(); }
+    float mapperAudio() const override { return cart ? cart->audioOutput() : 0.0f; }
+    bool  mapperIRQ() const override { return cart && cart->irqState(); }
+    void  mapperIrqAck() override { if (cart) cart->irqClear(); }
+
+    void onCpuCycle(bool getCycle) override {
+        if (controllerStrobe && !getCycle) {
+            controllerShift  = nesHost.readController(0);
+            controllerShift2 = nesHost.readController(1);
+        }
     }
 
-protected:
     PPU2C02 ppu;
     std::unique_ptr<Cartridge> cart;
 

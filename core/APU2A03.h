@@ -490,7 +490,6 @@ public:
         frameMode     = 0;
         frameIRQInhibit = false;
         frameIRQPending = false;
-        clockCount    = 0;
         pulse1.isPulse1 = true;
         pulse2.isPulse1 = false;
         setPAL(false);
@@ -505,6 +504,7 @@ public:
         dmc.irqPending       = false;
 
         frameIRQPending = false;
+        frameIRQReadClear = false;
 
         cpuWrite(0x4017, val4017);
     }
@@ -596,10 +596,8 @@ public:
                 frameIRQInhibit = (data >> 6) & 0x01;
                 if (frameIRQInhibit) frameIRQPending = false;
 
-                // Sprzętowe opóźnienie resetu (3 lub 4 cykle CPU)
-                // Obliczamy parzystość cyklu zapisu (clockCount + 1).
                 {
-                    bool isAPUCycle = ((clockCount + 1) & 0x01) == 1;
+                    bool isAPUCycle = !apuGetPhase;
                     delay4017 = isAPUCycle ? 2 : 3;
                 }
                 break;
@@ -617,67 +615,69 @@ public:
             if (dmc.bytesRemaining     > 0) status |= 0x10;
             if (frameIRQPending)            status |= 0x40;
             if (dmc.irqPending)             status |= 0x80;
-            frameIRQPending = false; // Odczyt $4015 kasuje Frame IRQ
+            if (apuGetPhase) frameIRQPending  = false;
+            else             frameIRQReadClear = true;
             return status;
         }
         return 0x00;
     }
 
-    // --- Jeden cykl zegara APU (wywoływany co cykl CPU) ---
-    void clock() {
-        clockCount++;
+    void clock(bool getCycle) {
+        apuGetPhase = getCycle;
 
-        // Zliczamy cykle CPU, aby trafić idealnie w progi np. 7457
+        if (apuGetPhase && frameIRQReadClear) {
+            frameIRQPending   = false;
+            frameIRQReadClear = false;
+        }
+
         frameCounter++;
 
-        // --- Obsługa opóźnionego zapisu do $4017 ---
-        if (delay4017 >= 0) {
-            if (delay4017 == 0) {
-                frameMode = (val4017 >> 7) & 0x01; // 0=4-step, 1=5-step
-                frameCounter = 0; // Reset na dokładny cykl CPU!
+        serviceFrameCounterWrite();
 
-                // Tryb 5-step natychmiast taktuje half i quarter frame
-                if (frameMode == 1) {
-                    clockQuarterFrame();
-                    clockHalfFrame();
-                }
-            }
-            delay4017--;
-        }
-
-        // Triangle timer taktowany na częstotliwości CPU (każdy cykl)
         triangle.clockTimer();
 
-        // Pozostałe kanały taktowane na częstotliwości APU (cykle nieparzyste)
-        if (clockCount & 0x01) {
-            pulse1.clockTimer();
-            pulse2.clockTimer();
-            noise.clockTimer();
-            dmc.clockTimer();
-        }
+        if (apuGetPhase) clockChannelTimers();
 
-        // --- Sekwencer Ramek (taktowany cyklami CPU) ---
+        clockFrameSequencer();
+    }
+
+private:
+    void clockChannelTimers() {
+        pulse1.clockTimer();
+        pulse2.clockTimer();
+        noise.clockTimer();
+        dmc.clockTimer();
+    }
+
+    void serviceFrameCounterWrite() {
+        if (delay4017 < 0) return;
+        if (delay4017 == 0) {
+            frameMode = (val4017 >> 7) & 0x01;
+            frameCounter = 0;
+            if (frameMode == 1) {
+                clockQuarterFrame();
+                clockHalfFrame();
+            }
+        }
+        delay4017--;
+    }
+
+    void clockFrameSequencer() {
         if (frameMode == 0) {
             // Tryb 4-step
             if (frameCounter == fcStep[0]) { clockQuarterFrame(); }
             else if (frameCounter == fcStep[1]) { clockQuarterFrame(); clockHalfFrame(); }
             else if (frameCounter == fcStep[2]) { clockQuarterFrame(); }
             else if (frameCounter == fcStep[3] - 1) {
-                if (!frameIRQInhibit) {
-                    frameIRQPending = true;
-                }
+                if (!frameIRQInhibit) frameIRQPending = true;
             }
             else if (frameCounter == fcStep[3]) {
                 clockQuarterFrame();
                 clockHalfFrame();
-                if (!frameIRQInhibit) {
-                    frameIRQPending = true;
-                }
+                if (!frameIRQInhibit) frameIRQPending = true;
             }
             else if (frameCounter == fcStep[3] + 1) {
-                if (!frameIRQInhibit) {
-                    frameIRQPending = true;
-                }
+                if (!frameIRQInhibit) frameIRQPending = true;
                 frameCounter = 0;
             }
         }
@@ -696,6 +696,8 @@ public:
         }
     }
 
+public:
+
     // --- Wyjście miksera (wywołaj po clock(), aby pobrać próbkę audio bieżącego cyklu) ---
     // Zwraca wartość z zakresu [0.0, 1.0]
     float getOutputSample() const {
@@ -713,7 +715,8 @@ public:
     }
 
 private:
-    uint32_t clockCount     = 0;
+    bool     apuGetPhase    = true;
+    bool     frameIRQReadClear = false;
     uint32_t frameCounter   = 0;
     uint8_t  frameMode      = 0;   // 0 = 4-step, 1 = 5-step
     bool     frameIRQInhibit = false;

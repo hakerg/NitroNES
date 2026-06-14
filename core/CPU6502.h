@@ -66,7 +66,6 @@ public:
         nmiDetected = false;
         interruptPending = false;
         currentInt = IntKind::None;
-        stallCycles = 7;
     }
 
     void tick() {
@@ -75,25 +74,6 @@ public:
         nmiAtStartOfCycle = nmiDetected;
         irqAtStartOfCycle = irqDetected;
 
-        if (stallCycles > 0) {
-            // Degrader: Transformacja instrukcji SH* w zepsute odpowiedniki
-            if (nextOp == &CPU6502::am_abx_2 || nextOp == &CPU6502::am_aby_2 || nextOp == &CPU6502::am_izy_3) {
-                if (storeKind == StoreKind::SHX) storeKind = StoreKind::SHX_c3;
-                else if (storeKind == StoreKind::SHY) storeKind = StoreKind::SHY_c3;
-                else if (storeKind == StoreKind::SHA) storeKind = StoreKind::SHA_c3;
-                else if (storeKind == StoreKind::SHS) storeKind = StoreKind::SHS_c3;
-            }
-            else if (nextOp == &CPU6502::am_abx_3_fixup || nextOp == &CPU6502::am_aby_3_fixup || nextOp == &CPU6502::am_izy_4_fixup) {
-                if (storeKind == StoreKind::SHX) storeKind = StoreKind::SHX_c4;
-                else if (storeKind == StoreKind::SHY) storeKind = StoreKind::SHY_c4;
-                else if (storeKind == StoreKind::SHA) storeKind = StoreKind::SHA_c4;
-                else if (storeKind == StoreKind::SHS) storeKind = StoreKind::SHS_c4;
-            }
-
-            stallCycles--;
-            sampleInterruptLatches();
-            return;
-        }
 
         nextOp = (this->*nextOp)().next;
 
@@ -117,7 +97,6 @@ public:
         irqDetected = level;
     }
 
-    void addStall(uint16_t n) { stallCycles += n; }
     bool isAtInstructionBoundary() const { return nextOp == &CPU6502::opFetch; }
 
 private:
@@ -145,7 +124,6 @@ private:
 
     uint16_t intVector() const { return currentInt == IntKind::NMI ? 0xFFFA : 0xFFFE; }
 
-    uint16_t stallCycles = 0;
 
     // ---- Helpery ----
     static Step STEP(MicroOp m) { return Step{ m }; }
@@ -355,9 +333,8 @@ private:
     enum class StoreKind : uint8_t {
         STA, STX, STY, SAX,
         SHX, SHY, SHA, SHS,
-        // -- Warianty sprzętowo zdegradowane przez uderzenie linii RDY --
-        SHX_c3, SHY_c3, SHA_c3, SHS_c3, // Stall 2 cykle przed zapisem
-        SHX_c4, SHY_c4, SHA_c4, SHS_c4  // Stall 1 cykl przed zapisem
+        SHX_c3, SHY_c3, SHA_c3, SHS_c3,
+        SHX_c4, SHY_c4, SHA_c4, SHS_c4
     };
 
     StoreKind storeKind = StoreKind::STA;
@@ -368,13 +345,11 @@ private:
             case StoreKind::STY: return Y;
             case StoreKind::SAX: return A & X;
 
-            // Standardowe, zdrowe działanie:
             case StoreKind::SHX: return X & ((uint8_t)(origHigh + 1));
             case StoreKind::SHY: return Y & ((uint8_t)(origHigh + 1));
             case StoreKind::SHA: return A & X & ((uint8_t)(origHigh + 1));
             case StoreKind::SHS: S = A & X; return S & ((uint8_t)(origHigh + 1));
 
-            // Quirk zepsutej wartości (gubi maskę H+1):
             case StoreKind::SHX_c3: case StoreKind::SHX_c4: return X;
             case StoreKind::SHY_c3: case StoreKind::SHY_c4: return Y;
             case StoreKind::SHA_c3: case StoreKind::SHA_c4: return A & X;
@@ -382,6 +357,22 @@ private:
         }
         return 0;
     }
+
+public:
+    void onRdyLow() {
+        if (accessMode != AccessMode::WRITE || storeKind < StoreKind::SHX
+            || storeKind >= StoreKind::SHX_c3)
+            return;
+
+        if (nextOp == &CPU6502::am_abx_2 || nextOp == &CPU6502::am_aby_2 || nextOp == &CPU6502::am_izy_3) {
+            storeKind = (StoreKind)((int)StoreKind::SHX_c3 + ((int)storeKind - (int)StoreKind::SHX));
+        }
+        else if (nextOp == &CPU6502::am_abx_3_fixup || nextOp == &CPU6502::am_aby_3_fixup || nextOp == &CPU6502::am_izy_4_fixup) {
+            storeKind = (StoreKind)((int)StoreKind::SHX_c4 + ((int)storeKind - (int)StoreKind::SHX));
+        }
+    }
+
+private:
 
     enum class AccessMode : uint8_t { READ, RMW, WRITE };
     AccessMode accessMode = AccessMode::READ;
@@ -469,17 +460,10 @@ inline void CPU6502::doExecRmw() {
 inline CPU6502::Step CPU6502::writeStep_() {
     uint8_t val = storeValue();
 
-    // Sprawdzamy czy to jakakolwiek instrukcja SH* (zdrowa lub zepsuta)
     bool isAnySh = (storeKind >= StoreKind::SHX);
-
-    // Sprawdzamy czy to specyficzny wariant stallu w cyklu 3 (chroni przed zepsuciem adresu)
-    bool isShC3 = (storeKind >= StoreKind::SHX_c3 && storeKind <= StoreKind::SHS_c3);
-
-    if (isAnySh) {
-        // Psujemy adres TYLKO wtedy, gdy przekroczono stronę i sprzęt NIE został wstrzymany 2 cykle wcześniej
-        if (pageCross && !isShC3) {
-            addr = ((uint16_t)val << 8) | (addr & 0xFF);
-        }
+    bool isShC3  = (storeKind >= StoreKind::SHX_c3 && storeKind <= StoreKind::SHS_c3);
+    if (isAnySh && pageCross && !isShC3) {
+        addr = ((uint16_t)val << 8) | (addr & 0xFF);
     }
 
     bus.cpuWrite(addr, val);
@@ -683,8 +667,7 @@ inline CPU6502::Step CPU6502::plp2_incS()  { bus.cpuRead(0x0100 | S); return STE
 inline CPU6502::Step CPU6502::plp3_pull()  { P = (pull() & ~FLAG_B) | FLAG_U; return DONE(); }
 
 inline CPU6502::Step CPU6502::jam_loop() {
-    // KIL/JAM/HLT - CPU zawiesza si? na zawsze.
-    PC--; // utrzymuj PC na opkodzie JAM
+    bus.cpuRead(PC);
     return STEP(&CPU6502::jam_loop);
 }
 
