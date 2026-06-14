@@ -100,6 +100,7 @@ protected:
 	CPU6502 cpu;
 	APU2A03 apu;
 	std::array<uint8_t, 2048> cpuRam;
+	bool isDMAAccess = false;
 
 private:
 	IEmulatorHost& host;
@@ -152,7 +153,11 @@ private:
 			dmaIdle(cpuAddr);
 			dmaIdle(cpuAddr);
 			if (!getCycle) dmaIdle(cpuAddr);
+
+			isDMAAccess = true;
 			uint8_t b = dmaGet(dma.dmcAddr);
+			isDMAAccess = false;
+
 			apu.loadDMCSample(b);
 			dma.dmcPending = false;
 		}
@@ -161,10 +166,14 @@ private:
 			dmaIdle(cpuAddr);
 			if (!getCycle) dmaIdle(cpuAddr);
 			PPU2C02* ppu = getPPU();
+
+			isDMAAccess = true;
 			for (int i = 0; i < 256; i++) {
 				uint8_t b = dmaGet(dma.oamPage + i);
 				runSystemCycle([&] { if (ppu) ppu->oamDMAWrite(b); });
 			}
+			isDMAAccess = false;
+
 			dma.oamPending = false;
 		}
 	}

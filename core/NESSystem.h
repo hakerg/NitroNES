@@ -50,6 +50,7 @@ public:
 protected:
     uint8_t memRead(uint16_t addr) override {
         uint8_t data;
+
         if (addr < 0x2000) {
             data = cpuRam[addr & 0x07FF];
         }
@@ -58,32 +59,47 @@ protected:
         }
         else if (addr < 0x4020) {
             if (addr == 0x4015) {
-                // $4015 nie aktualizuje open bus — zwracamy wynik bez zapisu do openBus
-                return apu.cpuRead(addr, openBus);
+                data = apu.cpuRead(addr, internalDataBus);
+
+                if (!isDMAAccess) internalDataBus = data;
+                return data;
             }
             else if (addr == 0x4016) {
                 uint8_t bit = (controllerShift & 0x80) ? 1 : 0;
                 if (!controllerStrobe) controllerShift = (controllerShift << 1) | 0x01;
-                data = (openBus & 0xE0) | bit;
+                data = (externalDataBus & 0xE0) | bit;
             }
             else if (addr == 0x4017) {
                 uint8_t bit = (controllerShift2 & 0x80) ? 1 : 0;
                 if (!controllerStrobe) controllerShift2 = (controllerShift2 << 1) | 0x01;
-                data = (openBus & 0xE0) | bit;
+                data = (externalDataBus & 0xE0) | bit;
             }
             else {
-                data = openBus;
+                data = externalDataBus;
             }
         }
         else {
-            data = cart ? cart->cpuRead(addr, openBus) : openBus;
+            data = cart ? cart->cpuRead(addr, externalDataBus) : externalDataBus;
         }
-        openBus = data;
+
+        if (isDMAAccess) {
+            externalDataBus = data;
+        } else {
+            internalDataBus = data;
+            externalDataBus = data;
+        }
+
         return data;
     }
 
     void memWrite(uint16_t addr, uint8_t data) override {
-        openBus = data;
+        if (isDMAAccess) {
+            externalDataBus = data;
+        } else {
+            internalDataBus = data;
+            externalDataBus = data;
+        }
+
         if (addr < 0x2000) { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000) { ppu.cpuWrite(addr, data); return; }
         if (addr < 0x4020) {
@@ -116,7 +132,8 @@ protected:
     PPU2C02 ppu;
     std::unique_ptr<Cartridge> cart;
 
-    uint8_t openBus = 0x00;
+    uint8_t internalDataBus = 0x00;
+    uint8_t externalDataBus = 0x00;
 
     uint8_t controllerShift  = 0x00;
     uint8_t controllerShift2 = 0x00;
