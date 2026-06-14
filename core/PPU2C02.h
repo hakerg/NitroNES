@@ -78,7 +78,7 @@ public:
             break;
         case 7: // PPUDATA
             ppuWrite(vram_addr.reg, data);
-            vram_addr.reg += (ctrl.increment_mode ? 32 : 1);
+            incrementVramAddr();
             break;
         }
     }
@@ -185,9 +185,14 @@ public:
             backgroundFetchPhase();
 
             if (cycle == 256) IncrementScrollY();
-            if (cycle == 257) { LoadBackgroundShifters(); TransferAddressX(); }
+            if (cycle == 257) {
+                if (renderingEnabled()) LoadBackgroundShifters();
+                TransferAddressX();
+            }
             if (cycle == 338 || cycle == 340) {
-                bg_next_tile_id = busRead(0x2000 | (vram_addr.reg & 0x0FFF));
+                if (renderingEnabled()) {
+                    bg_next_tile_id = busRead(0x2000 | (vram_addr.reg & 0x0FFF));
+                }
             }
             if (prerender && cycle >= 280 && cycle < 305) TransferAddressY();
 
@@ -399,18 +404,10 @@ private:
 
     uint8_t readPPUData(bool bReadOnly) {
         uint8_t data;
-        // Detekcja palety operuje na 14-bitowym adresie wystawianym na PPU bus
-        // (v jest 15-bitowe i moze przyjmowac $4000-$7FFF po inkrementacji
-        // z $3FFF; wtedy adres na busie to v & 0x3FFF, czyli NIE paleta).
         const uint16_t busAddr = vram_addr.reg & 0x3FFF;
         if (busAddr >= 0x3F00) {
-            // Paleta: bity 5..0 zdefiniowane, 7..6 to open bus.
             uint8_t pal = ppuRead(busAddr) & 0x3F;
             data = (ppuOpenBus & 0xC0) | pal;
-            // Bufor odczytu jest rownolegle ladowany z PPU bus pod adresem
-            // pod paleta - linie adresowe wystawiaja vram_addr na bus, a
-            // paleta jest tylko wewnetrzna, wiec bus zwraca nametable mirror
-            // (addr & 0x2FFF).
             ppu_data_buffer = ppuRead(busAddr & 0x2FFF);
             if (!bReadOnly) refreshOpenBus(0x3F, pal);
         }
@@ -419,8 +416,9 @@ private:
             ppu_data_buffer = ppuRead(busAddr);
             if (!bReadOnly) refreshOpenBus(0xFF, data);
         }
-        if (!bReadOnly)
-            vram_addr.reg += (ctrl.increment_mode ? 32 : 1);
+        if (!bReadOnly) {
+            incrementVramAddr();
+        }
         return data;
     }
 
@@ -428,6 +426,7 @@ private:
     //  Background fetch / shifter pipeline
     // ----------------------------------------------------------
     void backgroundFetchPhase() {
+        if (!renderingEnabled()) return;
         if (!((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338))) return;
 
         UpdateShifters();
@@ -475,13 +474,13 @@ private:
     }
 
     void UpdateShifters() {
-        if (mask.render_background) {
+        if (renderingEnabled()) {
             bg_shifter_pattern_lo <<= 1;
             bg_shifter_pattern_hi <<= 1;
             bg_shifter_attrib_lo <<= 1;
             bg_shifter_attrib_hi <<= 1;
         }
-        if (mask.render_sprites && cycle >= 1 && cycle < 258) {
+        if (renderingEnabled() && cycle >= 1 && cycle < 258) {
             for (int i = 0; i < sprite_count; i++) {
                 if (spriteScanline[i * 4 + 3] > 0) {
                     spriteScanline[i * 4 + 3]--;
@@ -534,6 +533,15 @@ private:
         vram_addr.fine_y = tram_addr.fine_y;
         vram_addr.nametable_y = tram_addr.nametable_y;
         vram_addr.coarse_y = tram_addr.coarse_y;
+    }
+
+    void incrementVramAddr() {
+        if (renderingEnabled() && (scanline == NES::SCANLINE_PRERENDER || scanline <= NES::SCANLINE_VISIBLE_LAST)) {
+            IncrementScrollY();
+            IncrementScrollX();
+        } else {
+            vram_addr.reg += (ctrl.increment_mode ? 32 : 1);
+        }
     }
 
     int16_t computeSpriteOverflowCycle() const {
