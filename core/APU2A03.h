@@ -598,11 +598,7 @@ public:
                 val4017 = data;
                 frameIRQInhibit = (data >> 6) & 0x01;
                 if (frameIRQInhibit) frameIRQPending = false;
-
-                {
-                    bool isAPUCycle = !isPutCycle;
-                    delay4017 = isAPUCycle ? 2 : 3;
-                }
+                delay4017 = isPutCycle ? 3 : 2;
                 break;
         }
     }

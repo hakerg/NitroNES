@@ -87,7 +87,7 @@ protected:
 	virtual void    mapperIrqAck() {}
 
 	virtual void onPreStep() {}
-	virtual void onCpuCycle(bool getCycle) { (void)getCycle; }
+	virtual void onCpuCycle(bool putCycle) { (void)putCycle; }
 	virtual bool coreIRQLine() { return apu.irqAsserted() || mapperIRQ(); }
 
 	void scheduleOAMDMA(uint8_t page) {
