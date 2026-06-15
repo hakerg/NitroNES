@@ -63,7 +63,7 @@ public:
 		host.onFrameReady();
 	}
 
-	uint8_t cpuRead(uint16_t addr) override final {
+	uint8_t cpuRead(uint16_t addr) override {
 		if (!cyclesEnabled) return memRead(addr);
 		serviceDMA(addr);
 		uint8_t v = 0;
@@ -71,12 +71,12 @@ public:
 		return v;
 	}
 
-	void cpuWrite(uint16_t addr, uint8_t data) override final {
+	void cpuWrite(uint16_t addr, uint8_t data) override {
 		if (!cyclesEnabled) { memWrite(addr, data); return; }
 		runSystemCycle([&] { memWrite(addr, data); });
 	}
 
-	void cpuIrqAck() override final { mapperIrqAck(); }
+	void cpuIrqAck() override { mapperIrqAck(); }
 
 protected:
 	virtual uint8_t memRead(uint16_t addr) = 0;

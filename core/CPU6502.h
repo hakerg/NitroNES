@@ -155,16 +155,19 @@ private:
             interruptPending = false;
             if (nmiPending) {
                 nmiPending  = false;
-                nmiDetected = false; // latch edge zerowany przy obsludze NMI
+                nmiDetected = false;
                 currentInt  = IntKind::NMI;
             } else {
                 currentInt = IntKind::IRQ;
                 bus.cpuIrqAck();
             }
             opcode = 0x00;
+
+            bus.cpuRead(PC);
+
             return STEP(&CPU6502::brk1_dummy);
         }
-        irqInhibitSnapshot = (P & FLAG_I) != 0; // snapshot przed wykonaniem instrukcji
+        irqInhibitSnapshot = (P & FLAG_I) != 0;
         opcode = bus.cpuRead(PC++);
         return decodeAndDispatch();
     }
@@ -612,9 +615,9 @@ inline CPU6502::Step CPU6502::brk3_pushPCL() { push(PC & 0xFF); return STEP(&CPU
 inline CPU6502::Step CPU6502::brk4_pushP() {
     bool wasBRK = (currentInt == IntKind::SoftwareBRK);
 
-    // Sprawdzamy snapshot z początku tego konkretnego (piątego) cyklu
     if (currentInt != IntKind::NMI && nmiAtStartOfCycle) {
         nmiPending = false;
+        nmiDetected = false;
         currentInt = IntKind::NMI;
     }
 
@@ -624,7 +627,10 @@ inline CPU6502::Step CPU6502::brk4_pushP() {
     irqInhibitSnapshot = true;
     return STEP(&CPU6502::brk5_readLow);
 }
-inline CPU6502::Step CPU6502::brk5_readLow()  { addr = bus.cpuRead(intVector()); return STEP(&CPU6502::brk6_readHigh); }
+inline CPU6502::Step CPU6502::brk5_readLow()  {
+    addr = bus.cpuRead(intVector());
+    return STEP(&CPU6502::brk6_readHigh);
+}
 inline CPU6502::Step CPU6502::brk6_readHigh() {
     addr |= bus.cpuRead(intVector() + 1) << 8;
     PC = addr;
