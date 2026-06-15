@@ -538,13 +538,16 @@ public:
     NoiseChannel    noise;
     DMCChannel      dmc;
 
-    // Czy DMC potrzebuje bajtu z pamięci (CPU powinno sprawdzić i dostarczyć przez loadDMCSample)
-    bool  dmcNeedsSample() const { return dmc.needsDMAFetch(); }
+    bool dmcNeedsSample() const { return dmc.needsDMAFetch(); }
     uint16_t dmcSampleAddress() const { return dmc.currentAddr; }
-    void  loadDMCSample(uint8_t data) { dmc.loadSampleBuffer(data); }
 
-    bool  frameIRQPending  = false;
-    bool  dmcIRQPending()  const { return dmc.irqPending; }
+    void loadDMCSample(uint8_t data) {
+        if (dmc.bytesRemaining == 0) return;
+        dmc.loadSampleBuffer(data);
+    }
+
+    bool frameIRQPending = false;
+    bool dmcIRQPending() const { return dmc.irqPending; }
 
     // --- Zapis przez CPU (adresy 0x4000 - 0x4017) ---
     void cpuWrite(uint16_t addr, uint8_t data) {
