@@ -149,8 +149,8 @@ private:
 
 		if (dma.dmcPending) {
 			dmaIdle(cpuAddr);
+			if (isPutCycle) dmaIdle(cpuAddr);
 			dmaIdle(cpuAddr);
-			if (!isPutCycle) dmaIdle(cpuAddr);
 
 			isDMAAccess = true;
 			uint8_t b = dmaGet(dma.dmcAddr);

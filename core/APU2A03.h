@@ -588,7 +588,7 @@ public:
                     dmc.enableDelay = 0;
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
-                    dmc.enableDelay = isPutCycle ? 3 : 4;
+                    dmc.enableDelay = isPutCycle ? 3 : 2;
                 }
 
                 dmc.irqPending = false;
