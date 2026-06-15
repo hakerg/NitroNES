@@ -142,6 +142,7 @@ private:
 	void dmaIdle(uint16_t cpuAddr) { runSystemCycle([&] { memRead(cpuAddr); }); }
 	uint8_t dmaGet(uint16_t addr)  { uint8_t v = 0; runSystemCycle([&] { v = memRead(addr); }); return v; }
 
+	// TODO: metoda nie powinna clockować CPU. Cykle DMA powinny być wywołane w tym samym miejscu co normalne, żeby obsłużyć konflikty DMA i abort-y
 	void serviceDMA(uint16_t cpuAddr) {
 		if (!dma.pending()) return;
 

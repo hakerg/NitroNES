@@ -1,13 +1,39 @@
 #pragma once
 #include "../ISDLWindowAPI.h"
 #include <windows.h>
+#include <commdlg.h>
+#include <string>
+#include <filesystem>
 #include "d3dkmthk.h"
 
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "comdlg32.lib")
 
 class WindowAPI : public ISDLWindowAPI {
 public:
+	std::string openFileDialog(SDL_Window* sdlWindow) override {
+		HWND hwnd = sdlWindow
+			? (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(sdlWindow),
+				SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr)
+			: nullptr;
+
+		wchar_t buf[MAX_PATH] = {};
+		OPENFILENAMEW ofn{};
+		ofn.lStructSize  = sizeof(ofn);
+		ofn.hwndOwner    = hwnd;
+		ofn.lpstrFilter  = L"Pliki NES/NSF\0*.nes;*.nsf\0Wszystkie pliki\0*.*\0\0";
+		ofn.lpstrFile    = buf;
+		ofn.nMaxFile     = MAX_PATH;
+		ofn.Flags        = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+		ofn.lpstrTitle   = L"Otwórz plik ROM";
+
+		if (!GetOpenFileNameW(&ofn)) return "";
+
+		auto u8 = std::filesystem::path(buf).u8string();
+		return std::string(u8.begin(), u8.end());
+	}
+
 	bool getScanLine(SDL_Window* window, int& outRaw) override {
 		if (!window) return false;
 

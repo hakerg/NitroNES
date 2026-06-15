@@ -401,7 +401,8 @@ struct DMCChannel {
     // Wskaźnik na bieżącą tabelę okresów (NTSC / PAL). Ustawiany przez APU.
     const uint16_t* periodTable = DMC_PERIOD_TABLE_NTSC;
 
-    uint8_t  enableDelay   = 0; // Licznik opóźnienia po zapisie do $4015
+    // TODO: spróbuj zrefaktorować DMC DMA, żeby to nie było potrzebne
+    uint8_t enableDelay = 0; // Licznik opóźnienia po zapisie do $4015
 
     void writeR0(uint8_t data) {
         irqEnabled = (data >> 7) & 0x01;

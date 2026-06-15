@@ -12,7 +12,7 @@
 
 class SDLWindow : public IWindow {
 public:
-	SDLWindow(ISDLWindowAPI* hardwareAPI) : platformAPI(hardwareAPI) {
+	SDLWindow(ISDLWindowAPI& hardwareAPI) : platformAPI(hardwareAPI) {
 		// --- Inicjalizacja SDL ---
 		if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
 			throw std::runtime_error(std::string("SDL_Init: ") + SDL_GetError());
@@ -110,10 +110,13 @@ public:
 	// --- GUI (Menu) ---
 	void initMenu(AppSettings& s, IMenuHandler& h) override { uiLayer->init(&s, &h); }
 	bool isMenuOpen() const override { return uiLayer->isMenuOpen(); }
+	std::string openFileDialog() override {
+		return platformAPI.openFileDialog(window);
+	}
 
 	// --- Sprzęt i Synchronizacja ---
 	bool getScanLine(int& outRaw) const override {
-		return platformAPI ? platformAPI->getScanLine(window, outRaw) : false;
+		return platformAPI.getScanLine(window, outRaw);
 	}
 
 	double getRefreshHz() const override {
@@ -216,7 +219,7 @@ private:
 	SDL_Window* window = nullptr;
 	SDL_Renderer* renderer = nullptr;
 	SDL_Texture* texture = nullptr;
-	ISDLWindowAPI* platformAPI = nullptr;
+	ISDLWindowAPI& platformAPI;
 
 	std::unique_ptr<ImGuiLayer> uiLayer;
 };

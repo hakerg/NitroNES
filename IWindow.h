@@ -28,6 +28,7 @@ public:
 	// --- GUI (Menu) ---
 	virtual void initMenu(AppSettings& settings, IMenuHandler& handler) = 0;
 	virtual bool isMenuOpen() const = 0;
+	virtual std::string openFileDialog() = 0;
 
 	// --- Sprzęt i Synchronizacja ---
 	virtual bool getScanLine(int& outRaw) const = 0;

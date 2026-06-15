@@ -44,7 +44,6 @@ public:
 		}
 	}
 
-protected:
 	void pushAudioSample(float sample, double dt) override {
 		audio.addNESSample(sample, dt);
 	}
@@ -54,7 +53,10 @@ protected:
 	}
 
 	void onOpen() override {
-		// TODO
+		std::string newPath = window.openFileDialog();
+		if (newPath.empty()) return;
+		session.reset();
+		session = makeSession(newPath);
 	}
 
 	void onReload() override {

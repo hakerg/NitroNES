@@ -30,7 +30,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     try {
         WindowAPI platformAPI;
-        SDLWindow window(&platformAPI);
+        SDLWindow window(platformAPI);
         AppSettings settings;
         SDLAudioStream audio(settings.audioSettings);
         SDLInputContext input;
