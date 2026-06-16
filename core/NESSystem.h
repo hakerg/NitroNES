@@ -2,7 +2,6 @@
 #include <array>
 #include <memory>
 #include <stdexcept>
-
 #include "NESCoreBase.h"
 #include "Cartridge.h"
 #include "PPU2C02.h"
@@ -25,20 +24,18 @@ public:
         }
         ppu.cart = cart.get();
         pal = false;
-        apu.setPAL(pal);
-        // Power-on: CPU w stanie pre-reset → reset() da S=$FD, P=$34
+        a2a03.getAPU().setPAL(pal);
         cpuRam.fill(0x00);
-        cpu.A = 0; cpu.X = 0; cpu.Y = 0;
-        cpu.S = 0x00;
-        cpu.P = CPU6502::FLAG_U | CPU6502::FLAG_B;
+        a2a03.getCPU().A = 0; a2a03.getCPU().X = 0; a2a03.getCPU().Y = 0;
+        a2a03.getCPU().S = 0x00;
+        a2a03.getCPU().P = CPU6502::FLAG_U | CPU6502::FLAG_B;
         reset();
     }
 
     void reset() override {
         if (cart) cart->reset();
-        apu.reset();
+        a2a03.reset();
         ppu.reset();
-        cpu.reset();
     }
 
     void renderFrame() override {
@@ -47,9 +44,17 @@ public:
 
     const PPU2C02* getPPU() const override { return &ppu; }
 
+    bool pollNMI() override {
+        return ppu.nmiLineLow();
+    }
+
+    bool pollIRQ() override {
+        return a2a03.getAPU().irqAsserted() || (cart && cart->irqState());
+    }
+
 protected:
     uint8_t memRead(uint16_t addr) override {
-        uint8_t data;
+        uint8_t data = a2a03.getDataBus();
 
         if (addr < 0x2000) {
             data = cpuRam[addr & 0x07FF];
@@ -57,64 +62,31 @@ protected:
         else if (addr < 0x4000) {
             data = ppu.cpuRead(addr);
         }
-        else if (addr < 0x4020) {
-            if (addr == 0x4015) {
-                data = apu.cpuRead(addr, internalDataBus);
-
-                if (!isDMAAccess) internalDataBus = data;
-                return data;
-            }
-            else if (addr == 0x4016) {
-                uint8_t bit = (controllerShift & 0x80) ? 1 : 0;
-                if (!controllerStrobe) controllerShift = (controllerShift << 1) | 0x01;
-                data = (externalDataBus & 0xE0) | bit;
-            }
-            else if (addr == 0x4017) {
-                uint8_t bit = (controllerShift2 & 0x80) ? 1 : 0;
-                if (!controllerStrobe) controllerShift2 = (controllerShift2 << 1) | 0x01;
-                data = (externalDataBus & 0xE0) | bit;
-            }
-            else {
-                data = externalDataBus;
-            }
+        else if (addr == 0x4016) {
+            uint8_t bit = (controllerShift & 0x80) ? 1 : 0;
+            if (!controllerStrobe) controllerShift = (controllerShift << 1) | 0x01;
+            data = (data & 0xE0) | bit;
         }
-        else {
-            data = cart ? cart->cpuRead(addr, externalDataBus) : externalDataBus;
+        else if (addr == 0x4017) {
+            uint8_t bit = (controllerShift2 & 0x80) ? 1 : 0;
+            if (!controllerStrobe) controllerShift2 = (controllerShift2 << 1) | 0x01;
+            data = (data & 0xE0) | bit;
         }
-
-        if (isDMAAccess) {
-            externalDataBus = data;
-        } else {
-            internalDataBus = data;
-            externalDataBus = data;
+        else if (addr >= 0x4020) {
+            data = cart ? cart->cpuRead(addr, data) : data;
         }
 
         return data;
     }
 
     void memWrite(uint16_t addr, uint8_t data) override {
-        if (isDMAAccess) {
-            externalDataBus = data;
-        } else {
-            internalDataBus = data;
-            externalDataBus = data;
-        }
-
         if (addr < 0x2000) { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000) { ppu.cpuWrite(addr, data); return; }
-        if (addr < 0x4020) {
-            if (addr == 0x4014) {
-                scheduleOAMDMA(data);
-                return;
-            }
-            if (addr == 0x4016) {
-                controllerStrobe = (data & 0x01) != 0;
-                return;
-            }
-            apu.cpuWrite(addr, data);
+        if (addr == 0x4016) {
+            controllerStrobe = (data & 0x01) != 0;
             return;
         }
-        if (cart) cart->cpuWrite(addr, data);
+        if (cart && addr >= 0x4020) cart->cpuWrite(addr, data);
     }
 
     void  clockMapper() override { if (cart) cart->clock(); }
@@ -131,9 +103,6 @@ protected:
 
     PPU2C02 ppu;
     std::unique_ptr<Cartridge> cart;
-
-    uint8_t internalDataBus = 0x00;
-    uint8_t externalDataBus = 0x00;
 
     uint8_t controllerShift  = 0x00;
     uint8_t controllerShift2 = 0x00;

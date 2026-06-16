@@ -1,10 +1,8 @@
 #pragma once
-#include <cstdint>
 #include <array>
 #include <vector>
 #include <string>
 #include <memory>
-
 #include "NESConst.h"
 #include "NESCoreBase.h"
 #include "NSFLoader.h"
@@ -13,262 +11,233 @@
 
 class NSFPlayer : public NESCoreBase {
 public:
-	static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000; // Adres pulapki (JMP $5000)
-	static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
+    static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000;
+    static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
 
-	explicit NSFPlayer(IEmulatorHost& host, const std::string& path) : NESCoreBase(host) {
-		extRam.fill(0x00);
-		prgRom.assign(32768, 0x00);
-		NSFFile nsf;
-		if (!NSFLoader::load(path, nsf))
-			throw std::runtime_error("[NSF] Nie udalo sie zaladowac: " + path);
-		load(nsf);
-	}
+    explicit NSFPlayer(IEmulatorHost& host, const std::string& path) : NESCoreBase(host) {
+        extRam.fill(0x00);
+        prgRom.assign(32768, 0x00);
+        NSFFile nsf;
+        if (!NSFLoader::load(path, nsf))
+            throw std::runtime_error("[NSF] Nie udalo sie zaladowac: " + path);
+        load(nsf);
+    }
 
-	bool load(const NSFFile& nsf) {
-		nsfHeader = nsf.header;  // kopiujemy tylko 128 B naglowka
-		pal = nsfIsPAL() && !nsfIsDualMode();
-		cpuClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
-		playCycles = calcPlayCycles(pal);
+    bool load(const NSFFile& nsf) {
+        nsfHeader = nsf.header;
+        pal = nsfIsPAL() && !nsfIsDualMode();
+        cpuClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
+        playCycles = calcPlayCycles(pal);
 
-		// Skonfiguruj timing APU pod region (tabele okresow + frame counter)
-		apu.setPAL(pal);
+        a2a03.getAPU().setPAL(pal);
 
-		// Expansion audio chip przez interfejs Mapper.
-		expChip.reset();
-		uint8_t chips = nsfHeader.extraChipFlags;
-		if (chips & 0x01) {
-			expChip = MapperRegistry::instance().create(24, 1, 1); // VRC6
-		}
+        expChip.reset();
+        uint8_t chips = nsfHeader.extraChipFlags;
+        if (chips & 0x01) {
+            expChip = MapperRegistry::instance().create(24, 1, 1);
+        }
 
-		// Zaladuj dane NSF do PRG ROM
-		if (isBankswitched()) {
-			loadBankswitched(nsf.data);
-		} else {
-			uint16_t base   = nsfHeader.loadAddr;
-			size_t   maxLen = prgRom.size() - (base - 0x8000);
-			size_t   len    = std::min(nsf.data.size(), maxLen);
-			std::fill(prgRom.begin(), prgRom.end(), 0x00);
-			std::copy(nsf.data.begin(), nsf.data.begin() + len,
-					  prgRom.begin() + (base - 0x8000));
-		}
+        if (isBankswitched()) {
+            loadBankswitched(nsf.data);
+        } else {
+            uint16_t base   = nsfHeader.loadAddr;
+            size_t   maxLen = prgRom.size() - (base - 0x8000);
+            size_t   len    = std::min(nsf.data.size(), maxLen);
+            std::fill(prgRom.begin(), prgRom.end(), 0x00);
+            std::copy(nsf.data.begin(), nsf.data.begin() + len,
+                    prgRom.begin() + (base - 0x8000));
+        }
 
-		// Trampoline pod TRAMPOLINE_ADDR: JMP $5000
-		trampoline[0] = 0x4C;                          // JMP abs
-		trampoline[1] = TRAMPOLINE_ADDR & 0xFF;
-		trampoline[2] = (TRAMPOLINE_ADDR >> 8) & 0xFF;
+        trampoline[0] = 0x4C;
+        trampoline[1] = TRAMPOLINE_ADDR & 0xFF;
+        trampoline[2] = (TRAMPOLINE_ADDR >> 8) & 0xFF;
 
-		currentSong = nsfHeader.startingSong;
-		initSong(currentSong);
-		return true;
-	}
+        currentSong = nsfHeader.startingSong;
+        initSong(currentSong);
+        return true;
+    }
 
-	// Zainicjalizuj i odtworz dany utwor (1-based)
-	void initSong(uint8_t songNum) {
-		currentSong = songNum;
-		playTimer   = 0;
-		callDone    = true;
+    void initSong(uint8_t songNum) {
+        currentSong = songNum;
+        playTimer   = 0;
+        callDone    = true;
 
-		// Spec: "Clear all RAM at 0000h-07FFh and 6000h-7FFFh"
-		cpuRam.fill(0x00);
-		extRam.fill(0x00);
+        cpuRam.fill(0x00);
+        extRam.fill(0x00);
 
-		// Spec: Init APU registers (NESdev NSF init sequence)
-		for (uint16_t a = 0x4000; a <= 0x400F; a++) apu.cpuWrite(a, 0x00);
-		apu.cpuWrite(0x4010, 0x10);
-		apu.cpuWrite(0x4011, 0x00);
-		apu.cpuWrite(0x4012, 0x00);
-		apu.cpuWrite(0x4013, 0x00);
-		apu.cpuWrite(NES::APU_STATUS_ADDR, 0x0F);
-		// $4017 <- $40: 4-step bez frame IRQ (NSF nie ma handlera $FFFE).
-		apu.cpuWrite(NES::APU_FRAME_CTR_ADDR, 0x40);
+        for (uint16_t a = 0x4000; a <= 0x400F; a++) a2a03.cpuWrite(a, 0x00);
+        a2a03.cpuWrite(0x4010, 0x10);
+        a2a03.cpuWrite(0x4011, 0x00);
+        a2a03.cpuWrite(0x4012, 0x00);
+        a2a03.cpuWrite(0x4013, 0x00);
+        a2a03.cpuWrite(NES::APU_STATUS_ADDR, 0x0F);
+        a2a03.cpuWrite(NES::APU_FRAME_CTR_ADDR, 0x40);
 
-		// Bankswitch - zaladuj wartosci startowe
-		if (isBankswitched()) {
-			for (int i = 0; i < 8; i++)
-				banks[i] = nsfHeader.bankValues[i];
-		}
+        if (isBankswitched()) {
+            for (int i = 0; i < 8; i++)
+                banks[i] = nsfHeader.bankValues[i];
+        }
 
-		// Ustaw wektor reset na trampoline
-		cpuRam[RESET_VECTOR & 0x07FF] = 0x00; // nie uzywany bezposrednio
+        cpuRam[RESET_VECTOR & 0x07FF] = 0x00;
 
-		// Ustaw rejestry CPU i wywolaj INIT
-		// A = numer utworu (0-based), X = 0 (NTSC) lub 1 (PAL)
-		cpu.reset();
-		cpu.A = songNum - 1;
-		cpu.X = pal ? 1 : 0;
-		cpu.P = CPU6502::FLAG_I | CPU6502::FLAG_U;
-		cpu.S = 0xFD;
+        a2a03.getCPU().reset();
+        a2a03.getCPU().A = songNum - 1;
+        a2a03.getCPU().X = pal ? 1 : 0;
+        a2a03.getCPU().P = CPU6502::FLAG_I | CPU6502::FLAG_U;
+        a2a03.getCPU().S = 0xFD;
 
-		// JSR do INIT via trampoline: ustawiamy PC na INIT, push adres powrotu
-		pushWord(TRAMPOLINE_ADDR - 1);
-		cpu.PC = nsfHeader.initAddr;
+        pushWord(TRAMPOLINE_ADDR - 1);
+        a2a03.getCPU().PC = nsfHeader.initAddr;
 
-		// Wykonaj INIT do momentu powrotu (max 200000 cykli)
-		int initCycles = 0;
-		for (; initCycles < 200000 && cpu.PC != TRAMPOLINE_ADDR; initCycles++) cpu.tick();
-	}
+        int initCycles = 0;
+        for (; initCycles < 200000 && a2a03.getCPU().PC != TRAMPOLINE_ADDR; initCycles++) a2a03.getCPU().tick();
+    }
 
-	void nextSong() {
-		uint8_t next = currentSong + 1;
-		if (next > nsfHeader.totalSongs) next = 1;
-		initSong(next);
-	}
+    void nextSong() {
+        uint8_t next = currentSong + 1;
+        if (next > nsfHeader.totalSongs) next = 1;
+        initSong(next);
+    }
 
-	void prevSong() {
-		uint8_t prev = currentSong - 1;
-		if (prev < 1) prev = nsfHeader.totalSongs;
-		initSong(prev);
-	}
+    void prevSong() {
+        uint8_t prev = currentSong - 1;
+        if (prev < 1) prev = nsfHeader.totalSongs;
+        initSong(prev);
+    }
 
-	uint8_t getCurrentSong()  const { return currentSong; }
-	uint8_t getTotalSongs()   const { return nsfHeader.totalSongs; }
+    uint8_t getCurrentSong()  const { return currentSong; }
+    uint8_t getTotalSongs()   const { return nsfHeader.totalSongs; }
 
-	// --- NESCoreBase API --------------------------------------------------
+    void reset() override { initSong(currentSong); }
 
-	void reset() override { initSong(currentSong); }
+    bool pollNMI() override {
+        return false;
+    }
+
+    bool pollIRQ() override {
+        return false;
+    }
 
 protected:
-	void onPreStep() override {
-		trampolineMaintenance();
-		playTimer -= 1.0;
-		if (!callDone && cpu.PC == TRAMPOLINE_ADDR) {
-			callDone = true;
-		}
-	}
+    void onPreStep() override {
+        trampolineMaintenance();
+        playTimer -= 1.0;
+        if (!callDone && a2a03.getCPU().PC == TRAMPOLINE_ADDR) {
+            callDone = true;
+        }
+    }
 
-	bool coreIRQLine() override { return false; }
+    void  clockMapper() override { if (expChip) expChip->clock(); }
+    float mapperAudio() const override { return expChip ? expChip->audioOutput() : 0.0f; }
 
-	void  clockMapper() override { if (expChip) expChip->clock(); }
-	float mapperAudio() const override { return expChip ? expChip->audioOutput() : 0.0f; }
+    uint8_t memRead(uint16_t addr) override {
+        uint8_t data = a2a03.getDataBus();
+        if (addr <= 0x07FF) {
+            data = cpuRam[addr];
+        }
+        else if (addr >= 0x2000 && addr <= 0x3FFF) {
+            data = 0x80;
+        }
+        else if (addr >= 0x5000 && addr <= 0x5002) {
+            data = trampoline[addr - 0x5000];
+        }
+        else if (addr >= 0x6000 && addr <= 0x7FFF) {
+            data = extRam[addr - 0x6000];
+        }
+        else if (addr >= 0x8000) {
+            if (isBankswitched()) {
+                uint8_t  bankIdx = (addr - 0x8000) / 4096;
+                uint16_t offset  = (addr - 0x8000) % 4096;
+                uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
+                data = (romAddr < bankRom.size()) ? bankRom[romAddr] : 0x00;
+            } else {
+                data = prgRom[addr - 0x8000];
+            }
+        }
+        return data;
+    }
 
-	uint8_t memRead(uint16_t addr) override {
-		uint8_t data;
-		if (addr <= 0x07FF) {
-			data = cpuRam[addr];
-		}
-		// PPU stub: NSF rip czesto czeka na VBlank (LDA $2002 / BPL -).
-		// Zwracamy 0x80 zeby symulowac stale ustawiona flage VBlank.
-		else if (addr >= 0x2000 && addr <= 0x3FFF) {
-			data = 0x80;
-		}
-		else if (addr >= 0x4000 && addr <= 0x4017) {
-			if (addr == 0x4015) {
-				// $4015 nie aktualizuje open bus — zwracamy wynik bez zapisu do openBus
-				return apu.cpuRead(addr, openBus);
-			}
-			data = apu.cpuRead(addr, openBus);
-		}
-		else if (addr >= 0x5000 && addr <= 0x5002) {
-			data = trampoline[addr - 0x5000];
-		}
-		else if (addr >= 0x6000 && addr <= 0x7FFF) {
-			data = extRam[addr - 0x6000];
-		}
-		else if (addr >= 0x8000) {
-			if (isBankswitched()) {
-				uint8_t  bankIdx = (addr - 0x8000) / 4096;
-				uint16_t offset  = (addr - 0x8000) % 4096;
-				uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
-				data = (romAddr < bankRom.size()) ? bankRom[romAddr] : 0x00;
-			} else {
-				data = prgRom[addr - 0x8000];
-			}
-		}
-		else {
-			data = openBus;
-		}
-		openBus = data;
-		return data;
-	}
-
-	void memWrite(uint16_t addr, uint8_t data) override {
-		openBus = data;
-		if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
-		if (addr >= 0x2000 && addr <= 0x3FFF) return; // PPU stub
-		if (addr >= 0x4000 && addr <= 0x4017) { apu.cpuWrite(addr, data); return; }
-		if (addr >= 0x6000 && addr <= 0x7FFF) { extRam[addr - 0x6000] = data; return; }
-		if (addr >= NES::NSF_BANK_BASE && addr <= 0x5FFF) {
-			banks[addr - NES::NSF_BANK_BASE] = data;
-			return;
-		}
-		if (expChip && addr >= 0x8000) {
-			uint32_t dummy = 0;
-			expChip->cpuMapWrite(addr, dummy, data);
-		}
-	}
-
+    void memWrite(uint16_t addr, uint8_t data) override {
+        if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
+        if (addr >= 0x2000 && addr <= 0x3FFF) return;
+        if (addr >= 0x6000 && addr <= 0x7FFF) { extRam[addr - 0x6000] = data; return; }
+        if (addr >= NES::NSF_BANK_BASE && addr <= 0x5FFF) {
+            banks[addr - NES::NSF_BANK_BASE] = data;
+            return;
+        }
+        if (expChip && addr >= 0x8000) {
+            uint32_t dummy = 0;
+            expChip->cpuMapWrite(addr, dummy, data);
+        }
+    }
 
 private:
-	void trampolineMaintenance() {
-		if (callDone && playTimer <= 0.0) {
-			if (!cpu.isAtInstructionBoundary()) return;
+    void trampolineMaintenance() {
+        if (callDone && playTimer <= 0.0) {
+            if (!a2a03.getCPU().isAtInstructionBoundary()) return;
 
-			cpu.S = 0xFD;
-			callDone = false;
-			pushWord(TRAMPOLINE_ADDR - 1);
-			cpu.PC = nsfHeader.playAddr;
+            a2a03.getCPU().S = 0xFD;
+            callDone = false;
+            pushWord(TRAMPOLINE_ADDR - 1);
+            a2a03.getCPU().PC = nsfHeader.playAddr;
 
-			playTimer += playCycles;
-		}
-	}
+            playTimer += playCycles;
+        }
+    }
 
-	// --- Helpery naglowka NSF ---------------------------------------------
-	bool isBankswitched() const {
-		for (int i = 0; i < 8; i++)
-			if (nsfHeader.bankValues[i] != 0) return true;
-		return false;
-	}
-	bool nsfIsPAL()      const { return (nsfHeader.palNtscBits & 0x01) != 0; }
-	bool nsfIsDualMode() const { return (nsfHeader.palNtscBits & 0x02) != 0; }
-	std::string nsfName() const {
-		int len = 0;
-		while (len < 32 && nsfHeader.songName[len] != '\0') len++;
-		return std::string(nsfHeader.songName, len);
-	}
-	double calcPlayCycles(bool palMode) const {
-		double   clk   = palMode ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
-		uint16_t speed = palMode ? nsfHeader.speedPAL   : nsfHeader.speedNTSC;
-		if (speed == 0) speed = palMode ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
-		return clk * speed / 1000000.0;
-	}
+    bool isBankswitched() const {
+        for (int i = 0; i < 8; i++)
+            if (nsfHeader.bankValues[i] != 0) return true;
+        return false;
+    }
 
-	void loadBankswitched(const std::vector<uint8_t>& data) {
-		uint16_t loadOffset  = nsfHeader.loadAddr & 0x0FFF;
-		size_t   romCapacity = 256 * 4096; // 1MB
-		bankRom.assign(romCapacity, 0x00);
-		size_t len = std::min(data.size(), romCapacity - loadOffset);
-		std::copy(data.begin(), data.begin() + len,
-				  bankRom.begin() + loadOffset);
-		for (int i = 0; i < 8; i++)
-			banks[i] = nsfHeader.bankValues[i];
-	}
+    bool nsfIsPAL()      const { return (nsfHeader.palNtscBits & 0x01) != 0; }
+    bool nsfIsDualMode() const { return (nsfHeader.palNtscBits & 0x02) != 0; }
+    std::string nsfName() const {
+        int len = 0;
+        while (len < 32 && nsfHeader.songName[len] != '\0') len++;
+        return std::string(nsfHeader.songName, len);
+    }
 
-	void pushWord(uint16_t val) {
-		cpuRam[0x0100 + cpu.S] = (val >> 8) & 0xFF;
-		cpu.S--;
-		cpuRam[0x0100 + cpu.S] = val & 0xFF;
-		cpu.S--;
-	}
+    double calcPlayCycles(bool palMode) const {
+        double   clk   = palMode ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
+        uint16_t speed = palMode ? nsfHeader.speedPAL   : nsfHeader.speedNTSC;
+        if (speed == 0) speed = palMode ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
+        return clk * speed / 1000000.0;
+    }
 
-	// Tylko naglowek (128 B) - dane muzyczne sa kopiowane raz do prgRom/bankRom podczas load()
-	NSFHeader nsfHeader  = {};
-	double    cpuClock    = NES::CPU_CLOCK_NTSC;
-	double    playCycles    = 0.0;
-	double    playTimer     = 0.0;
-	bool      callDone    = true;
-	uint8_t   currentSong = 1;
+    void loadBankswitched(const std::vector<uint8_t>& data) {
+        uint16_t loadOffset  = nsfHeader.loadAddr & 0x0FFF;
+        size_t   romCapacity = 256 * 4096;
+        bankRom.assign(romCapacity, 0x00);
+        size_t len = std::min(data.size(), romCapacity - loadOffset);
+        std::copy(data.begin(), data.begin() + len,
+                bankRom.begin() + loadOffset);
+        for (int i = 0; i < 8; i++)
+            banks[i] = nsfHeader.bankValues[i];
+    }
 
-	uint8_t   openBus     = 0x00; // Ostatnia wartość na szynie danych CPU
+    void pushWord(uint16_t val) {
+        cpuRam[0x0100 + a2a03.getCPU().S] = (val >> 8) & 0xFF;
+        a2a03.getCPU().S--;
+        cpuRam[0x0100 + a2a03.getCPU().S] = val & 0xFF;
+        a2a03.getCPU().S--;
+    }
 
-	std::array<uint8_t, 8192>  extRam;    // 0x6000-0x7FFF
-	std::vector<uint8_t>       prgRom;    // 0x8000-0xFFFF (32 KB, na stercie)
+    NSFHeader nsfHeader  = {};
+    double    cpuClock    = NES::CPU_CLOCK_NTSC;
+    double    playCycles    = 0.0;
+    double    playTimer     = 0.0;
+    bool      callDone    = true;
+    uint8_t   currentSong = 1;
 
-	// Bankswitch: 8 bankow x 4KB = 32KB przestrzeni adresowej
-	std::array<uint8_t, 8>   banks   = {};
-	std::vector<uint8_t>     bankRom; // Maks. 1MB danych NSF w bankach
+    std::array<uint8_t, 8192>  extRam;
+    std::vector<uint8_t>       prgRom;
 
-	uint8_t trampoline[3] = {};  // JMP $5000
+    std::array<uint8_t, 8>   banks   = {};
+    std::vector<uint8_t>     bankRom;
 
-	std::unique_ptr<Mapper> expChip; // expansion audio (VRC6 itp.)
+    uint8_t trampoline[3] = {};
+
+    std::unique_ptr<Mapper> expChip;
 };

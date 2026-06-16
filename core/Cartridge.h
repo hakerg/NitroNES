@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#include <cstdint>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -9,15 +8,7 @@
 
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
-// AllMappers.h wciaga wszystkie MapperNNN.h, ktore przez REGISTER_MAPPER
-// rejestruja sie w singletonie MapperRegistry przed wejsciem do main().
-// Dodajac nowy mapper: utworz plik, zakoncz makrem, dopisz include w
-// AllMappers.h - Cartridge nie wymaga modyfikacji.
-#include "mappers/AllMappers.h"
 
-// ============================================================================
-// Cartridge
-// ============================================================================
 class Cartridge {
 public:
     Cartridge(const std::string& sFileName) {
@@ -97,20 +88,14 @@ public:
         if (pMapper) pMapper->reset();
     }
 
-    // --- IRQ z kartridża (np. MMC3, FME-7, VRC) ---
     bool irqState() const { return pMapper && pMapper->irqState(); }
     void irqClear()       { if (pMapper) pMapper->irqClear(); }
     void scanline()       { if (pMapper) pMapper->scanline(); }
     void clockA12(bool a12High) { if (pMapper) pMapper->clockA12(a12High); }
     void clock()          { if (pMapper) pMapper->clock(); }
 
-    // Mikser audio mapperow ekspansyjnych (VRC6, VRC7, MMC5, FME-7, N163, ...).
     float audioOutput() const { return pMapper ? pMapper->audioOutput() : 0.0f; }
 
-    // --- INTERFEJS DLA CPU --- (wywoływany dla addr >= 0x4020)
-    // openBusFallback: wartość CPU open bus — zwracana gdy nic nie jest
-    // zamapowane pod danym adresem (NESDev: niezamapowane adresy zwracają
-    // ostatni bajt jaki był na szynie danych CPU).
     uint8_t cpuRead(uint16_t addr, uint8_t openBusFallback = 0x00) {
         uint32_t mapped = 0;
         uint8_t data = openBusFallback;
@@ -121,7 +106,7 @@ public:
 
         if (pMapper && pMapper->cpuMapRead(addr, mapped, data)) {
             if (mapped < vPRGMemory.size()) return vPRGMemory[mapped];
-            return data; // mapper sam dostarczył dane (np. open bus / EXRAM)
+            return data;
         }
         return openBusFallback;
     }
@@ -135,10 +120,6 @@ public:
         }
 
         if (pMapper) {
-            // Bus conflicts: niektóre mappery (CNROM, AxROM, GxROM, BNROM, ...)
-            // mają piny zapisu połączone z wyjściem ROM-u. Zapis fizycznie AND-uje
-            // wartość z magistrali z bajtem aktualnie wystawianym przez PRG-ROM
-            // pod tym samym adresem.
             if (pMapper->hasBusConflicts() && addr >= 0x8000) {
                 uint32_t romOff = 0;
                 uint8_t dummy = 0;
@@ -150,7 +131,6 @@ public:
         }
     }
 
-    // --- INTERFEJS SZYNY (BUS) DLA PPU ---
     bool ppuRead(uint16_t addr, uint8_t& data) {
         uint32_t mapped = 0;
         if (pMapper && pMapper->ppuMapRead(addr, mapped)) {

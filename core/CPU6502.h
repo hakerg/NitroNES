@@ -5,24 +5,15 @@ class ICPUBus {
 public:
     virtual ~ICPUBus() = default;
 
-    // Podstawowe operacje na magistrali
     virtual uint8_t cpuRead(uint16_t addr) = 0;
     virtual void    cpuWrite(uint16_t addr, uint8_t data) = 0;
-
-    // Czyszczenie/potwierdzenie przerwań (zastępuje irqAck)
     virtual void    cpuIrqAck() = 0;
+    virtual bool    pollNMI() = 0;
+    virtual bool    pollIRQ() = 0;
 };
 
-// ============================================================
-//  CPU6502 - cycle-accurate continuation-passing FSM.
-//
-//  Kazda mikro-op = jeden cykl magistrali. Mikro-op ZWRACA Step
-//  wskazujacy nastepna mikro-op (zamiast mutowac nextOp). tick():
-//      nextOp = (this->*nextOp)().next;
-// ============================================================
 class CPU6502 {
 public:
-    // 6502 status flags
     static constexpr uint8_t FLAG_C = 0x01;
     static constexpr uint8_t FLAG_Z = 0x02;
     static constexpr uint8_t FLAG_I = 0x04;
@@ -60,20 +51,16 @@ public:
         PC = lo | (hi << 8);
         nextOp = &CPU6502::opFetch;
         nmiPending = false;
-        prevNmiLineLow = false;
-        irqLine = false;
-        irqDetected = false;
-        nmiDetected = false;
+        prevNmiLow = false;
+        irqLevel = false;
         interruptPending = false;
         currentInt = IntKind::None;
     }
 
     void tick() {
         totalCycles++;
-
-        nmiAtStartOfCycle = nmiDetected;
-        irqAtStartOfCycle = irqDetected;
-
+        nmiAtStartOfCycle = nmiPending;
+        irqAtStartOfCycle = irqLevel;
 
         nextOp = (this->*nextOp)().next;
 
@@ -81,27 +68,19 @@ public:
     }
 
     void sampleInterruptLatches() {
-        irqDetected = irqLine;
-        nmiDetected = nmiPending;
-    }
-
-    void setNMILine(bool low) {
-        if (low && !prevNmiLineLow) {
+        bool currentNmiLow = bus.pollNMI();
+        if (currentNmiLow && !prevNmiLow) {
             nmiPending = true;
-            nmiDetected = true;
         }
-        prevNmiLineLow = low;
-    }
-    void setIRQ(bool level)   {
-        irqLine = level;
-        irqDetected = level;
+        prevNmiLow = currentNmiLow;
+
+        irqLevel = bus.pollIRQ();
     }
 
     bool isAtInstructionBoundary() const { return nextOp == &CPU6502::opFetch; }
 
 private:
     ICPUBus& bus;
-
     MicroOp nextOp = nullptr;
 
     uint8_t opcode = 0;
@@ -111,12 +90,10 @@ private:
     uint8_t tmp = 0;
     bool pageCross = false;
     bool nmiPending = false;
-    bool prevNmiLineLow = false; // poprzedni poziom /NMI (do edge detection)
-    bool irqLine = false;
-    bool irqDetected = false;
-    bool nmiDetected = false;
+    bool prevNmiLow = false;
+    bool irqLevel = false;
     bool interruptPending = false;
-    bool irqInhibitSnapshot = true; // wartosc FLAG_I z poczatku biezacej instrukcji
+    bool irqInhibitSnapshot = true;
     enum class IntKind : uint8_t { None, SoftwareBRK, IRQ, NMI };
     IntKind currentInt = IntKind::None;
     bool nmiAtStartOfCycle = false;
@@ -124,8 +101,6 @@ private:
 
     uint16_t intVector() const { return currentInt == IntKind::NMI ? 0xFFFA : 0xFFFE; }
 
-
-    // ---- Helpery ----
     static Step STEP(MicroOp m) { return Step{ m }; }
 
     void pollInterrupts() {
@@ -137,6 +112,7 @@ private:
         pollInterrupts();
         return Step{ &CPU6502::opFetch };
     }
+
     Step DONE_NOPOLL() {
         return Step{ &CPU6502::opFetch };
     }
@@ -144,27 +120,22 @@ private:
     void setZN(uint8_t v) {
         P = (P & ~(FLAG_Z | FLAG_N)) | (v == 0 ? FLAG_Z : 0) | (v & 0x80);
     }
+
     void push(uint8_t v) { bus.cpuWrite(0x0100 | S, v); S--; }
     uint8_t pull()       { S++; return bus.cpuRead(0x0100 | S); }
 
-    // ============================================================
-    //  Mikro-op'y
-    // ============================================================
     Step opFetch() {
         if (interruptPending) {
             interruptPending = false;
             if (nmiPending) {
                 nmiPending  = false;
-                nmiDetected = false;
                 currentInt  = IntKind::NMI;
             } else {
                 currentInt = IntKind::IRQ;
                 bus.cpuIrqAck();
             }
             opcode = 0x00;
-
             bus.cpuRead(PC);
-
             return STEP(&CPU6502::brk1_dummy);
         }
         irqInhibitSnapshot = (P & FLAG_I) != 0;
@@ -173,7 +144,6 @@ private:
     }
 
     Step decodeAndDispatch();
-
     Step afterAddressing();
     Step readAndExec_();
     Step rmw_read();
@@ -183,20 +153,15 @@ private:
 
     Step am_imm_exec();
     Step am_imp_exec();
-
     Step am_zp_1();
     Step am_zpx_1();  Step am_zpx_2();
     Step am_zpy_1();  Step am_zpy_2();
-
     Step am_abs_1();  Step am_abs_2();
     Step am_abx_1();  Step am_abx_2();  Step am_abx_3_fixup();
     Step am_aby_1();  Step am_aby_2();  Step am_aby_3_fixup();
-
     Step am_izx_1();  Step am_izx_2();  Step am_izx_3();  Step am_izx_4();
     Step am_izy_1();  Step am_izy_2();  Step am_izy_3();  Step am_izy_4_fixup();
-
     Step am_rel_1();  Step am_rel_2_taken();  Step am_rel_3_pagefix();
-
     Step am_ind_1();  Step am_ind_2();  Step am_ind_3();  Step am_ind_4();
 
     Step brk1_dummy();
@@ -222,7 +187,6 @@ private:
 
     Step jmpAbs1_low(); Step jmpAbs2_high();
 
-    // ---- Czysta egzekucja ----
     void execLDA() { A = fetched; setZN(A); }
     void execLDX() { X = fetched; setZN(X); }
     void execLDY() { Y = fetched; setZN(Y); }
@@ -267,7 +231,6 @@ private:
     void execROL_A() { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0); A = (A << 1) | c; setZN(A); }
     void execROR_A() { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0); A = (A >> 1) | c; setZN(A); }
 
-    // ---- Nieoficjalne (read/immediate) ----
     void execLAX() { A = fetched; X = fetched; setZN(A); }
     void execANC() {
         A &= fetched; setZN(A);
@@ -283,12 +246,10 @@ private:
         uint8_t c = (P & FLAG_C) ? 0x80 : 0;
         A = (A >> 1) | c;
         setZN(A);
-        // C = bit6 wyniku, V = bit6 XOR bit5
         P = (P & ~(FLAG_C | FLAG_V))
             | ((A & 0x40) ? FLAG_C : 0)
             | (((A ^ (A << 1)) & 0x40) ? FLAG_V : 0);
     }
-    // XAA/ANE i LXA s? niestabilne; powszechnie u?ywany model "magic constant"
     void execXAA() { A = (A | 0xEE) & X & fetched; setZN(A); }
     void execLXA() { A = (A | 0xFF) & fetched; X = A; setZN(A); }
     void execAXS() {
@@ -305,7 +266,6 @@ private:
         setZN(v);
     }
 
-    // ---- Nieoficjalne RMW (modyfikuj? pami??, potem operuj? na A) ----
     void execSLO() { execASL_mem(); A |= tmp; setZN(A); }
     void execRLA() { execROL_mem(); A &= tmp; setZN(A); }
     void execSRE() { execLSR_mem(); A ^= tmp; setZN(A); }
@@ -382,14 +342,11 @@ private:
 
     bool    branchTaken = false;
     uint8_t branchOffset = 0;
-
-    // Wysoki bajt operandu PRZED dodaniem indeksu (dla SHX/SHY/SHA/SHS/TAS).
     uint8_t origHigh = 0;
 
     Step jam_loop();
 };
 
-// =====================================================================
 inline CPU6502::Step CPU6502::afterAddressing() {
     switch (accessMode) {
         case AccessMode::READ:  return STEP(&CPU6502::readAndExec_);
@@ -404,6 +361,7 @@ inline CPU6502::Step CPU6502::readAndExec_() {
     doExecRead();
     return DONE();
 }
+
 inline void CPU6502::doExecRead() {
     switch (execKind) {
         case ExecKind::LDA: execLDA(); break;
@@ -434,15 +392,18 @@ inline CPU6502::Step CPU6502::rmw_read() {
     fetched = bus.cpuRead(addr);
     return STEP(&CPU6502::rmw_dummyWrite);
 }
+
 inline CPU6502::Step CPU6502::rmw_dummyWrite() {
     bus.cpuWrite(addr, fetched);
     doExecRmw();
     return STEP(&CPU6502::rmw_finalWrite);
 }
+
 inline CPU6502::Step CPU6502::rmw_finalWrite() {
     bus.cpuWrite(addr, tmp);
     return DONE();
 }
+
 inline void CPU6502::doExecRmw() {
     switch (rmwKind) {
         case RmwKind::ASL: execASL_mem(); break;
@@ -478,6 +439,7 @@ inline CPU6502::Step CPU6502::am_imm_exec() {
     doExecRead();
     return DONE();
 }
+
 inline CPU6502::Step CPU6502::am_imp_exec() {
     bus.cpuRead(PC);
     return DONE();
@@ -551,13 +513,6 @@ inline CPU6502::Step CPU6502::am_izy_4_fixup() {
 
 inline CPU6502::Step CPU6502::am_rel_1() {
     branchOffset = bus.cpuRead(PC++);
-    // Cykl 2 (operand fetch) - spec: "interrupts are always polled before
-    // the second CPU cycle (the operand fetch)". Polling musi zajsc dla
-    // OBYDWU sciezek (taken i not-taken). Dla not-taken DONE() i polluje,
-    // i konczy. Dla taken polling rozdzielamy od koncowki, bo instrukcja
-    // trwa jeszcze 1-2 cykle, ale cykl 3 (ostatni przy non-page-cross)
-    // sam w sobie pollingu juz NIE wykona (quirk testowany przez
-    // 5-branch_delays_irq/test_branch_taken).
     if (!branchTaken) return DONE();
     pollInterrupts();
     return STEP(&CPU6502::am_rel_2_taken);
@@ -569,15 +524,6 @@ inline CPU6502::Step CPU6502::am_rel_2_taken() {
     uint8_t  newL  = oldL + branchOffset;
     PC = (oldPC & 0xFF00) | newL;
     bool cross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
-    // Cykl 3 taken-branch:
-    //  * non-page-cross (3-cyklowy taken): IRQ na tym cyklu jest
-    //    IGNOROWANY - to wlasnie quirk testowany w
-    //    5-branch_delays_irq/test_branch_taken. DONE_NOPOLL konczy
-    //    instrukcje BEZ pollingu.
-    //  * page-cross: polling odbywa sie "przed PCH fixup", co w naszym
-    //    modelu z 1-cyklowym latchem detektora oznacza sample na
-    //    poczatku cyklu 4 (am_rel_3_pagefix.DONE()) - bo sygnal IRQ
-    //    z φ2 cyklu 3 jest widoczny w φ1 cyklu 4.
     if (!cross) return DONE_NOPOLL();
     pageCross = ((int8_t)branchOffset < 0);
     return STEP(&CPU6502::am_rel_3_pagefix);
@@ -585,9 +531,6 @@ inline CPU6502::Step CPU6502::am_rel_2_taken() {
 inline CPU6502::Step CPU6502::am_rel_3_pagefix() {
     bus.cpuRead(PC);
     PC += pageCross ? (uint16_t)(-0x100) : 0x100;
-    // Cykl 4 (PCH fixup) - polling przez DONE(): snapshot z poczatku
-    // tego cyklu odpowiada stanowi IRQ z φ2 cyklu 3 - zgodnie ze spec
-    // "interrupts are polled before the PCH fixup cycle".
     return DONE();
 }
 
@@ -595,7 +538,7 @@ inline CPU6502::Step CPU6502::am_ind_1() { ptr = bus.cpuRead(PC++); return STEP(
 inline CPU6502::Step CPU6502::am_ind_2() { ptr |= bus.cpuRead(PC++) << 8; return STEP(&CPU6502::am_ind_3); }
 inline CPU6502::Step CPU6502::am_ind_3() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_ind_4); }
 inline CPU6502::Step CPU6502::am_ind_4() {
-    uint16_t hiAddr = (ptr & 0xFF00) | ((ptr + 1) & 0xFF); // sprzetowy bug JMP (ind)
+    uint16_t hiAddr = (ptr & 0xFF00) | ((ptr + 1) & 0xFF);
     addr |= bus.cpuRead(hiAddr) << 8;
     PC = addr;
     return DONE();
@@ -604,7 +547,6 @@ inline CPU6502::Step CPU6502::am_ind_4() {
 inline CPU6502::Step CPU6502::jmpAbs1_low()  { addr = bus.cpuRead(PC++); return STEP(&CPU6502::jmpAbs2_high); }
 inline CPU6502::Step CPU6502::jmpAbs2_high() { addr |= bus.cpuRead(PC++) << 8; PC = addr; return DONE(); }
 
-// ---- BRK / IRQ / NMI ----
 inline CPU6502::Step CPU6502::brk1_dummy() {
     if (currentInt == IntKind::SoftwareBRK) bus.cpuRead(PC++);
     else                                    bus.cpuRead(PC);
@@ -617,7 +559,6 @@ inline CPU6502::Step CPU6502::brk4_pushP() {
 
     if (currentInt != IntKind::NMI && nmiAtStartOfCycle) {
         nmiPending = false;
-        nmiDetected = false;
         currentInt = IntKind::NMI;
     }
 
@@ -635,11 +576,6 @@ inline CPU6502::Step CPU6502::brk6_readHigh() {
     addr |= bus.cpuRead(intVector() + 1) << 8;
     PC = addr;
     currentInt = IntKind::None;
-    // Spec: po zakonczeniu sekwencji przerwania (BRK/IRQ/NMI) co najmniej
-    // jedna instrukcja handlera musi sie wykonac przed kolejnym
-    // przerwaniem. Polling na koncu cyklu 7 jest pomijany - patrz
-    // 2-nmi_and_brk: "NMI after SEC at beginning of IRQ handler" oczekuje
-    // 27 36 00, czyli SEC najpierw, NMI dopiero potem.
     return DONE_NOPOLL();
 }
 
@@ -677,7 +613,6 @@ inline CPU6502::Step CPU6502::jam_loop() {
     return STEP(&CPU6502::jam_loop);
 }
 
-// =====================================================================
 inline CPU6502::Step CPU6502::decodeAndDispatch() {
     branchTaken = false;
     accessMode  = AccessMode::READ;
@@ -869,15 +804,9 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
 
     case 0xEA: return implied([&]{});
 
-    // ================================================================
-    //                NIEOFICJALNE / NIEUDOKUMENTOWANE OPKODY
-    // ================================================================
-
-    // ---- NOP-y 1-bajtowe (implied) ----
     case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xFA:
         return implied([&]{});
 
-    // ---- DOP / SKB (NOP z operandem zero-page lub immediate, 2-bajtowe) ----
     case 0x80: case 0x82: case 0x89: case 0xC2: case 0xE2:
         execKind = ExecKind::NOP_;
         return STEP(&CPU6502::am_imm_exec);
@@ -886,13 +815,11 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x14: case 0x34: case 0x54: case 0x74: case 0xD4: case 0xF4:
         return setRead(ExecKind::NOP_, &CPU6502::am_zpx_1);
 
-    // ---- TOP / SKW (NOP 3-bajtowy, abs / abs,X z page-cross) ----
     case 0x0C:
         return setRead(ExecKind::NOP_, &CPU6502::am_abs_1);
     case 0x1C: case 0x3C: case 0x5C: case 0x7C: case 0xDC: case 0xFC:
         return setRead(ExecKind::NOP_, &CPU6502::am_abx_1);
 
-    // ---- LAX ----
     case 0xA7: return setRead(ExecKind::LAX_, &CPU6502::am_zp_1);
     case 0xB7: return setRead(ExecKind::LAX_, &CPU6502::am_zpy_1);
     case 0xAF: return setRead(ExecKind::LAX_, &CPU6502::am_abs_1);
@@ -901,25 +828,19 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xB3: return setRead(ExecKind::LAX_, &CPU6502::am_izy_1);
     case 0xAB: execKind = ExecKind::LXA_; return STEP(&CPU6502::am_imm_exec);
 
-    // ---- SAX (A & X -> mem) ----
     case 0x87: return setWrite(StoreKind::SAX, &CPU6502::am_zp_1);
     case 0x97: return setWrite(StoreKind::SAX, &CPU6502::am_zpy_1);
     case 0x8F: return setWrite(StoreKind::SAX, &CPU6502::am_abs_1);
     case 0x83: return setWrite(StoreKind::SAX, &CPU6502::am_izx_1);
 
-    // ---- SBC nieoficjalne (alias #imm 0xEB ju? w SBC; ?adne inne nie wymagaj? dodatku) ----
-
-    // ---- ANC / ALR / ARR / XAA / AXS ----
     case 0x0B: case 0x2B: execKind = ExecKind::ANC_; return STEP(&CPU6502::am_imm_exec);
     case 0x4B:            execKind = ExecKind::ALR_; return STEP(&CPU6502::am_imm_exec);
     case 0x6B:            execKind = ExecKind::ARR_; return STEP(&CPU6502::am_imm_exec);
     case 0x8B:            execKind = ExecKind::XAA_; return STEP(&CPU6502::am_imm_exec);
     case 0xCB:            execKind = ExecKind::AXS_; return STEP(&CPU6502::am_imm_exec);
 
-    // ---- LAS (mem & S -> A,X,S) ----
     case 0xBB: return setRead(ExecKind::LAS_, &CPU6502::am_aby_1);
 
-    // ---- SLO = ASL + ORA ----
     case 0x07: return setRmw(RmwKind::SLO, &CPU6502::am_zp_1);
     case 0x17: return setRmw(RmwKind::SLO, &CPU6502::am_zpx_1);
     case 0x0F: return setRmw(RmwKind::SLO, &CPU6502::am_abs_1);
@@ -928,7 +849,6 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x03: return setRmw(RmwKind::SLO, &CPU6502::am_izx_1);
     case 0x13: return setRmw(RmwKind::SLO, &CPU6502::am_izy_1);
 
-    // ---- RLA = ROL + AND ----
     case 0x27: return setRmw(RmwKind::RLA, &CPU6502::am_zp_1);
     case 0x37: return setRmw(RmwKind::RLA, &CPU6502::am_zpx_1);
     case 0x2F: return setRmw(RmwKind::RLA, &CPU6502::am_abs_1);
@@ -937,7 +857,6 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x23: return setRmw(RmwKind::RLA, &CPU6502::am_izx_1);
     case 0x33: return setRmw(RmwKind::RLA, &CPU6502::am_izy_1);
 
-    // ---- SRE = LSR + EOR ----
     case 0x47: return setRmw(RmwKind::SRE, &CPU6502::am_zp_1);
     case 0x57: return setRmw(RmwKind::SRE, &CPU6502::am_zpx_1);
     case 0x4F: return setRmw(RmwKind::SRE, &CPU6502::am_abs_1);
@@ -946,7 +865,6 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x43: return setRmw(RmwKind::SRE, &CPU6502::am_izx_1);
     case 0x53: return setRmw(RmwKind::SRE, &CPU6502::am_izy_1);
 
-    // ---- RRA = ROR + ADC ----
     case 0x67: return setRmw(RmwKind::RRA, &CPU6502::am_zp_1);
     case 0x77: return setRmw(RmwKind::RRA, &CPU6502::am_zpx_1);
     case 0x6F: return setRmw(RmwKind::RRA, &CPU6502::am_abs_1);
@@ -955,7 +873,6 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x63: return setRmw(RmwKind::RRA, &CPU6502::am_izx_1);
     case 0x73: return setRmw(RmwKind::RRA, &CPU6502::am_izy_1);
 
-    // ---- DCP = DEC + CMP ----
     case 0xC7: return setRmw(RmwKind::DCP, &CPU6502::am_zp_1);
     case 0xD7: return setRmw(RmwKind::DCP, &CPU6502::am_zpx_1);
     case 0xCF: return setRmw(RmwKind::DCP, &CPU6502::am_abs_1);
@@ -964,7 +881,6 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xC3: return setRmw(RmwKind::DCP, &CPU6502::am_izx_1);
     case 0xD3: return setRmw(RmwKind::DCP, &CPU6502::am_izy_1);
 
-    // ---- ISC / ISB / INS = INC + SBC ----
     case 0xE7: return setRmw(RmwKind::ISC, &CPU6502::am_zp_1);
     case 0xF7: return setRmw(RmwKind::ISC, &CPU6502::am_zpx_1);
     case 0xEF: return setRmw(RmwKind::ISC, &CPU6502::am_abs_1);
@@ -973,14 +889,12 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xE3: return setRmw(RmwKind::ISC, &CPU6502::am_izx_1);
     case 0xF3: return setRmw(RmwKind::ISC, &CPU6502::am_izy_1);
 
-    // ---- SH* (niestabilne store'y; uproszczony, ale popularny model) ----
-    case 0x9C: return setWrite(StoreKind::SHY, &CPU6502::am_abx_1); // SHY abs,X
-    case 0x9E: return setWrite(StoreKind::SHX, &CPU6502::am_aby_1); // SHX abs,Y
-    case 0x9F: return setWrite(StoreKind::SHA, &CPU6502::am_aby_1); // SHA / AHX abs,Y
-    case 0x93: return setWrite(StoreKind::SHA, &CPU6502::am_izy_1); // SHA / AHX (zp),Y
-    case 0x9B: return setWrite(StoreKind::SHS, &CPU6502::am_aby_1); // SHS / TAS abs,Y
+    case 0x9C: return setWrite(StoreKind::SHY, &CPU6502::am_abx_1);
+    case 0x9E: return setWrite(StoreKind::SHX, &CPU6502::am_aby_1);
+    case 0x9F: return setWrite(StoreKind::SHA, &CPU6502::am_aby_1);
+    case 0x93: return setWrite(StoreKind::SHA, &CPU6502::am_izy_1);
+    case 0x9B: return setWrite(StoreKind::SHS, &CPU6502::am_aby_1);
 
-    // ---- JAM / KIL / HLT ----
     case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52:
     case 0x62: case 0x72: case 0x92: case 0xB2: case 0xD2: case 0xF2:
         return STEP(&CPU6502::jam_loop);
