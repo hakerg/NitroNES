@@ -1,0 +1,65 @@
+APU Frame Counter
+The NES APU frame counter (or frame sequencer) generates low-frequency clocks for the channels and an optional 60 Hz interrupt. The name "frame counter" might be slightly misleading because the clocks have nothing to do with the video signal.
+
+The frame counter contains the following: divider, looping clock sequencer, frame interrupt flag.
+
+The sequencer is clocked on every other CPU cycle, so 2 CPU cycles = 1 APU cycle. The sequencer keeps track of how many APU cycles have elapsed in total, and each step of the sequence will occur once that total has reached the indicated amount (with an additional delay of one CPU cycle for the quarter and half frame signals). Once the last step has executed, the count resets to 0 on the next APU cycle.
+
+Address	Bitfield	Description
+$4017	MI--.----	Set mode and interrupt (write)
+Bit 7	M--- ----	Sequencer mode: 0 selects 4-step sequence, 1 selects 5-step sequence
+Bit 6	-I-- ----	Interrupt inhibit flag. If set, the frame interrupt flag is cleared, otherwise it is unaffected.
+Side effects	After 3 or 4 CPU clock cycles*, the timer is reset.
+If the mode flag is set, then both "quarter frame" and "half frame" signals are also generated.
+* If the write occurs during an APU cycle, the effects occur 3 CPU cycles after the $4017 write cycle, and if the write occurs between APU cycles, the effects occurs 4 CPU cycles after the write cycle.
+
+PAL behavior is currently assumed to be the same.
+
+The frame interrupt flag is connected to the CPU's IRQ line. It is set at a particular point in the 4-step sequence (see below) provided the interrupt inhibit flag in $4017 is clear, and can be cleared either by reading $4015 (which also returns its old status) or by setting the interrupt inhibit flag.
+
+Mode 0: 4-Step Sequence (bit 7 of $4017 clear)
+Step	APU cycles	Envelopes & triangle's linear counter
+(Quarter frame)	Length counters & sweep units
+(Half frame)	Frame interrupt flag
+NTSC	PAL
+1	3728, PUT	4156, PUT	Clock	 	 
+2	7456, PUT	8313, PUT	Clock	Clock	 
+3	11185, PUT	12469, PUT	Clock	 	 
+4	14914, GET	16626, GET	 	 	Set if interrupt inhibit is clear
+14914, PUT	16626, PUT	Clock	Clock	Set if interrupt inhibit is clear
+0 (14915), GET	0 (16627), GET	 	 	Set if interrupt inhibit is clear
+ 	NTSC: 240 Hz (approx.)
+PAL: 200 Hz (approx)	NTSC: 120 Hz (approx.)
+PAL: 100 Hz (approx)	NTSC: 60 Hz (approx.)
+PAL: 50 Hz (approx)
+In this mode, the interrupt flag is set every 29830 CPU cycles, which is slightly (0.166%) slower than the 29780.5 CPU cycles per NTSC PPU frame.
+
+On the PAL RP2A07, this is every 33254 CPU cycles, still slower than the 33247.5 CPU cycles per PAL PPU frame but much closer (only off by 0.0196%).
+
+This IRQ allows the CPU to keep time in scenarios where no NMI signal is provided.
+
+Mode 1: 5-Step Sequence (bit 7 of $4017 set)
+Step	APU cycles	Envelopes & triangle's linear counter
+(Quarter frame)	Length counters & sweep units
+(Half frame)
+NTSC	PAL
+1	3728, PUT	4156, PUT	Clock	 
+2	7456, PUT	8313, PUT	Clock	Clock
+3	11185, PUT	12469, PUT	Clock	 
+4	14914, PUT	16626, PUT	 	 
+5	18640, PUT	20782, PUT	Clock	Clock
+0 (18641), GET	0 (20783), GET	 	 
+ 	NTSC: 192 Hz (approx.), uneven timing
+PAL: 160 Hz (approx.), uneven timing	NTSC: 96 Hz (approx.), uneven timing
+PAL: 80 Hz (approx.), uneven timing
+In this mode, the frame interrupt flag is never set.
+
+This mode seems to be intended for use with a NMI handler that writes to $4017 once each PPU frame and resets the sequence before it ever reaches step 5, thereby synchronizing the various APU counters to the PPU frame rate and yielding exactly four quarter-frame clocks and two half-frame clocks per PPU frame. This mode has been observed to be primarily used by first-party titles, including the FDS BIOS, and these titles do use it in the way described.
+
+Punch-Out!! and Donkey Kong 3 are arcade boards not directly based on the NES, which use the 2A03 CPU as a sound processor in this mode.
+
+V | TAPU
+Concepts	Registers | Basics | Period table
+Channels	Pulse 1 and Pulse 2 | Triangle | Noise | DMC
+Components	Envelope | Sweep | Frame Counter | Length Counter | DMA | Mixer
+Expansion audio	2C33 (Disk System) | MMC5 | VRC6 | VRC7 | Namco 163 | Sunsoft 5B | µPD7756

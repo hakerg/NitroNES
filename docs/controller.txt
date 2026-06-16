@@ -1,0 +1,242 @@
+Standard controller
+
+Standard NES controller
+All NES units come with at least one standard controller - without it, you wouldn't be able to play any games!
+
+Standard controllers can be used in both controller ports, or in a Four score accessory.
+
+For code examples, see: Controller reading code
+
+Contents
+1	Report
+2	Input ($4016 write)
+3	Output ($4016/$4017 read)
+3.1	Famicom
+4	Hardware
+4.1	PAL
+4.2	Schematic
+5	Turbo
+6	See also
+7	References
+Report
+The standard NES controller will report 8 bits on its data line:
+
+0 - A
+1 - B
+2 - Select
+3 - Start
+4 - Up
+5 - Down
+6 - Left
+7 - Right
+After 8 bits are read, all subsequent bits will report 1 on a standard NES controller, but third party and other controllers may report other values here.
+
+If using DPCM audio samples, read conflicts must be corrected with a software technique. The most common symptom of this is spurious Right presses as the DPCM conflict deletes one bit of the report, and an extra 1 bit appears in the Right press position. See: Controller reading: DPCM conflict.
+
+Input ($4016 write)
+7  bit  0
+---- ----
+xxxx xxxS
+        |
+        +- Controller shift register strobe
+While S (strobe) is high, the shift registers in the controllers are continuously reloaded from the button states, and reading $4016/$4017 will keep returning the current state of the first button (A). Once S goes low, this reloading will stop. Hence a 1/0 write sequence is required to get the button states, after which the buttons can be read back one at a time.
+
+(Note that bits 2-0 of $4016/write are stored in internal latches in the 2A03/07.)
+
+Output ($4016/$4017 read)
+7  bit  0
+---- ----
+xxxx xMES
+      |||
+      ||+- Primary controller status bit
+      |+-- Expansion controller status bit (Famicom)
+      +--- Microphone status bit (Famicom, $4016 only)
+Though both are polled from a write to $4016, controller 1 is read through $4016, and controller 2 is separately read through $4017.
+
+Each read reports one bit at a time through D0. The first 8 reads will indicate which buttons or directions are pressed (1 if pressed, 0 if not pressed). All subsequent reads will return 1 on official Nintendo brand controllers but may return 0 on third party controllers such as the U-Force.
+
+Status for each controller is returned as an 8-bit report in the following order: A, B, Select, Start, Up, Down, Left, Right.
+
+In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus. Usually this is the most significant byte of the address of the controller port—0x40. Certain games (such as Paperboy) rely on this behavior and require that reads from the controller ports return exactly $40 or $41 as appropriate. See: Controller reading: unconnected data lines.
+
+When no controller is connected, the corresponding status bit will report 0. This is due to the presence of internal pull-up resistors, and the internal inverter. (See: Controller reading)
+
+Famicom
+
+Famicom second-player controller
+The original Famicom's hard-wired second controller (II) is missing the Select and Start buttons. Its corresponding bits will read as 0, so Famicom games must not rely on the second player being able to push Start or Select.
+
+This hard-wired second controller also contains a microphone, which gives an immediate 1-bit report at $4016 D2 whenever it is read. It was common for Famicom games to track when the report changes its state (0 to 1 and vice versa), rather than relying on a specific state representing microphone activity. (TODO: There appears to have been cases where the report was inverted on some units, possibly due to the microphone being installed backwards?) As a result, the microphone report is most useful for detecting noisy audio sources such as a player blowing into the microphone. The microphone audio itself is mixed with the APU output before being sent to the cartridge edge. (i.e. before expansion audio is mixed in by the cartridge)
+
+The later AV Famicom used detachable controllers, with connectors identical to the NES. Its second controller was the same as the first, with Select and Start present, and no microphone.
+
+The expansion port of the Famicom could be used to connect external controllers. These gave the same standard 8-bit report, but through D1 instead of D0. It was common for Famicom games to combine D1 and D0 (logical OR) when reading to permit players to use expansion controllers instead, though several games do not support this[1]. Alternatively, these could be used as extra controllers for 4-player games.
+
+Hardware
+The 4021 IC is an 8-bit parallel-to-serial shift register. This allows the 8 button states to be latched into the register simultaneously (parallel), then read out one bit at a time (serial).
+
+From the controller port pinouts:
+
+OUT ($4016:0) controls the 4021's Parallel/Serial Control. When this goes high, the current state of the 8 buttons are read into the 4021's 8-bit register.
+CLK controls the 4021's Clock input. On a low-to-high transition this will shift each bit of the register to the next higher bit. This is normally held high, and becomes low during a read of $4016 or $4017. When the read is finished, it returns high, triggering the shift to prepare for the next bit to be read.
+D0 reads the 4021's Q8 output. This is the current state of the last bit in the register. Note that the NES will invert this signal, so for the 4021 unpressed buttons are stored as 1, but will read to the NES CPU as 0.
++5V powers the 4021 through its Vcc pin.
+GND provides ground to the 4021 through Vss but is also connected to its Serial In input, which will shift a 0 into each empty bit as the 4021 is clocked. This is why (after inversion) the standard controller will read back all 1s once the 8 buttons have been read.
+Each of the 8 PI parallel input pins is connected to +5V through its own pull-up resistor (~10k), keeping it high normally. When a button is pressed, it connects the input to ground, bypassing the pull-up, creating a low signal when latched. PI-8 corresponds to the first button read: the A button.
+
+If using DPCM audio samples, read conflicts may occur requiring a software technique to correct for them. See: Controller reading: DPCM conflict.
+
+PAL
+Some PAL region consoles (for example FRA, HOL, NOE) have internal diodes on their controller port. (See: Controller port pinout: Protection Diodes)
+
+These diodes prevent the Clock and Latch signals from functioning unless they are pulled high. PAL controllers for these regions (model NES-004E) each contain a 3.6KΩ resistor between these two inputs and 5V.[2]
+
+On these systems, only PAL controllers with the pull-ups can be read. NTSC systems, along with early PAL market systems (at least SCN) can read controllers of either type. Modifying the internal controller port to bypass these diodes will make the PAL system compatible with both. Conversely, modifying a controller to add the pull-up resistors makes it compatible with both types of systems.
+
+This also extends to the 4-score peripheral: Model NESE-034 ver1.1 is also diode protected and will require pull-up-equipped controllers.
+
+Schematic
+                     .-----\/-----.
+*--------- A Button -|PI-8     Vcc|- 5V
+                  x -|Q6      PI-7|- B Button -------*
+   +------------ D0 -|Q8      PI-6|- Select Button --*
+*--|----- Up Button -|PI-4    PI-5|- Start Button ---*
+*--|--- Down Button -|PI-3      Q7|- x                    |\
+*--|--- Left Button -|PI-2   SerIn|- GND             GND -|o\
+*--|-- Right Button -|PI-1   Clock|---+------------- CLK -|oo|- 5V
+   |            GND -|Vss    Latch|---|--+---------- OUT -|oo|- D3 --x
+   |                 .____4021____.   |  |  +-------- D0 -|oo|- D4 --x
+   |                                  |  |  |             .__.
+   +----------------------------------|--|--+            (Port)
+                                      |  |
+8 x *--+--[ 10k ]-- 5V                |  | (PAL pullups)
+       |                              +--|--[ 3.6k ]--+-- 5V
+       |   __+__ (Button)                |            |
+       +---o   o--- GND                  +--[ 3.6k ]--+
+Turbo
+A turbo controller such as the NES Max or NES Advantage is read just like a standard controller, but the user can switch some of its buttons to be toggled by an oscillator. Such an oscillator turns the button on and off at 15 to 30 Hz, producing rapid fire in games.
+
+A controller should not toggle the button states on each strobe pulse. Doing so will cause problems for games that poll the controller in a loop until they get two identical consecutive reads (see DMC conflict above). The game may halt while the turbo button is held, or crash, or cause other unknown behaviour.
+
+See also
+Controller reading
+Controller detection
+Controller port pinout
+Four Score 4-player adapter
+SNES controller has backward compatible protocol with the NES
+References
+ Famicom World forum post: Famicom games that do not work with pads connected through the expansion port.
+ Forum post: explaining PAL controller diodes and their function.
+Forum post: Famicom controller PCB and exterior photographs
+Hori controller schematic - Third party controller similar to the NES or Famicom controller, and contains the Clock/Latch pull-ups needed for PAL compatibility.
+Category: Controllers
+
+
+
+Controller reading
+NES and Famicom controllers are operated through a register interface that is connected to the controller port and expansion port, as well as hardwired controllers on the Famicom.
+
+For most input devices a standard procedure is used for reading input:
+
+Write 1 to $4016 to signal the controller to poll its input
+Write 0 to $4016 to finish the poll
+Read polled data one bit at a time from $4016 or $4017
+
+Contents
+1	$4016 Write
+2	$4016 / $4017 Read
+2.1	Clock timing
+2.2	DPCM conflict
+2.2.1	Multiple Read Solution
+2.2.2	Synchronized OAM Solution
+2.3	Unconnected data lines and open bus
+3	See Also
+4	References
+$4016 Write
+7  bit  0
+---- ----
+xxxx xEES
+      |||
+      ||+- Controller port latch bit
+      ++-- Expansion port latch bits
+The low 3 bits written to this register will be latched and held. Its output will be continuously available on the OUT line of the controller port, and the expansion port.
+
+Other bits are ignored.
+
+On the standard controller this is connected to the parallel/serial control of a 4021 8-bit shift register. Writing 1 to $4016 causes the register to fill its parallel inputs from the buttons currently held. Writing 0 to $4016 returns it to serial mode, waiting to be read out one bit at a time. Most other input devices operate in a similar way.
+
+$4016 / $4017 Read
+7  bit  0
+---- ----
+xxxD DDDD
+|||+-++++- Input data lines D4 D3 D2 D1 D0
++++------- Open bus
+Reading from this register causes a clock pulse to be sent to the controller port CLK line on one controller, and one bit will be read from the connected input lines. $4016 reads only from controller port 1, and $4017 reads only from controller port 2. The read value is inverted: a high signal from the data line will read as 0, and a low signal will read as 1.
+
+For most devices it is necessary to read several times from these registers to collect multiple output bits from the device.
+
+The specific use of each data line depends on the input device connected. For the standard controller and Zapper which commonly came with the NES/Famicom:
+
+Line	Used by
+D0	NES standard controller, Famicom hardwired controller
+D1	Famicom expansion port controller
+D2	Famicom microphone (controller 2 only)
+D3	Zapper light sense
+D4	Zapper trigger
+The NES controller port makes only D0, D3 and D4 available for peripherals. The Famicom hardwired controllers connect to D0, and $4016.D2 (microphone) only. Some of the other lines can be connected through the expansion port on the Famicom. The NES expansion port was never used commercially, but connects all 5 data lines to both ports.
+
+The Four Score multiplayer adapter for NES only passes D0 from the connected controllers.
+
+Clock timing
+The CLK line for controller port is R/W nand (ADDRESS == $4016/$4017) (i.e., CLK is low only when reading $4016/$4017, since R/W high means read). When this transitions from high to low, the buffer inside the NES latches the output of the controller data lines, and when it transitions from low to high, the shift register in the controller shifts one bit.[1]
+
+DPCM conflict
+Using DPCM sample playback while trying to read the controller can cause problems because of a bug in its hardware implementation.
+
+If the DMC DMA is running, and happens to start a read in the same cycle that the CPU is trying to read from $4016 or $4017, the values read will become invalid. Since the address bus will change for one cycle, the shift register will see an extra rising clock edge (a "double clock"), and the shift register will drop a bit out. The program will see this as a bit deletion from the serial data. Not correcting for this results in spurious presses. On the standard controller this is most often seen as a right-press as a trailing 1 bit takes the place of the 8th bit of the report (right).
+
+This glitch is fixed in the 2A07 CPU used in the PAL NES.
+
+This detail is poorly represented in emulators.[2] Because it is not normally a compatibility issue, many emulators do not simulate this glitch at all.
+
+Multiple Read Solution
+The standard solution used in most games using DMC will read the controller multiple times and compare the results to avoid this problem. This is not suitable for controllers that can't be reread, such as the Super NES Mouse.
+
+See: Controller reading code
+
+Synchronized OAM Solution
+The APU alternates between "get" and "put" cycles. OAM DMA synchronizes the CPU and APU such that the following cycle (usually an opcode fetch) is a "get". Because reads on a "get" cycle never overlap a glitch, a program on an NTSC NES can miss all the glitches by triggering an OAM DMA as the last thing in vblank just before reading the controller, so long as all $401x reads are spaced an even number of cycles apart.[3] If the execution time of the read routine can span more than one DPCM sample fetch, additional care must be taken to align all CPU writes.[4]
+
+Because this is a relatively new discovery, many current emulated implementations of the DMC glitch may be inadequate for testing this technique.[5] In Mesen 2, set a breakpoint on reading $4016-$4017 with IsDma as the condition. Hardware testing is recommended as well.
+
+See: Controller reading code: DPCM Safety using OAM DMA
+
+Unconnected data lines and open bus
+The behaviour of unconnected lines is more complicated. For the most part, unconnected lines are either pulled to 0, or exhibit open bus behaviour.
+
+NES-001
+$4016/$4017	NES-101
+$4016	NES-101
+$4017	Famicom
+$4016	Famicom
+$4017
+D0	0 if not connected	0 if not connected	0 if not connected[6]	0 if not connected[6]
+D1	0 if not connected	always 0	0 if not connected	0 if not connected
+D2	0 if not connected	open bus[7]	always 0	microphone on controller 2	0 if not connected
+D3	0 if not connected	0 if not connected	open bus	0 if not connected
+D4	0 if not connected	0 if not connected	open bus	0 if not connected
+D5	open bus
+D6
+D7
+See Also
+Controller reading code
+Standard controller
+Input devices
+References
+ Forum post: DPCM generates extra $4016 read pulse
+ http://forums.nesdev.org/viewtopic.php?p=231604#p231604
+ Forum post: Rahsennor's OAM-synchronized controller read
+ Forum post: demonstration of how ROL instruction affects alignment for OAM DMA synchronized controller reading.
+ Forum post: as of May 2016, Nintendulator and Nestopia do not accurately emulate OAM-synchronized controller reading.
+ Famicom controllers are not user-replacable, however they can be easily disconnected (or even replaced with external connectors) after disassembling the console. In that case, $4016/$4017 D0 reads 0.
+ Forum post: Riding the open bus (NES-101 D2 behaviour)
