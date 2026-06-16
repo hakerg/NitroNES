@@ -1,19 +1,5 @@
 #pragma once
 
-// ============================================================================
-// AllMappers.h - agregator wszystkich naglowkow mapperow.
-// ----------------------------------------------------------------------------
-// Wlaczany przez Cartridge.h. Dziala jako pojedyncza jednostka kompilacji
-// odpowiedzialna za wyemitowanie statycznych obiektow AutoRegister, ktore
-// rejestruja mappery w MapperRegistry zanim ruszy main().
-//
-// Dodajac nowy mapper:
-//   1. utworz mappers/MapperNNN.h (wzorem istniejacych)
-//   2. zakoncz plik makrem REGISTER_MAPPER(NNN, MapperNNN)
-//   3. dodaj #include "mappers/MapperNNN.h" ponizej
-// To wszystko - Cartridge.h nie wymaga zmian.
-// ============================================================================
-
 #include "MapperRegistry.h"
 
 #include "Mapper000.h"
