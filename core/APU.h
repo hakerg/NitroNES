@@ -327,9 +327,6 @@ struct DMCChannel {
 
     const uint16_t* periodTable = DMC_PERIOD_TABLE_NTSC;
 
-    // TODO: spróbuj zrefaktorować DMC DMA, żeby to nie było potrzebne
-    uint8_t enableDelay = 0;
-
     void writeR0(uint8_t data) {
         irqEnabled = (data >> 7) & 0x01;
         loopFlag   = (data >> 6) & 0x01;
@@ -355,7 +352,7 @@ struct DMCChannel {
     }
 
     bool needsDMAFetch() const {
-        return sampleBufferEmpty && bytesRemaining > 0 && enableDelay == 0;
+        return sampleBufferEmpty && bytesRemaining > 0;
     }
 
     void loadSampleBuffer(uint8_t data) {
@@ -390,8 +387,8 @@ struct DMCChannel {
                 if (sampleBufferEmpty) {
                     silenceFlag = true;
                 } else {
-                    silenceFlag   = false;
-                    shiftReg      = sampleBuffer;
+                    silenceFlag       = false;
+                    shiftReg          = sampleBuffer;
                     sampleBufferEmpty = true;
                 }
             }
@@ -427,9 +424,7 @@ public:
         dmc.irqPending       = false;
 
         frameIRQPending = false;
-        frameIRQReadClear = false;
-
-        cpuWrite(0x4017, val4017);
+        delay4017 = -1;
     }
 
     void setPAL(bool enable) {
@@ -469,7 +464,7 @@ public:
     bool frameIRQPending = false;
     bool dmcIRQPending() const { return dmc.irqPending; }
 
-    void cpuWrite(uint16_t addr, uint8_t data) {
+    void cpuWrite(uint16_t addr, uint8_t data, bool isAPUCycle) {
         switch (addr) {
             case 0x4000: pulse1.writeR0(data); break;
             case 0x4001: pulse1.writeR1(data); break;
@@ -501,10 +496,8 @@ public:
 
                 if (!(data & 0x10)) {
                     dmc.bytesRemaining = 0;
-                    dmc.enableDelay = 0;
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
-                    dmc.enableDelay = isPutCycle ? 3 : 2;
                 }
 
                 dmc.irqPending = false;
@@ -513,7 +506,7 @@ public:
                 val4017 = data;
                 frameIRQInhibit = (data >> 6) & 0x01;
                 if (frameIRQInhibit) frameIRQPending = false;
-                delay4017 = isPutCycle ? 3 : 2;
+                delay4017 = isAPUCycle ? 2 : 3;
                 break;
         }
     }
@@ -528,34 +521,18 @@ public:
             if (dmc.bytesRemaining     > 0) status |= 0x10;
             if (frameIRQPending)            status |= 0x40;
             if (dmc.irqPending)             status |= 0x80;
-
-            if (!isPutCycle) {
-                frameIRQPending   = false;
-                frameIRQReadClear = false;
-            } else {
-                frameIRQReadClear = true;
-            }
+            frameIRQPending = false;
             return status;
         }
         return 0x00;
     }
 
-    void clock(bool putCycle) {
-        isPutCycle = putCycle;
-
-        if (dmc.enableDelay > 0) {
-            dmc.enableDelay--;
-        }
-
-        if (isPutCycle && frameIRQReadClear) {
-            frameIRQPending   = false;
-            frameIRQReadClear = false;
-        }
+    void clock(bool isAPUCycle) {
 
         frameCounter++;
         serviceFrameCounterWrite();
         triangle.clockTimer();
-        if (isPutCycle) clockChannelTimers();
+        if (isAPUCycle) clockChannelTimers();
         clockFrameSequencer();
     }
 
@@ -613,21 +590,15 @@ private:
             }
         }
         else {
-            if (frameCounter == fcStep[0]) { clockQuarterFrame(); }
+            if      (frameCounter == fcStep[0]) { clockQuarterFrame(); }
             else if (frameCounter == fcStep[1]) { clockQuarterFrame(); clockHalfFrame(); }
             else if (frameCounter == fcStep[2]) { clockQuarterFrame(); }
-            else if (frameCounter == fcStep5End) {
-                clockQuarterFrame();
-                clockHalfFrame();
-            }
-            else if (frameCounter == fcStep5End + 1) {
-                frameCounter = 0;
-            }
+            // fcStep[3] (29829) = step 4: brak akcji
+            else if (frameCounter == fcStep5End) { clockQuarterFrame(); clockHalfFrame(); }
+            else if (frameCounter == fcStep5End + 1) { frameCounter = 0; }
         }
     }
 
-    bool     isPutCycle    = true;
-    bool     frameIRQReadClear = false;
     uint32_t frameCounter   = 0;
     uint8_t  frameMode      = 0;
     bool     frameIRQInhibit = false;

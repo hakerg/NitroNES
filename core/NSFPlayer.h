@@ -90,7 +90,10 @@ public:
         a2a03.getCPU().PC = nsfHeader.initAddr;
 
         int initCycles = 0;
-        for (; initCycles < 200000 && a2a03.getCPU().PC != TRAMPOLINE_ADDR; initCycles++) a2a03.getCPU().tick();
+        for (; initCycles < 200000 && a2a03.getCPU().PC != TRAMPOLINE_ADDR; initCycles++) {
+            a2a03.clockPhi1();
+            a2a03.clockPhi2();
+        }
     }
 
     void nextSong() {

@@ -94,8 +94,8 @@ protected:
     bool  mapperIRQ() const override { return cart && cart->irqState(); }
     void  mapperIrqAck() override { if (cart) cart->irqClear(); }
 
-    void onCpuCycle(bool putCycle) override {
-        if (controllerStrobe && putCycle) {
+    void onPreStep() override {
+        if (controllerStrobe) {
             controllerShift  = nesHost.readController(0);
             controllerShift2 = nesHost.readController(1);
         }

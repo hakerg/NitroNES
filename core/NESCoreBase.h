@@ -81,7 +81,6 @@ protected:
     virtual void    mapperIrqAck() {}
 
     virtual void onPreStep() {}
-    virtual void onCpuCycle(bool putCycle) { (void)putCycle; }
 
     A2A03 a2a03;
     std::array<uint8_t, 2048> cpuRam;
@@ -90,7 +89,6 @@ private:
     IEmulatorHost& host;
     bool   frameReady    = false;
     double pendingDT     = 0.0;
-    bool   isPutCycle    = true;
 
     void clockOneCycle() {
         onPreStep();
@@ -99,12 +97,11 @@ private:
         if (ppu) { ppu->clock(); ppu->clock(); }
 
         clockMapper();
-        a2a03.clock(isPutCycle);
+        a2a03.clockPhi1();
 
         if (ppu) ppu->clock();
 
-        onCpuCycle(isPutCycle);
-        isPutCycle = !isPutCycle;
+        a2a03.clockPhi2();
 
         double dt = 1.0 / (getCPUClockRate() * speed);
         pendingDT += dt;

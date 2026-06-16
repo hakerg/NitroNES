@@ -57,23 +57,20 @@ public:
         currentInt = IntKind::None;
     }
 
-    void tick() {
+    void clockPhi1() {
         totalCycles++;
         nmiAtStartOfCycle = nmiPending;
         irqAtStartOfCycle = irqLevel;
 
         nextOp = (this->*nextOp)().next;
-
-        sampleInterruptLatches();
     }
 
-    void sampleInterruptLatches() {
+    void clockPhi2() {
         bool currentNmiLow = bus.pollNMI();
         if (currentNmiLow && !prevNmiLow) {
             nmiPending = true;
         }
         prevNmiLow = currentNmiLow;
-
         irqLevel = bus.pollIRQ();
     }
 

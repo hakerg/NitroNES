@@ -16,21 +16,27 @@ public:
         dataBus = 0x00;
     }
 
-    void clock(bool isPutCycle) {
-        apu.clock(isPutCycle);
+    void clockPhi1() {
+        apu.clock(isAPUCycle);
 
         if (dma.active()) {
             cpu.onRdyLow();
-            stepDMA(isPutCycle);
+            stepDMA(isAPUCycle);
         } else {
-            cyclesEnabled = true;
-            cpu.tick();
-            cyclesEnabled = false;
+            cpu.clockPhi1();
         }
 
         if (apu.dmcNeedsSample() && !dma.dmcPending) {
             dma.dmcPending = true;
             dma.dmcAddr = apu.dmcSampleAddress();
+        }
+
+        isAPUCycle = !isAPUCycle;
+    }
+
+    void clockPhi2() {
+        if (!dma.active()) {
+            cpu.clockPhi2();
         }
     }
 
@@ -38,7 +44,6 @@ public:
     APU& getAPU() { return apu; }
 
     uint8_t getDataBus() const { return dataBus; }
-    bool getCyclesEnabled() const { return cyclesEnabled; }
 
     uint8_t cpuRead(uint16_t addr) override {
         lastCpuAddr = addr;
@@ -64,7 +69,7 @@ public:
             dma.oamPending = true;
             dma.oamPage = (uint16_t)data << 8;
         } else if (addr >= 0x4000 && addr <= 0x4017) {
-            apu.cpuWrite(addr, data);
+            apu.cpuWrite(addr, data, isAPUCycle);
         }
     }
 
@@ -87,7 +92,7 @@ private:
 
     uint8_t dataBus = 0x00;
     uint16_t lastCpuAddr = 0x0000;
-    bool cyclesEnabled = false;
+    bool isAPUCycle = false;
 
     struct DMA {
         bool oamPending = false;
