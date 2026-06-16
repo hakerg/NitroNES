@@ -8,6 +8,7 @@
 
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
+#include "mappers/AllMappers.h"
 
 class Cartridge {
 public:
