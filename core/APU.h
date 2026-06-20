@@ -33,6 +33,7 @@ static void initMixerTables() {
     mixerTablesInitialized = true;
 }
 
+template <bool IsPulse1>
 struct PulseChannel {
     uint8_t  duty           = 0;
     bool     lengthHalt     = false;
@@ -58,7 +59,6 @@ struct PulseChannel {
     uint8_t  sweepDivider   = 0;
     bool     sweepReload    = false;
 
-    bool     isPulse1       = false;
 
     void writeR0(uint8_t data) {
         duty        = (data >> 6) & 0x03;
@@ -134,7 +134,7 @@ struct PulseChannel {
     uint16_t sweepTarget() const {
         int16_t delta = (int16_t)(timerPeriod >> sweepShift);
         if (sweepNegate)
-            delta = isPulse1 ? -(delta + 1) : -delta;
+            delta = IsPulse1 ? -(delta + 1) : -delta;
         int32_t target = (int32_t)timerPeriod + delta;
         return (uint16_t)(target < 0 ? 0 : target);
     }
@@ -236,8 +236,6 @@ struct NoiseChannel {
     uint8_t  envDivider  = 0;
     uint8_t  envDecay    = 0;
 
-    const uint16_t* periodTable = NOISE_PERIOD_TABLE_NTSC;
-
     void writeR0(uint8_t data) {
         lengthHalt  = (data >> 5) & 0x01;
         constVolume = (data >> 4) & 0x01;
@@ -254,9 +252,11 @@ struct NoiseChannel {
         envStart = true;
     }
 
-    void clockTimer() {
+    void clockTimer(bool isPal) {
         if (timerCounter == 0) {
-            timerCounter = periodTable[periodIndex];
+            const uint16_t period = isPal ? NOISE_PERIOD_TABLE_PAL[periodIndex]
+                                          : NOISE_PERIOD_TABLE_NTSC[periodIndex];
+            timerCounter = period;
             uint16_t feedback = (shiftReg & 0x0001) ^
                                 ((modeFlag ? (shiftReg >> 6) : (shiftReg >> 1)) & 0x0001);
             shiftReg >>= 1;
@@ -324,8 +324,11 @@ struct DMCChannel {
     bool     sampleBufferEmpty = true;
     bool     silenceFlag   = true;
     bool     irqPending    = false;
-
-    const uint16_t* periodTable = DMC_PERIOD_TABLE_NTSC;
+    // Per nes_specs/dma.txt: a "load" DMC DMA (after $4015 D4 set with empty buffer)
+    // attempts to halt the CPU on a get cycle (3 cycles), while a "reload" DMC DMA
+    // (buffer emptied during playback) attempts to halt on a put cycle (4 cycles).
+    // false => halt on get (load), true => halt on put (reload).
+    bool     dmaHaltOnPut  = false;
 
     void writeR0(uint8_t data) {
         irqEnabled = (data >> 7) & 0x01;
@@ -349,6 +352,8 @@ struct DMCChannel {
     void restart() {
         currentAddr   = sampleAddr;
         bytesRemaining = sampleLength;
+        // A fetch caused directly by (re)starting playback is a "load" DMA: halt on get.
+        dmaHaltOnPut  = false;
     }
 
     bool needsDMAFetch() const {
@@ -368,9 +373,10 @@ struct DMCChannel {
         }
     }
 
-    void clockTimer() {
+    void clockTimer(bool isPal) {
         if (timerCounter == 0) {
-            timerCounter = periodTable[rateIndex];
+            timerCounter = isPal ? DMC_PERIOD_TABLE_PAL[rateIndex]
+                                 : DMC_PERIOD_TABLE_NTSC[rateIndex];
 
             if (!silenceFlag) {
                 if (shiftReg & 0x01) {
@@ -390,6 +396,9 @@ struct DMCChannel {
                     silenceFlag       = false;
                     shiftReg          = sampleBuffer;
                     sampleBufferEmpty = true;
+                    // Buffer emptied during playback => the next fetch is a "reload"
+                    // DMC DMA, which attempts to halt the CPU on a put cycle.
+                    dmaHaltOnPut      = true;
                 }
             }
         } else {
@@ -410,8 +419,6 @@ public:
         frameMode     = 0;
         frameIRQInhibit = false;
         frameIRQPending = false;
-        pulse1.isPulse1 = true;
-        pulse2.isPulse1 = false;
         setPAL(false);
     }
 
@@ -429,32 +436,20 @@ public:
 
     void setPAL(bool enable) {
         palMode = enable;
-        noise.periodTable = palMode ? NOISE_PERIOD_TABLE_PAL : NOISE_PERIOD_TABLE_NTSC;
-        dmc.periodTable = palMode ? DMC_PERIOD_TABLE_PAL : DMC_PERIOD_TABLE_NTSC;
-
-        if (palMode) {
-            fcStep[0] = 8313;  fcStep[1] = 16627;
-            fcStep[2] = 24939; fcStep[3] = 33253;
-            fcStep5End = 41565;
-        }
-        else {
-            fcStep[0] = 7457;  fcStep[1] = 14913;
-            fcStep[2] = 22371; fcStep[3] = 29829;
-            fcStep5End = 37281;
-        }
     }
 
     bool isPAL() const { return palMode; }
     bool irqAsserted() const { return (frameIRQPending && !frameIRQInhibit) || dmc.irqPending; }
 
-    PulseChannel    pulse1;
-    PulseChannel    pulse2;
+    PulseChannel<true>  pulse1;
+    PulseChannel<false> pulse2;
     TriangleChannel triangle;
     NoiseChannel    noise;
     DMCChannel      dmc;
 
     bool dmcNeedsSample() const { return dmc.needsDMAFetch(); }
     uint16_t dmcSampleAddress() const { return dmc.currentAddr; }
+    bool dmcDMAHaltOnPut() const { return dmc.dmaHaltOnPut; }
 
     void loadDMCSample(uint8_t data) {
         if (dmc.bytesRemaining == 0) return;
@@ -464,7 +459,7 @@ public:
     bool frameIRQPending = false;
     bool dmcIRQPending() const { return dmc.irqPending; }
 
-    void cpuWrite(uint16_t addr, uint8_t data, bool isAPUCycle) {
+    void writeData(uint16_t addr, uint8_t data, bool isAPUPutCycle) {
         switch (addr) {
             case 0x4000: pulse1.writeR0(data); break;
             case 0x4001: pulse1.writeR1(data); break;
@@ -506,12 +501,12 @@ public:
                 val4017 = data;
                 frameIRQInhibit = (data >> 6) & 0x01;
                 if (frameIRQInhibit) frameIRQPending = false;
-                delay4017 = isAPUCycle ? 2 : 3;
+                delay4017 = isAPUPutCycle ? 2 : 3;
                 break;
         }
     }
 
-    uint8_t cpuRead(uint16_t addr, uint8_t openBus) {
+    uint8_t readData(uint16_t addr, uint8_t openBus) {
         if (addr == 0x4015) {
             uint8_t status = openBus & 0x20;
             if (pulse1.lengthCounter   > 0) status |= 0x01;
@@ -528,7 +523,6 @@ public:
     }
 
     void clock(bool isAPUCycle) {
-
         frameCounter++;
         serviceFrameCounterWrite();
         triangle.clockTimer();
@@ -553,8 +547,8 @@ private:
     void clockChannelTimers() {
         pulse1.clockTimer();
         pulse2.clockTimer();
-        noise.clockTimer();
-        dmc.clockTimer();
+        noise.clockTimer(palMode);
+        dmc.clockTimer(palMode);
     }
 
     void serviceFrameCounterWrite() {
@@ -571,31 +565,37 @@ private:
     }
 
     void clockFrameSequencer() {
+        const uint32_t step1 = palMode ? 8313  : 7457;
+        const uint32_t step2 = palMode ? 16627 : 14913;
+        const uint32_t step3 = palMode ? 24939 : 22371;
+        const uint32_t step4 = palMode ? 33253 : 29829;
+        const uint32_t step5 = palMode ? 41565 : 37281;
+
         if (frameMode == 0) {
-            if (frameCounter == fcStep[0]) { clockQuarterFrame(); }
-            else if (frameCounter == fcStep[1]) { clockQuarterFrame(); clockHalfFrame(); }
-            else if (frameCounter == fcStep[2]) { clockQuarterFrame(); }
-            else if (frameCounter == fcStep[3] - 1) {
+            if (frameCounter == step1) { clockQuarterFrame(); }
+            else if (frameCounter == step2) { clockQuarterFrame(); clockHalfFrame(); }
+            else if (frameCounter == step3) { clockQuarterFrame(); }
+            else if (frameCounter == step4 - 1) {
                 frameIRQPending = true;
             }
-            else if (frameCounter == fcStep[3]) {
+            else if (frameCounter == step4) {
                 clockQuarterFrame();
                 clockHalfFrame();
                 frameIRQPending = true;
             }
-            else if (frameCounter == fcStep[3] + 1) {
+            else if (frameCounter == step4 + 1) {
                 if (frameIRQInhibit) frameIRQPending = false;
                 else                 frameIRQPending = true;
                 frameCounter = 0;
             }
         }
         else {
-            if      (frameCounter == fcStep[0]) { clockQuarterFrame(); }
-            else if (frameCounter == fcStep[1]) { clockQuarterFrame(); clockHalfFrame(); }
-            else if (frameCounter == fcStep[2]) { clockQuarterFrame(); }
-            // fcStep[3] (29829) = step 4: brak akcji
-            else if (frameCounter == fcStep5End) { clockQuarterFrame(); clockHalfFrame(); }
-            else if (frameCounter == fcStep5End + 1) { frameCounter = 0; }
+            if      (frameCounter == step1) { clockQuarterFrame(); }
+            else if (frameCounter == step2) { clockQuarterFrame(); clockHalfFrame(); }
+            else if (frameCounter == step3) { clockQuarterFrame(); }
+            // step4 (29829/33253): brak akcji
+            else if (frameCounter == step5) { clockQuarterFrame(); clockHalfFrame(); }
+            else if (frameCounter == step5 + 1) { frameCounter = 0; }
         }
     }
 
@@ -604,8 +604,6 @@ private:
     bool     frameIRQInhibit = false;
 
     bool     palMode        = false;
-    uint32_t fcStep[4]      = { 7457, 14913, 22371, 29829 };
-    uint32_t fcStep5End     = 37281;
 
     int delay4017 = -1;
     uint8_t val4017 = 0;

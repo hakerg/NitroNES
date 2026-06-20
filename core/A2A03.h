@@ -1,178 +1,147 @@
 #pragma once
-#include "CPU6502.h"
 #include "APU.h"
+#include "CPU6502.h"
+#include "DMA.h"
 
-class A2A03 : public ICPUBus {
+// Define ACCURACY_DMA_TRACE (e.g. add target_compile_definitions or -DACCURACY_DMA_TRACE)
+// to print a per-cycle trace of every DMC DMA and the few cycles around it.
+#if defined(ACCURACY_DMA_TRACE)
+#include <cstdio>
+#endif
+
+class IA2A03 {
 public:
-    explicit A2A03(ICPUBus& motherboardBus)
-        : cpu(*this), motherboard(motherboardBus) {}
+    virtual ~IA2A03() = default;
+    virtual bool    pollNMI()                                    = 0;
+    virtual bool    irqAsserted()                                = 0;
+    virtual uint8_t a2a03ReadData(uint16_t addr)                 = 0;
+    virtual void    a2a03WriteData(uint16_t addr, uint8_t data)  = 0;
+};
+
+class A2A03 : public ICPUBus, public IDMA {
+public:
+    explicit A2A03(IA2A03& core)
+        : cpu(*this), dma(*this), core(core) {}
 
     void reset() {
         cpu.reset();
         apu.reset();
-        dma.state = DMA::State::Idle;
-        dma.oamPending = false;
-        dma.dmcPending = false;
-        dataBus = 0x00;
+        dma.reset();
+
+        busData = 0;
+        isAPUPutCycle = false;
     }
 
     void clockPhi1() {
-        apu.clock(isAPUCycle);
-
-        if (dma.active()) {
-            cpu.onRdyLow();
-            stepDMA(isAPUCycle);
-        } else {
-            cpu.clockPhi1();
-        }
-
-        if (apu.dmcNeedsSample() && !dma.dmcPending) {
-            dma.dmcPending = true;
-            dma.dmcAddr = apu.dmcSampleAddress();
-        }
-
-        isAPUCycle = !isAPUCycle;
+        apu.clock(isAPUPutCycle);
+        cpu.clockPhi1();
+        dma.clockPhi1(isAPUPutCycle);
     }
 
     void clockPhi2() {
-        if (!dma.active()) {
-            cpu.clockPhi2();
+        if (!cpu.isRead()) {
+            writeData(cpu.getWriteData());
         }
+        dma.clockPhi2();
+        cpu.clockPhi2();
+#if defined(ACCURACY_DMA_TRACE)
+        traceDMC();
+#endif
+        isAPUPutCycle = !isAPUPutCycle;
     }
 
     CPU6502& getCPU() { return cpu; }
     APU& getAPU() { return apu; }
+    uint8_t getBusData() { return busData; }
 
-    uint8_t getDataBus() const { return dataBus; }
-
-    uint8_t cpuRead(uint16_t addr) override {
-        lastCpuAddr = addr;
-
-        if (addr == 0x4015) {
-            dataBus = apu.cpuRead(addr, dataBus);
-        } else if (addr >= 0x4000 && addr <= 0x4013) {
-        } else if (addr == 0x4014) {
-        } else {
-            dataBus = motherboard.cpuRead(addr);
-        }
-
-        return dataBus;
+    uint8_t cpuReadData() override {
+        if (dma.overridesAddr()) return busData;
+        return readData();
     }
 
-    void cpuWrite(uint16_t addr, uint8_t data) override {
-        lastCpuAddr = addr;
-        dataBus = data;
+    bool pollNMI() override { return core.pollNMI(); }
+    bool pollIRQ() override { return !(apu.irqAsserted() || core.irqAsserted()); }
+    bool pollRDY() override { return dma.getRDYOut(); }
+    bool isReadOverridden() override { return dma.overridesAddr(); }
+    bool isDMCSampleNeeded() override { return apu.dmcNeedsSample(); }
+    bool dmcDMAHaltOnPut()   override { return apu.dmcDMAHaltOnPut(); }
+    bool pollIsRead()        override { return cpu.isRead(); }
 
-        motherboard.cpuWrite(addr, data);
+    uint8_t dmaReadData() override {
+        return readData();
+    }
+
+    uint16_t getDMCSampleAddress() override { return apu.dmcSampleAddress(); }
+
+    void writeOAMData(uint8_t data) override {
+        busData = data;
+        core.a2a03WriteData(0x2004, data);
+    }
+
+    void loadDMCSample(uint8_t data) override { apu.loadDMCSample(data); }
+    uint16_t getAddr() { return dma.overridesAddr() ? dma.getAddr() : cpu.getAddr(); }
+
+    uint8_t readData() {
+        uint16_t addr = getAddr();
+        if (addr >= 0x4000 && addr <= 0x4014) return busData;
+        if (addr == 0x4015) return apu.readData(addr, busData);
+        busData = core.a2a03ReadData(addr);
+        return busData;
+    }
+
+    void writeData(uint8_t data) {
+        busData = data;
+        uint16_t addr = getAddr();
+        core.a2a03WriteData(addr, data);
 
         if (addr == 0x4014) {
-            dma.oamPending = true;
-            dma.oamPage = (uint16_t)data << 8;
+            dma.write4014(data);
         } else if (addr >= 0x4000 && addr <= 0x4017) {
-            apu.cpuWrite(addr, data, isAPUCycle);
+            apu.writeData(addr, data, isAPUPutCycle);
         }
-    }
-
-    void cpuIrqAck() override {
-        motherboard.cpuIrqAck();
-    }
-
-    bool pollNMI() override {
-        return motherboard.pollNMI();
-    }
-
-    bool pollIRQ() override {
-        return motherboard.pollIRQ();
     }
 
 private:
     CPU6502 cpu;
     APU apu;
-    ICPUBus& motherboard;
+    DMA dma;
+    IA2A03& core;
 
-    uint8_t dataBus = 0x00;
-    uint16_t lastCpuAddr = 0x0000;
-    bool isAPUCycle = false;
+    uint8_t busData = 0;
+    bool isAPUPutCycle = false;
 
-    struct DMA {
-        bool oamPending = false;
-        uint16_t oamPage = 0;
-        bool dmcPending = false;
-        uint16_t dmcAddr = 0;
-        uint16_t oamOffset = 0;
-        uint8_t oamData = 0;
-        enum class State {
-            Idle, Halt_DMC, Align_DMC, Dummy_DMC, Read_DMC,
-            Halt_OAM, Align_OAM, Read_OAM, Write_OAM
-        } state = State::Idle;
-        State returnState = State::Idle;
+#if defined(ACCURACY_DMA_TRACE)
+    unsigned long long traceCycle = 0;
+    int dmcTraceTail = 0;
+    int traceBudget = 800;
+    bool oamSeen = false;
+    bool oamTraceDone = false;
+    int  oamTraceTail = 0;
 
-        bool active() const { return state != State::Idle || oamPending || dmcPending; }
-    } dma;
-
-    void stepDMA(bool isPutCycle) {
-        if (dma.state == DMA::State::Idle) {
-            if (dma.dmcPending) dma.state = DMA::State::Halt_DMC;
-            else if (dma.oamPending) dma.state = DMA::State::Halt_OAM;
-        } else if (dma.dmcPending && dma.state >= DMA::State::Halt_OAM) {
-            dma.returnState = dma.state;
-            dma.state = DMA::State::Halt_DMC;
+    void traceDMC() {
+        ++traceCycle;
+        const bool oamActive = dma.oamIsActive();
+        const bool dmcActive = dma.dmcIsActive();
+        // Capture the first full OAM DMA (with any DMC interruption) plus a few
+        // cycles on each side, to compare the cadence against hardware traces.
+        if (oamTraceDone) return;
+        if (!oamActive && oamTraceTail == 0) {
+            if (!oamSeen) return;        // not started yet
+            oamTraceDone = true;         // finished the window
+            return;
         }
+        if (oamActive) { oamSeen = true; oamTraceTail = 4; }
+        else           { --oamTraceTail; }
 
-        switch (dma.state) {
-            case DMA::State::Halt_DMC:
-                motherboard.cpuRead(lastCpuAddr);
-                dma.state = isPutCycle ? DMA::State::Align_DMC : DMA::State::Dummy_DMC;
-                break;
-            case DMA::State::Align_DMC:
-                motherboard.cpuRead(lastCpuAddr);
-                dma.state = DMA::State::Dummy_DMC;
-                break;
-            case DMA::State::Dummy_DMC:
-                motherboard.cpuRead(lastCpuAddr);
-                dma.state = DMA::State::Read_DMC;
-                break;
-            case DMA::State::Read_DMC: {
-                uint8_t b = motherboard.cpuRead(dma.dmcAddr);
-                apu.loadDMCSample(b);
-                dma.dmcPending = false;
-                if (dma.returnState != DMA::State::Idle) {
-                    dma.state = dma.returnState;
-                    dma.returnState = DMA::State::Idle;
-                } else if (dma.oamPending) {
-                    dma.state = DMA::State::Halt_OAM;
-                } else {
-                    dma.state = DMA::State::Idle;
-                }
-                break;
-            }
-
-            case DMA::State::Halt_OAM:
-                motherboard.cpuRead(lastCpuAddr);
-                dma.state = (!isPutCycle) ? DMA::State::Align_OAM : DMA::State::Read_OAM;
-                break;
-            case DMA::State::Align_OAM:
-                motherboard.cpuRead(lastCpuAddr);
-                dma.state = DMA::State::Read_OAM;
-                break;
-            case DMA::State::Read_OAM:
-                dma.oamData = motherboard.cpuRead(dma.oamPage + dma.oamOffset);
-                dma.state = DMA::State::Write_OAM;
-                break;
-            case DMA::State::Write_OAM: {
-                motherboard.cpuWrite(0x2004, dma.oamData);
-                dma.oamOffset++;
-                if (dma.oamOffset == 256) {
-                    dma.oamOffset = 0;
-                    dma.oamPending = false;
-                    dma.state = DMA::State::Idle;
-                } else {
-                    dma.state = DMA::State::Read_OAM;
-                }
-                break;
-            }
-            case DMA::State::Idle:
-                break;
-        }
+        static const char* phase[] = { "Idle", "Halt", "Dummy", "Read" };
+        static const char* act[]   = { "None", "OAMGet", "OAMPut", "DMCGet" };
+        std::printf("[OAM] cyc=%llu put=%d cpuRead=%d cpuAddr=$%04X "
+                    "override=%d dmaAddr=$%04X bus=$%02X dmcPhase=%s action=%s rdy=%d oam=%d\n",
+                    traceCycle, isAPUPutCycle ? 1 : 0, cpu.isRead() ? 1 : 0, cpu.getAddr(),
+                    dma.overridesAddr() ? 1 : 0, dma.getAddr(), busData,
+                    phase[dma.dmcPhaseId()], act[dma.actionId()], dma.getRDYOut() ? 1 : 0,
+                    oamActive ? 1 : 0);
+        (void)dmcActive;
     }
+#endif
 };

@@ -8,7 +8,7 @@
 // ============================================================================
 // VRC6Mapper - wspolna baza dla Mapper024 (VRC6a) i Mapper026 (VRC6b).
 // ----------------------------------------------------------------------------
-// Realizuje banking PRG/CHR, mirroring i VRC IRQ zgodnie z docs/vrc6.txt.
+// Realizuje banking PRG/CHR, mirroring i VRC IRQ zgodnie z nes_specs/vrc6.txt.
 // Audio jest delegowane do samodzielnego modulu VRC6Audio (audio/VRC6Audio.h),
 // dzieki czemu NSFPlayer moze uzywac wyjscia VRC6 bez tworzenia mappera.
 //

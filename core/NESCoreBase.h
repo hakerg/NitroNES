@@ -11,10 +11,10 @@ public:
     virtual void onFrameReady() = 0;
 };
 
-class NESCoreBase : public IFrameConsumer, public ICPUBus {
+class NESCoreBase : public IFrameConsumer, public IA2A03 {
 public:
-    bool    pal = false;
-    double  speed = 1.0;
+    bool    pal    = false;
+    double  speed  = 1.0;
     bool    paused = false;
 
     explicit NESCoreBase(IEmulatorHost& host)
@@ -31,29 +31,24 @@ public:
         if (paused) { outDT = 0.1; return; }
         pendingDT  = 0.0;
         frameReady = false;
-        do {
-            clockOneCycle();
-        } while (!frameReady);
+        do { clockOneCycle(); } while (!frameReady);
         outDT = pendingDT;
     }
 
     template <typename ConditionFunc>
     void tickWhile(ConditionFunc condition) {
         if (paused) return;
-        while (condition()) {
-            clockOneCycle();
-        }
+        while (condition()) clockOneCycle();
     }
 
-    virtual void reset() {}
-    virtual void shutdown() {}
+    virtual void reset()       {}
+    virtual void shutdown()    {}
     virtual void renderFrame() {}
 
-    PPU2C02* getPPU() { return const_cast<PPU2C02*>(static_cast<const NESCoreBase*>(this)->getPPU()); }
-    virtual const PPU2C02* getPPU() const { return nullptr; }
-    bool hasPPU() const { return getPPU() != nullptr; }
-    int  getCurrentScanline() const {
-        const PPU2C02* p = getPPU();
+    virtual PPU2C02* getPPU() { return nullptr; }
+    bool hasPPU() { return getPPU() != nullptr; }
+    int getCurrentScanline() {
+        PPU2C02* p = getPPU();
         return p ? p->getScanline() : -1;
     }
 
@@ -62,23 +57,14 @@ public:
         host.onFrameReady();
     }
 
-    uint8_t cpuRead(uint16_t addr) override {
-        return memRead(addr);
-    }
-
-    void cpuWrite(uint16_t addr, uint8_t data) override {
-        memWrite(addr, data);
-    }
-
-    void cpuIrqAck() override { mapperIrqAck(); }
+    uint8_t a2a03ReadData(uint16_t addr) override { return memRead(addr); }
+    void    a2a03WriteData(uint16_t addr, uint8_t data) override { memWrite(addr, data); }
 
 protected:
     virtual uint8_t memRead(uint16_t addr) = 0;
     virtual void    memWrite(uint16_t addr, uint8_t data) = 0;
     virtual void    clockMapper() {}
     virtual float   mapperAudio() const { return 0.0f; }
-    virtual bool    mapperIRQ() const { return false; }
-    virtual void    mapperIrqAck() {}
 
     virtual void onPreStep() {}
 
@@ -87,8 +73,8 @@ protected:
 
 private:
     IEmulatorHost& host;
-    bool   frameReady    = false;
-    double pendingDT     = 0.0;
+    bool   frameReady = false;
+    double pendingDT  = 0.0;
 
     void clockOneCycle() {
         onPreStep();

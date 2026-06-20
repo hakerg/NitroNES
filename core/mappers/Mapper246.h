@@ -17,7 +17,7 @@ public:
 
 	void reset() override {
 		prg.fill(0);
-		prg[3] = 0xFF;          // wg docs: $6003 = $FF na powerup
+		prg[3] = 0xFF;          // wg nes_specs: $6003 = $FF na powerup
 		chr.fill(0);
 	}
 

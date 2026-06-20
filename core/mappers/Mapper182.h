@@ -5,7 +5,7 @@
 // ----------------------------------------------------------------------------
 // Mapper 182 - MMC3 z poprzestawianymi rejestrami
 // ----------------------------------------------------------------------------
-// Translacja zapisow (zrodlo: docs/mapper_docs/182.txt):
+// Translacja zapisow (zrodlo: nes_specs/mappers/182.txt):
 //   M182        MMC3
 //   $8001  ->   $A000  (mirroring)
 //   $A000  ->   $8000  (bank select, dodatkowo scramble R:x)

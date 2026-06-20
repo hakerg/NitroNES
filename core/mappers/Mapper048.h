@@ -87,7 +87,8 @@ public:
 	bool hasDynamicMirror() const override { return true; }
 
 	void scanline() override { tickIrq(); }
-	void clockA12(bool a12High) override {
+	void clockA12(uint16_t addr) override {
+		const bool a12High = (addr & 0x1000) != 0;
 		if (a12High && !lastA12) tickIrq();
 		lastA12 = a12High;
 	}

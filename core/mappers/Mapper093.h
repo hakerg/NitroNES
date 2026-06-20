@@ -7,7 +7,7 @@
 // ----------------------------------------------------------------------------
 // PRG: 16 KB switchable @ $8000, {-1} fixed @ $C000.
 // CHR-RAM: 8 KB (brak swappingu CHR-ROM, bit M tu jest "CHR enable" - ignorowany).
-// $8000-FFFF: [PPPP ...M]  P = PRG bank (bity 4..6 wedlug docs - uzyjemy data>>4).
+// $8000-FFFF: [PPPP ...M]  P = PRG bank (bity 4..6 wedlug nes_specs - uzyjemy data>>4).
 // Mirroring: hardwired (z naglowka).
 // Doc Disch mowi "M = Mirroring" - ale to bledne tradycyjnie; faktycznie Sunsoft-2
 // uzywa stalego mirroringu. Trzymamy sie zachowania zgodnego z testowymi ROMami:

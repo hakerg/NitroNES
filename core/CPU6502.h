@@ -4,12 +4,11 @@
 class ICPUBus {
 public:
     virtual ~ICPUBus() = default;
-
-    virtual uint8_t cpuRead(uint16_t addr) = 0;
-    virtual void    cpuWrite(uint16_t addr, uint8_t data) = 0;
-    virtual void    cpuIrqAck() = 0;
-    virtual bool    pollNMI() = 0;
-    virtual bool    pollIRQ() = 0;
+    virtual uint8_t cpuReadData() = 0;
+    virtual bool pollNMI() = 0;
+    virtual bool pollIRQ() = 0;
+    virtual bool pollRDY() = 0;
+    virtual bool isReadOverridden() = 0;
 };
 
 class CPU6502 {
@@ -23,6 +22,70 @@ public:
     static constexpr uint8_t FLAG_V = 0x40;
     static constexpr uint8_t FLAG_N = 0x80;
 
+    CPU6502(ICPUBus& busInterface) : bus(busInterface) {
+        reset();
+    }
+
+    void reset() {
+        P |= FLAG_I;
+
+        nmiPending = false;
+        interruptPending = false;
+        currentInt = IntKind::None;
+
+        nmiLevel = true;
+        irqLevel = true;
+        rdyLevel = true;
+
+        irqInhibitSnapshot = true;
+
+        nmiEdgeDetected = false;
+        nmiPollSignal   = false;
+        irqDetected = false;
+
+        currentStep = emitRead(&CPU6502::reset1, PC);
+        nextOp = currentStep.next;
+    }
+
+    void jumpTo(uint16_t pc) {
+        PC = pc;
+        currentStep = emitRead(&CPU6502::startOpFetch, pc);
+        nextOp = &CPU6502::startOpFetch;
+    }
+
+    void clockPhi1() {
+        rdyLevel = bus.pollRDY();
+        nmiPollSignal   = nmiEdgeDetected;
+        nmiEdgeDetected = nmiPending;
+        irqDetected = !irqLevel;
+
+        if (isStalled()) {
+            return;
+        }
+
+        currentStep = (this->*nextOp)();
+        nextOp = currentStep.next;
+    }
+
+    void clockPhi2() {
+        if (currentStep.isRead && !bus.isReadOverridden()) {
+            fetched = bus.cpuReadData();
+        }
+
+        bool currentNMILevel = bus.pollNMI();
+        if (!currentNMILevel && nmiLevel) {
+            nmiPending = true;
+        }
+        nmiLevel = currentNMILevel;
+        irqLevel = bus.pollIRQ();
+    }
+
+    uint16_t getAddr()      { return currentStep.busAddr; }
+    uint8_t  getWriteData() { return currentStep.writeData; }
+    bool     isRead()       { return currentStep.isRead; }
+
+    bool isAtInstructionBoundary() const { return nextOp == &CPU6502::decodeAndDispatch; }
+
     uint16_t PC = 0;
     uint8_t  S  = 0x00;
     uint8_t  A  = 0;
@@ -30,55 +93,37 @@ public:
     uint8_t  Y  = 0;
     uint8_t  P  = FLAG_U | FLAG_B;
 
-    uint64_t totalCycles = 0;
-
 private:
     struct Step;
     using MicroOp = Step (CPU6502::*)();
-    struct Step { MicroOp next; };
+    struct Step {
+        MicroOp next;
+        uint16_t busAddr;
+        bool isRead;
+        uint8_t writeData;
+    };
 
-public:
-    CPU6502(ICPUBus& busInterface) : bus(busInterface) {
-        nextOp = &CPU6502::opFetch;
-    }
+    enum class IntKind : uint8_t { None, SoftwareBRK, IRQ, NMI };
+    enum class ExecKind : uint8_t {
+        LDA, LDX, LDY, AND_, ORA_, EOR_, BIT_, ADC_, SBC_, CMP_, CPX_, CPY_, NOP_,
+        LAX_, ANC_, ALR_, ARR_, XAA_, AXS_, LAS_, LXA_,
+        TAX, TAY, TSX, TXA, TXS, TYA, INX, INY, DEX, DEY, ASL_A, LSR_A, ROL_A, ROR_A,
+        CLC, SEC, CLI, SEI, CLV, CLD, SED, NOP_IMP
+    };
+    enum class RmwKind : uint8_t {
+        ASL, LSR, ROL, ROR, INC, DEC,
+        SLO, RLA, SRE, RRA, DCP, ISC
+    };
+    enum class StoreKind : uint8_t {
+        STA, STX, STY, SAX,
+        SHX, SHY, SHA, SHS
+    };
+    enum class AccessMode : uint8_t { READ, RMW, WRITE };
 
-    void reset() {
-        S -= 3;
-        P |= FLAG_I;
-
-        uint16_t lo = bus.cpuRead(0xFFFC);
-        uint16_t hi = bus.cpuRead(0xFFFD);
-        PC = lo | (hi << 8);
-        nextOp = &CPU6502::opFetch;
-        nmiPending = false;
-        prevNmiLow = false;
-        irqLevel = false;
-        interruptPending = false;
-        currentInt = IntKind::None;
-    }
-
-    void clockPhi1() {
-        totalCycles++;
-        nmiAtStartOfCycle = nmiPending;
-        irqAtStartOfCycle = irqLevel;
-
-        nextOp = (this->*nextOp)().next;
-    }
-
-    void clockPhi2() {
-        bool currentNmiLow = bus.pollNMI();
-        if (currentNmiLow && !prevNmiLow) {
-            nmiPending = true;
-        }
-        prevNmiLow = currentNmiLow;
-        irqLevel = bus.pollIRQ();
-    }
-
-    bool isAtInstructionBoundary() const { return nextOp == &CPU6502::opFetch; }
-
-private:
     ICPUBus& bus;
     MicroOp nextOp = nullptr;
+    Step currentStep = { nullptr, 0, false, 0 };
+
 
     uint8_t opcode = 0;
     uint16_t addr = 0;
@@ -86,67 +131,82 @@ private:
     uint8_t fetched = 0;
     uint8_t tmp = 0;
     bool pageCross = false;
-    bool nmiPending = false;
-    bool prevNmiLow = false;
+    bool nmiLevel = false;
     bool irqLevel = false;
+    bool nmiPending = false;
     bool interruptPending = false;
     bool irqInhibitSnapshot = true;
-    enum class IntKind : uint8_t { None, SoftwareBRK, IRQ, NMI };
     IntKind currentInt = IntKind::None;
-    bool nmiAtStartOfCycle = false;
-    bool irqAtStartOfCycle = false;
+    bool nmiEdgeDetected = false;
+    bool nmiPollSignal = false;
+    bool irqDetected = false;
+    bool rdyLevel = false;
+
+    ExecKind execKind = ExecKind::NOP_;
+    RmwKind rmwKind = RmwKind::ASL;
+    StoreKind storeKind = StoreKind::STA;
+    AccessMode accessMode = AccessMode::READ;
+
+    bool branchTaken = false;
+    uint8_t branchOffset = 0;
+    uint8_t origHigh = 0;
+
+    Step emitRead(MicroOp next, uint16_t busAddr) {
+        return { next, busAddr, true, 0 };
+    }
+
+    Step emitWrite(MicroOp next, uint16_t busAddr, uint8_t writeData) {
+        return { next, busAddr, false, writeData };
+    }
 
     uint16_t intVector() const { return currentInt == IntKind::NMI ? 0xFFFA : 0xFFFE; }
 
-    static Step STEP(MicroOp m) { return Step{ m }; }
+    bool isStalled() const { return !rdyLevel && currentStep.isRead; }
 
     void pollInterrupts() {
-        if (nmiAtStartOfCycle) interruptPending = true;
-        else if (irqAtStartOfCycle && !irqInhibitSnapshot) interruptPending = true;
-    }
-
-    Step DONE() {
-        pollInterrupts();
-        return Step{ &CPU6502::opFetch };
-    }
-
-    Step DONE_NOPOLL() {
-        return Step{ &CPU6502::opFetch };
+        if (nmiPollSignal) interruptPending = true;
+        else if (irqDetected && !irqInhibitSnapshot) interruptPending = true;
     }
 
     void setZN(uint8_t v) {
         P = (P & ~(FLAG_Z | FLAG_N)) | (v == 0 ? FLAG_Z : 0) | (v & 0x80);
     }
 
-    void push(uint8_t v) { bus.cpuWrite(0x0100 | S, v); S--; }
-    uint8_t pull()       { S++; return bus.cpuRead(0x0100 | S); }
+    Step startOpFetch() {
+        return opFetch();
+    }
 
     Step opFetch() {
+        pollInterrupts();
         if (interruptPending) {
             interruptPending = false;
             if (nmiPending) {
-                nmiPending  = false;
-                currentInt  = IntKind::NMI;
+                nmiPending = false;
+                currentInt = IntKind::NMI;
             } else {
                 currentInt = IntKind::IRQ;
-                bus.cpuIrqAck();
             }
-            opcode = 0x00;
-            bus.cpuRead(PC);
-            return STEP(&CPU6502::brk1_dummy);
+            return emitRead(&CPU6502::int1_dummy, PC);
         }
         irqInhibitSnapshot = (P & FLAG_I) != 0;
-        opcode = bus.cpuRead(PC++);
-        return decodeAndDispatch();
+        return emitRead(&CPU6502::decodeAndDispatch, PC++);
     }
 
+    Step reset1() { return emitRead(&CPU6502::reset2, PC); }
+    Step reset2() { return emitRead(&CPU6502::reset3, PC); }
+    Step reset3() { Step s = emitRead(&CPU6502::reset4, 0x0100 | S); S--; return s; }
+    Step reset4() { Step s = emitRead(&CPU6502::reset5, 0x0100 | S); S--; return s; }
+    Step reset5() { Step s = emitRead(&CPU6502::reset6, 0x0100 | S); S--; return s; }
+    Step reset6() { return emitRead(&CPU6502::reset7, 0xFFFC); }
+    Step reset7() { addr = fetched; return emitRead(&CPU6502::reset8, 0xFFFD); }
+    Step reset8() { addr |= fetched << 8; PC = addr; return opFetch(); }
+
     Step decodeAndDispatch();
-    Step afterAddressing();
+    Step afterAddressing_ReadWrite();
     Step readAndExec_();
-    Step rmw_read();
+    Step executeWrite();
     Step rmw_dummyWrite();
     Step rmw_finalWrite();
-    Step writeStep_();
 
     Step am_imm_exec();
     Step am_imp_exec();
@@ -161,12 +221,12 @@ private:
     Step am_rel_1();  Step am_rel_2_taken();  Step am_rel_3_pagefix();
     Step am_ind_1();  Step am_ind_2();  Step am_ind_3();  Step am_ind_4();
 
-    Step brk1_dummy();
-    Step brk2_pushPCH();
-    Step brk3_pushPCL();
-    Step brk4_pushP();
-    Step brk5_readLow();
-    Step brk6_readHigh();
+    Step int1_dummy();
+    Step int2_pushPCH();
+    Step int3_pushPCL();
+    Step int4_pushP();
+    Step int5_readLow();
+    Step int6_readHigh();
 
     Step rti1_dummyRead(); Step rti2_incS(); Step rti3_pullP();
     Step rti4_pullPCL();   Step rti5_pullPCH();
@@ -177,25 +237,15 @@ private:
     Step jsr1_readLow();  Step jsr2_internal(); Step jsr3_pushPCH();
     Step jsr4_pushPCL();  Step jsr5_readHigh();
 
-    Step pha1_dummy(); Step pha2_push();
-    Step php1_dummy(); Step php2_push();
+    Step pha1_dummy();
+    Step php1_dummy();
     Step pla1_dummy(); Step pla2_incS(); Step pla3_pull();
     Step plp1_dummy(); Step plp2_incS(); Step plp3_pull();
 
     Step jmpAbs1_low(); Step jmpAbs2_high();
+    Step jam_loop();
 
-    void execLDA() { A = fetched; setZN(A); }
-    void execLDX() { X = fetched; setZN(X); }
-    void execLDY() { Y = fetched; setZN(Y); }
-    void execAND() { A &= fetched; setZN(A); }
-    void execORA() { A |= fetched; setZN(A); }
-    void execEOR() { A ^= fetched; setZN(A); }
-    void execBIT() {
-        uint8_t r = A & fetched;
-        P = (P & ~(FLAG_Z | FLAG_N | FLAG_V))
-            | (r == 0 ? FLAG_Z : 0) | (fetched & 0x80) | (fetched & 0x40);
-    }
-    void execADC() {
+    void doExecADC() {
         uint16_t s = (uint16_t)A + fetched + ((P & FLAG_C) ? 1 : 0);
         uint8_t  r = (uint8_t)s;
         P = (P & ~(FLAG_C | FLAG_Z | FLAG_V | FLAG_N))
@@ -203,7 +253,8 @@ private:
             | (((~(A ^ fetched) & (A ^ r)) & 0x80) ? FLAG_V : 0) | (r & 0x80);
         A = r;
     }
-    void execSBC() {
+
+    void doExecSBC() {
         uint8_t v = fetched ^ 0xFF;
         uint16_t s = (uint16_t)A + v + ((P & FLAG_C) ? 1 : 0);
         uint8_t  r = (uint8_t)s;
@@ -212,417 +263,308 @@ private:
             | (((~(A ^ v) & (A ^ r)) & 0x80) ? FLAG_V : 0) | (r & 0x80);
         A = r;
     }
-    void execCMP() { uint16_t s = (uint16_t)A - fetched; P = (P & ~(FLAG_C|FLAG_Z|FLAG_N)) | (A >= fetched ? FLAG_C : 0) | (((uint8_t)s) == 0 ? FLAG_Z : 0) | (s & 0x80); }
-    void execCPX() { uint16_t s = (uint16_t)X - fetched; P = (P & ~(FLAG_C|FLAG_Z|FLAG_N)) | (X >= fetched ? FLAG_C : 0) | (((uint8_t)s) == 0 ? FLAG_Z : 0) | (s & 0x80); }
-    void execCPY() { uint16_t s = (uint16_t)Y - fetched; P = (P & ~(FLAG_C|FLAG_Z|FLAG_N)) | (Y >= fetched ? FLAG_C : 0) | (((uint8_t)s) == 0 ? FLAG_Z : 0) | (s & 0x80); }
 
-    void execASL_mem() { P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = fetched << 1; setZN(tmp); }
-    void execLSR_mem() { P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = fetched >> 1; setZN(tmp); }
-    void execROL_mem() { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = (fetched << 1) | c; setZN(tmp); }
-    void execROR_mem() { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = (fetched >> 1) | c; setZN(tmp); }
-    void execINC_mem() { tmp = fetched + 1; setZN(tmp); }
-    void execDEC_mem() { tmp = fetched - 1; setZN(tmp); }
-
-    void execASL_A() { P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0); A <<= 1; setZN(A); }
-    void execLSR_A() { P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0); A >>= 1; setZN(A); }
-    void execROL_A() { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0); A = (A << 1) | c; setZN(A); }
-    void execROR_A() { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0); A = (A >> 1) | c; setZN(A); }
-
-    void execLAX() { A = fetched; X = fetched; setZN(A); }
-    void execANC() {
-        A &= fetched; setZN(A);
-        P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0);
+    void doExecRead() {
+        switch (execKind) {
+            case ExecKind::LDA: A = fetched; setZN(A); break;
+            case ExecKind::LDX: X = fetched; setZN(X); break;
+            case ExecKind::LDY: Y = fetched; setZN(Y); break;
+            case ExecKind::AND_: A &= fetched; setZN(A); break;
+            case ExecKind::ORA_: A |= fetched; setZN(A); break;
+            case ExecKind::EOR_: A ^= fetched; setZN(A); break;
+            case ExecKind::BIT_: {
+                uint8_t r = A & fetched;
+                P = (P & ~(FLAG_Z | FLAG_N | FLAG_V)) | (r == 0 ? FLAG_Z : 0) | (fetched & 0x80) | (fetched & 0x40);
+            } break;
+            case ExecKind::ADC_: doExecADC(); break;
+            case ExecKind::SBC_: doExecSBC(); break;
+            case ExecKind::CMP_: {
+                uint16_t s = (uint16_t)A - fetched;
+                P = (P & ~(FLAG_C|FLAG_Z|FLAG_N)) | (A >= fetched ? FLAG_C : 0) | (((uint8_t)s) == 0 ? FLAG_Z : 0) | (s & 0x80);
+            } break;
+            case ExecKind::CPX_: {
+                uint16_t s = (uint16_t)X - fetched;
+                P = (P & ~(FLAG_C|FLAG_Z|FLAG_N)) | (X >= fetched ? FLAG_C : 0) | (((uint8_t)s) == 0 ? FLAG_Z : 0) | (s & 0x80);
+            } break;
+            case ExecKind::CPY_: {
+                uint16_t s = (uint16_t)Y - fetched;
+                P = (P & ~(FLAG_C|FLAG_Z|FLAG_N)) | (Y >= fetched ? FLAG_C : 0) | (((uint8_t)s) == 0 ? FLAG_Z : 0) | (s & 0x80);
+            } break;
+            case ExecKind::NOP_: break;
+            case ExecKind::LAX_: A = fetched; X = fetched; setZN(A); break;
+            case ExecKind::ANC_: A &= fetched; setZN(A); P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0); break;
+            case ExecKind::ALR_: A &= fetched; P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0); A >>= 1; setZN(A); break;
+            case ExecKind::ARR_: {
+                A &= fetched;
+                uint8_t c = (P & FLAG_C) ? 0x80 : 0;
+                A = (A >> 1) | c;
+                setZN(A);
+                P = (P & ~(FLAG_C | FLAG_V)) | ((A & 0x40) ? FLAG_C : 0) | (((A ^ (A << 1)) & 0x40) ? FLAG_V : 0);
+            } break;
+            case ExecKind::XAA_: A = (A | 0xEE) & X & fetched; setZN(A); break;
+            case ExecKind::LXA_: A = (A | 0xFF) & fetched; X = A; setZN(A); break;
+            case ExecKind::AXS_: {
+                uint16_t s = (uint16_t)(A & X) - fetched;
+                X = (uint8_t)s;
+                P = (P & ~(FLAG_C | FLAG_Z | FLAG_N)) | (s < 0x100 ? FLAG_C : 0) | (X == 0 ? FLAG_Z : 0) | (X & 0x80);
+            } break;
+            case ExecKind::LAS_: {
+                uint8_t v = fetched & S;
+                A = v; X = v; S = v;
+                setZN(v);
+            } break;
+            default: break;
+        }
     }
-    void execALR() {
-        A &= fetched;
-        P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0);
-        A >>= 1; setZN(A);
-    }
-    void execARR() {
-        A &= fetched;
-        uint8_t c = (P & FLAG_C) ? 0x80 : 0;
-        A = (A >> 1) | c;
-        setZN(A);
-        P = (P & ~(FLAG_C | FLAG_V))
-            | ((A & 0x40) ? FLAG_C : 0)
-            | (((A ^ (A << 1)) & 0x40) ? FLAG_V : 0);
-    }
-    void execXAA() { A = (A | 0xEE) & X & fetched; setZN(A); }
-    void execLXA() { A = (A | 0xFF) & fetched; X = A; setZN(A); }
-    void execAXS() {
-        uint16_t s = (uint16_t)(A & X) - fetched;
-        X = (uint8_t)s;
-        P = (P & ~(FLAG_C | FLAG_Z | FLAG_N))
-            | (s < 0x100 ? FLAG_C : 0)
-            | (X == 0 ? FLAG_Z : 0)
-            | (X & 0x80);
-    }
-    void execLAS() {
-        uint8_t v = fetched & S;
-        A = v; X = v; S = v;
-        setZN(v);
+
+    void doExecImplied() {
+        switch (execKind) {
+            case ExecKind::TAX: X = A; setZN(X); break;
+            case ExecKind::TAY: Y = A; setZN(Y); break;
+            case ExecKind::TSX: X = S; setZN(X); break;
+            case ExecKind::TXA: A = X; setZN(A); break;
+            case ExecKind::TXS: S = X; break;
+            case ExecKind::TYA: A = Y; setZN(A); break;
+            case ExecKind::INX: X++; setZN(X); break;
+            case ExecKind::INY: Y++; setZN(Y); break;
+            case ExecKind::DEX: X--; setZN(X); break;
+            case ExecKind::DEY: Y--; setZN(Y); break;
+            case ExecKind::ASL_A: P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0); A <<= 1; setZN(A); break;
+            case ExecKind::LSR_A: P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0); A >>= 1; setZN(A); break;
+            case ExecKind::ROL_A: { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((A & 0x80) ? FLAG_C : 0); A = (A << 1) | c; setZN(A); } break;
+            case ExecKind::ROR_A: { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((A & 0x01) ? FLAG_C : 0); A = (A >> 1) | c; setZN(A); } break;
+            case ExecKind::CLC: P &= ~FLAG_C; break;
+            case ExecKind::SEC: P |=  FLAG_C; break;
+            case ExecKind::CLI: P &= ~FLAG_I; break;
+            case ExecKind::SEI: P |=  FLAG_I; break;
+            case ExecKind::CLV: P &= ~FLAG_V; break;
+            case ExecKind::CLD: P &= ~FLAG_D; break;
+            case ExecKind::SED: P |=  FLAG_D; break;
+            case ExecKind::NOP_IMP: break;
+            default: break;
+        }
     }
 
-    void execSLO() { execASL_mem(); A |= tmp; setZN(A); }
-    void execRLA() { execROL_mem(); A &= tmp; setZN(A); }
-    void execSRE() { execLSR_mem(); A ^= tmp; setZN(A); }
-    void execRRA() { execROR_mem(); fetched = tmp; execADC(); }
-    void execDCP() {
-        execDEC_mem();
-        uint8_t v = tmp;
-        uint8_t r = A - v;
-        P = (P & ~(FLAG_C | FLAG_Z | FLAG_N))
-            | (A >= v ? FLAG_C : 0) | (r == 0 ? FLAG_Z : 0) | (r & 0x80);
+    void doExecRmw() {
+        switch (rmwKind) {
+            case RmwKind::ASL: P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = fetched << 1; setZN(tmp); break;
+            case RmwKind::LSR: P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = fetched >> 1; setZN(tmp); break;
+            case RmwKind::ROL: { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = (fetched << 1) | c; setZN(tmp); } break;
+            case RmwKind::ROR: { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = (fetched >> 1) | c; setZN(tmp); } break;
+            case RmwKind::INC: tmp = fetched + 1; setZN(tmp); break;
+            case RmwKind::DEC: tmp = fetched - 1; setZN(tmp); break;
+            case RmwKind::SLO: P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = fetched << 1; A |= tmp; setZN(A); break;
+            case RmwKind::RLA: { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = (fetched << 1) | c; A &= tmp; setZN(A); } break;
+            case RmwKind::SRE: P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = fetched >> 1; A ^= tmp; setZN(A); break;
+            case RmwKind::RRA: { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = (fetched >> 1) | c; fetched = tmp; doExecADC(); } break;
+            case RmwKind::DCP: { tmp = fetched - 1; uint8_t r = A - tmp; P = (P & ~(FLAG_C | FLAG_Z | FLAG_N)) | (A >= tmp ? FLAG_C : 0) | (r == 0 ? FLAG_Z : 0) | (r & 0x80); } break;
+            case RmwKind::ISC: { tmp = fetched + 1; fetched = tmp; doExecSBC(); } break;
+        }
     }
-    void execISC() { execINC_mem(); fetched = tmp; execSBC(); }
 
-    enum class ExecKind : uint8_t {
-        LDA, LDX, LDY, AND_, ORA_, EOR_, BIT_, ADC_, SBC_, CMP_, CPX_, CPY_, NOP_,
-        LAX_, ANC_, ALR_, ARR_, XAA_, AXS_, LAS_, LXA_
-    };
-    ExecKind execKind = ExecKind::NOP_;
-    void doExecRead();
-
-    enum class RmwKind : uint8_t {
-        ASL, LSR, ROL, ROR, INC, DEC,
-        SLO, RLA, SRE, RRA, DCP, ISC
-    };
-    RmwKind rmwKind = RmwKind::ASL;
-    void doExecRmw();
-
-    enum class StoreKind : uint8_t {
-        STA, STX, STY, SAX,
-        SHX, SHY, SHA, SHS,
-        SHX_c3, SHY_c3, SHA_c3, SHS_c3,
-        SHX_c4, SHY_c4, SHA_c4, SHS_c4
-    };
-
-    StoreKind storeKind = StoreKind::STA;
     uint8_t storeValue() {
         switch (storeKind) {
             case StoreKind::STA: return A;
             case StoreKind::STX: return X;
             case StoreKind::STY: return Y;
             case StoreKind::SAX: return A & X;
-
             case StoreKind::SHX: return X & ((uint8_t)(origHigh + 1));
             case StoreKind::SHY: return Y & ((uint8_t)(origHigh + 1));
             case StoreKind::SHA: return A & X & ((uint8_t)(origHigh + 1));
             case StoreKind::SHS: S = A & X; return S & ((uint8_t)(origHigh + 1));
-
-            case StoreKind::SHX_c3: case StoreKind::SHX_c4: return X;
-            case StoreKind::SHY_c3: case StoreKind::SHY_c4: return Y;
-            case StoreKind::SHA_c3: case StoreKind::SHA_c4: return A & X;
-            case StoreKind::SHS_c3: case StoreKind::SHS_c4: S = A & X; return S;
         }
         return 0;
     }
-
-public:
-    void onRdyLow() {
-        if (accessMode != AccessMode::WRITE || storeKind < StoreKind::SHX
-            || storeKind >= StoreKind::SHX_c3)
-            return;
-
-        if (nextOp == &CPU6502::am_abx_2 || nextOp == &CPU6502::am_aby_2 || nextOp == &CPU6502::am_izy_3) {
-            storeKind = (StoreKind)((int)StoreKind::SHX_c3 + ((int)storeKind - (int)StoreKind::SHX));
-        }
-        else if (nextOp == &CPU6502::am_abx_3_fixup || nextOp == &CPU6502::am_aby_3_fixup || nextOp == &CPU6502::am_izy_4_fixup) {
-            storeKind = (StoreKind)((int)StoreKind::SHX_c4 + ((int)storeKind - (int)StoreKind::SHX));
-        }
-    }
-
-private:
-
-    enum class AccessMode : uint8_t { READ, RMW, WRITE };
-    AccessMode accessMode = AccessMode::READ;
-
-    bool    branchTaken = false;
-    uint8_t branchOffset = 0;
-    uint8_t origHigh = 0;
-
-    Step jam_loop();
 };
 
-inline CPU6502::Step CPU6502::afterAddressing() {
-    switch (accessMode) {
-        case AccessMode::READ:  return STEP(&CPU6502::readAndExec_);
-        case AccessMode::RMW:   return STEP(&CPU6502::rmw_read);
-        case AccessMode::WRITE: return STEP(&CPU6502::writeStep_);
+inline CPU6502::Step CPU6502::executeWrite() {
+    uint8_t val = storeValue();
+    bool isAnySh = (storeKind >= StoreKind::SHX);
+    if (isAnySh && pageCross) {
+        addr = ((uint16_t)val << 8) | (addr & 0xFF);
     }
-    return STEP(&CPU6502::opFetch);
+    return emitWrite(&CPU6502::startOpFetch, addr, val);
+}
+
+inline CPU6502::Step CPU6502::afterAddressing_ReadWrite() {
+    if (accessMode == AccessMode::READ)  return emitRead(&CPU6502::readAndExec_, addr);
+    if (accessMode == AccessMode::RMW)   return emitRead(&CPU6502::rmw_dummyWrite, addr);
+    return executeWrite();
 }
 
 inline CPU6502::Step CPU6502::readAndExec_() {
-    fetched = bus.cpuRead(addr);
     doExecRead();
-    return DONE();
-}
-
-inline void CPU6502::doExecRead() {
-    switch (execKind) {
-        case ExecKind::LDA: execLDA(); break;
-        case ExecKind::LDX: execLDX(); break;
-        case ExecKind::LDY: execLDY(); break;
-        case ExecKind::AND_: execAND(); break;
-        case ExecKind::ORA_: execORA(); break;
-        case ExecKind::EOR_: execEOR(); break;
-        case ExecKind::BIT_: execBIT(); break;
-        case ExecKind::ADC_: execADC(); break;
-        case ExecKind::SBC_: execSBC(); break;
-        case ExecKind::CMP_: execCMP(); break;
-        case ExecKind::CPX_: execCPX(); break;
-        case ExecKind::CPY_: execCPY(); break;
-        case ExecKind::NOP_: break;
-        case ExecKind::LAX_: execLAX(); break;
-        case ExecKind::ANC_: execANC(); break;
-        case ExecKind::ALR_: execALR(); break;
-        case ExecKind::ARR_: execARR(); break;
-        case ExecKind::XAA_: execXAA(); break;
-        case ExecKind::AXS_: execAXS(); break;
-        case ExecKind::LAS_: execLAS(); break;
-        case ExecKind::LXA_: execLXA(); break;
-    }
-}
-
-inline CPU6502::Step CPU6502::rmw_read() {
-    fetched = bus.cpuRead(addr);
-    return STEP(&CPU6502::rmw_dummyWrite);
+    return opFetch();
 }
 
 inline CPU6502::Step CPU6502::rmw_dummyWrite() {
-    bus.cpuWrite(addr, fetched);
     doExecRmw();
-    return STEP(&CPU6502::rmw_finalWrite);
+    return emitWrite(&CPU6502::rmw_finalWrite, addr, fetched);
 }
 
 inline CPU6502::Step CPU6502::rmw_finalWrite() {
-    bus.cpuWrite(addr, tmp);
-    return DONE();
-}
-
-inline void CPU6502::doExecRmw() {
-    switch (rmwKind) {
-        case RmwKind::ASL: execASL_mem(); break;
-        case RmwKind::LSR: execLSR_mem(); break;
-        case RmwKind::ROL: execROL_mem(); break;
-        case RmwKind::ROR: execROR_mem(); break;
-        case RmwKind::INC: execINC_mem(); break;
-        case RmwKind::DEC: execDEC_mem(); break;
-        case RmwKind::SLO: execSLO(); break;
-        case RmwKind::RLA: execRLA(); break;
-        case RmwKind::SRE: execSRE(); break;
-        case RmwKind::RRA: execRRA(); break;
-        case RmwKind::DCP: execDCP(); break;
-        case RmwKind::ISC: execISC(); break;
-    }
-}
-
-inline CPU6502::Step CPU6502::writeStep_() {
-    uint8_t val = storeValue();
-
-    bool isAnySh = (storeKind >= StoreKind::SHX);
-    bool isShC3  = (storeKind >= StoreKind::SHX_c3 && storeKind <= StoreKind::SHS_c3);
-    if (isAnySh && pageCross && !isShC3) {
-        addr = ((uint16_t)val << 8) | (addr & 0xFF);
-    }
-
-    bus.cpuWrite(addr, val);
-    return DONE();
+    return emitWrite(&CPU6502::startOpFetch, addr, tmp);
 }
 
 inline CPU6502::Step CPU6502::am_imm_exec() {
-    fetched = bus.cpuRead(PC++);
     doExecRead();
-    return DONE();
+    return opFetch();
 }
 
 inline CPU6502::Step CPU6502::am_imp_exec() {
-    bus.cpuRead(PC);
-    return DONE();
+    doExecImplied();
+    return opFetch();
 }
 
-inline CPU6502::Step CPU6502::am_zp_1()  { addr = bus.cpuRead(PC++); return afterAddressing(); }
-inline CPU6502::Step CPU6502::am_zpx_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_zpx_2); }
-inline CPU6502::Step CPU6502::am_zpx_2() { bus.cpuRead(ptr); addr = (ptr + X) & 0xFF; return afterAddressing(); }
-inline CPU6502::Step CPU6502::am_zpy_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_zpy_2); }
-inline CPU6502::Step CPU6502::am_zpy_2() { bus.cpuRead(ptr); addr = (ptr + Y) & 0xFF; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_zp_1() {
+    addr = fetched;
+    return afterAddressing_ReadWrite();
+}
 
-inline CPU6502::Step CPU6502::am_abs_1() { addr = bus.cpuRead(PC++); return STEP(&CPU6502::am_abs_2); }
-inline CPU6502::Step CPU6502::am_abs_2() { addr |= bus.cpuRead(PC++) << 8; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_zpx_1() { ptr = fetched; return emitRead(&CPU6502::am_zpx_2, ptr); }
+inline CPU6502::Step CPU6502::am_zpx_2() { addr = (ptr + X) & 0xFF; return afterAddressing_ReadWrite(); }
+inline CPU6502::Step CPU6502::am_zpy_1() { ptr = fetched; return emitRead(&CPU6502::am_zpy_2, ptr); }
+inline CPU6502::Step CPU6502::am_zpy_2() { addr = (ptr + Y) & 0xFF; return afterAddressing_ReadWrite(); }
 
-inline CPU6502::Step CPU6502::am_abx_1() { addr = bus.cpuRead(PC++); return STEP(&CPU6502::am_abx_2); }
+inline CPU6502::Step CPU6502::am_abs_1() { addr = fetched; return emitRead(&CPU6502::am_abs_2, PC++); }
+inline CPU6502::Step CPU6502::am_abs_2() { addr |= fetched << 8; return afterAddressing_ReadWrite(); }
+
+inline CPU6502::Step CPU6502::am_abx_1() { addr = fetched; return emitRead(&CPU6502::am_abx_2, PC++); }
 inline CPU6502::Step CPU6502::am_abx_2() {
-    uint8_t high = bus.cpuRead(PC++);
-    origHigh = high;
-    uint16_t base = (high << 8) | (addr & 0xFF);
+    origHigh = fetched;
+    uint16_t base = (origHigh << 8) | (addr & 0xFF);
     uint16_t eff  = base + X;
     pageCross = (eff & 0xFF00) != (base & 0xFF00);
     addr = eff;
-    if (accessMode != AccessMode::READ || pageCross)
-        return STEP(&CPU6502::am_abx_3_fixup);
-    return afterAddressing();
+    if (accessMode != AccessMode::READ || pageCross) return emitRead(&CPU6502::am_abx_3_fixup, addr - (pageCross ? 0x100 : 0));
+    return afterAddressing_ReadWrite();
 }
-inline CPU6502::Step CPU6502::am_abx_3_fixup() {
-    bus.cpuRead(addr - (pageCross ? 0x100 : 0));
-    return afterAddressing();
-}
+inline CPU6502::Step CPU6502::am_abx_3_fixup() { return afterAddressing_ReadWrite(); }
 
-inline CPU6502::Step CPU6502::am_aby_1() { addr = bus.cpuRead(PC++); return STEP(&CPU6502::am_aby_2); }
+inline CPU6502::Step CPU6502::am_aby_1() { addr = fetched; return emitRead(&CPU6502::am_aby_2, PC++); }
 inline CPU6502::Step CPU6502::am_aby_2() {
-    uint8_t high = bus.cpuRead(PC++);
-    origHigh = high;
-    uint16_t base = (high << 8) | (addr & 0xFF);
+    origHigh = fetched;
+    uint16_t base = (origHigh << 8) | (addr & 0xFF);
     uint16_t eff  = base + Y;
     pageCross = (eff & 0xFF00) != (base & 0xFF00);
     addr = eff;
-    if (accessMode != AccessMode::READ || pageCross)
-        return STEP(&CPU6502::am_aby_3_fixup);
-    return afterAddressing();
+    if (accessMode != AccessMode::READ || pageCross) return emitRead(&CPU6502::am_aby_3_fixup, addr - (pageCross ? 0x100 : 0));
+    return afterAddressing_ReadWrite();
 }
-inline CPU6502::Step CPU6502::am_aby_3_fixup() {
-    bus.cpuRead(addr - (pageCross ? 0x100 : 0));
-    return afterAddressing();
-}
+inline CPU6502::Step CPU6502::am_aby_3_fixup() { return afterAddressing_ReadWrite(); }
 
-inline CPU6502::Step CPU6502::am_izx_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_izx_2); }
-inline CPU6502::Step CPU6502::am_izx_2() { bus.cpuRead(ptr); ptr = (ptr + X) & 0xFF; return STEP(&CPU6502::am_izx_3); }
-inline CPU6502::Step CPU6502::am_izx_3() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_izx_4); }
-inline CPU6502::Step CPU6502::am_izx_4() { addr |= bus.cpuRead((ptr + 1) & 0xFF) << 8; return afterAddressing(); }
+inline CPU6502::Step CPU6502::am_izx_1() { ptr = fetched; return emitRead(&CPU6502::am_izx_2, ptr); }
+inline CPU6502::Step CPU6502::am_izx_2() { ptr = (ptr + X) & 0xFF; return emitRead(&CPU6502::am_izx_3, ptr); }
+inline CPU6502::Step CPU6502::am_izx_3() { addr = fetched; return emitRead(&CPU6502::am_izx_4, (ptr + 1) & 0xFF); }
+inline CPU6502::Step CPU6502::am_izx_4() { addr |= fetched << 8; return afterAddressing_ReadWrite(); }
 
-inline CPU6502::Step CPU6502::am_izy_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_izy_2); }
-inline CPU6502::Step CPU6502::am_izy_2() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_izy_3); }
+inline CPU6502::Step CPU6502::am_izy_1() { ptr = fetched; return emitRead(&CPU6502::am_izy_2, ptr); }
+inline CPU6502::Step CPU6502::am_izy_2() { addr = fetched; return emitRead(&CPU6502::am_izy_3, (ptr + 1) & 0xFF); }
 inline CPU6502::Step CPU6502::am_izy_3() {
-    uint16_t high = bus.cpuRead((ptr + 1) & 0xFF);
-    origHigh = (uint8_t)high;
-    uint16_t base = (high << 8) | (addr & 0xFF);
+    origHigh = fetched;
+    uint16_t base = (origHigh << 8) | (addr & 0xFF);
     uint16_t eff  = base + Y;
     pageCross = (eff & 0xFF00) != (base & 0xFF00);
     addr = eff;
-    if (accessMode != AccessMode::READ || pageCross)
-        return STEP(&CPU6502::am_izy_4_fixup);
-    return afterAddressing();
+    if (accessMode != AccessMode::READ || pageCross) return emitRead(&CPU6502::am_izy_4_fixup, addr - (pageCross ? 0x100 : 0));
+    return afterAddressing_ReadWrite();
 }
-inline CPU6502::Step CPU6502::am_izy_4_fixup() {
-    bus.cpuRead(addr - (pageCross ? 0x100 : 0));
-    return afterAddressing();
-}
+inline CPU6502::Step CPU6502::am_izy_4_fixup() { return afterAddressing_ReadWrite(); }
 
 inline CPU6502::Step CPU6502::am_rel_1() {
-    branchOffset = bus.cpuRead(PC++);
-    if (!branchTaken) return DONE();
-    pollInterrupts();
-    return STEP(&CPU6502::am_rel_2_taken);
+    branchOffset = fetched;
+    if (!branchTaken) return opFetch();
+    return emitRead(&CPU6502::am_rel_2_taken, PC);
 }
 inline CPU6502::Step CPU6502::am_rel_2_taken() {
-    bus.cpuRead(PC);
     uint16_t oldPC = PC;
     uint8_t  oldL  = PC & 0xFF;
     uint8_t  newL  = oldL + branchOffset;
     PC = (oldPC & 0xFF00) | newL;
     bool cross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
-    if (!cross) return DONE_NOPOLL();
+    if (!cross) return opFetch();
     pageCross = ((int8_t)branchOffset < 0);
-    return STEP(&CPU6502::am_rel_3_pagefix);
+    return emitRead(&CPU6502::am_rel_3_pagefix, PC);
 }
 inline CPU6502::Step CPU6502::am_rel_3_pagefix() {
-    bus.cpuRead(PC);
     PC += pageCross ? (uint16_t)(-0x100) : 0x100;
-    return DONE();
+    return opFetch();
 }
 
-inline CPU6502::Step CPU6502::am_ind_1() { ptr = bus.cpuRead(PC++); return STEP(&CPU6502::am_ind_2); }
-inline CPU6502::Step CPU6502::am_ind_2() { ptr |= bus.cpuRead(PC++) << 8; return STEP(&CPU6502::am_ind_3); }
-inline CPU6502::Step CPU6502::am_ind_3() { addr = bus.cpuRead(ptr); return STEP(&CPU6502::am_ind_4); }
-inline CPU6502::Step CPU6502::am_ind_4() {
-    uint16_t hiAddr = (ptr & 0xFF00) | ((ptr + 1) & 0xFF);
-    addr |= bus.cpuRead(hiAddr) << 8;
-    PC = addr;
-    return DONE();
-}
+inline CPU6502::Step CPU6502::am_ind_1() { ptr = fetched; return emitRead(&CPU6502::am_ind_2, PC++); }
+inline CPU6502::Step CPU6502::am_ind_2() { ptr |= fetched << 8; return emitRead(&CPU6502::am_ind_3, ptr); }
+inline CPU6502::Step CPU6502::am_ind_3() { addr = fetched; uint16_t hiAddr = (ptr & 0xFF00) | ((ptr + 1) & 0xFF); return emitRead(&CPU6502::am_ind_4, hiAddr); }
+inline CPU6502::Step CPU6502::am_ind_4() { addr |= fetched << 8; PC = addr; return opFetch(); }
 
-inline CPU6502::Step CPU6502::jmpAbs1_low()  { addr = bus.cpuRead(PC++); return STEP(&CPU6502::jmpAbs2_high); }
-inline CPU6502::Step CPU6502::jmpAbs2_high() { addr |= bus.cpuRead(PC++) << 8; PC = addr; return DONE(); }
+inline CPU6502::Step CPU6502::jmpAbs1_low()  { addr = fetched; return emitRead(&CPU6502::jmpAbs2_high, PC++); }
+inline CPU6502::Step CPU6502::jmpAbs2_high() { addr |= fetched << 8; PC = addr; return opFetch(); }
 
-inline CPU6502::Step CPU6502::brk1_dummy() {
-    if (currentInt == IntKind::SoftwareBRK) bus.cpuRead(PC++);
-    else                                    bus.cpuRead(PC);
-    return STEP(&CPU6502::brk2_pushPCH);
+inline CPU6502::Step CPU6502::int1_dummy() {
+    if (currentInt == IntKind::SoftwareBRK) PC++;
+    return emitWrite(&CPU6502::int2_pushPCH, 0x0100 | S--, (PC >> 8) & 0xFF);
 }
-inline CPU6502::Step CPU6502::brk2_pushPCH() { push((PC >> 8) & 0xFF); return STEP(&CPU6502::brk3_pushPCL); }
-inline CPU6502::Step CPU6502::brk3_pushPCL() { push(PC & 0xFF); return STEP(&CPU6502::brk4_pushP); }
-inline CPU6502::Step CPU6502::brk4_pushP() {
+inline CPU6502::Step CPU6502::int2_pushPCH() { return emitWrite(&CPU6502::int3_pushPCL, 0x0100 | S--, PC & 0xFF); }
+inline CPU6502::Step CPU6502::int3_pushPCL() {
     bool wasBRK = (currentInt == IntKind::SoftwareBRK);
-
-    if (currentInt != IntKind::NMI && nmiAtStartOfCycle) {
+    if (currentInt != IntKind::NMI && nmiEdgeDetected) {
         nmiPending = false;
         currentInt = IntKind::NMI;
+    } else if (currentInt == IntKind::SoftwareBRK && irqDetected && !irqInhibitSnapshot) {
+        currentInt = IntKind::IRQ;
     }
-
     uint8_t pushP = P | FLAG_U | (wasBRK ? FLAG_B : 0);
-    push(pushP);
     P |= FLAG_I;
     irqInhibitSnapshot = true;
-    return STEP(&CPU6502::brk5_readLow);
+    return emitWrite(&CPU6502::int5_readLow, 0x0100 | S--, pushP);
 }
-inline CPU6502::Step CPU6502::brk5_readLow()  {
-    addr = bus.cpuRead(intVector());
-    return STEP(&CPU6502::brk6_readHigh);
-}
-inline CPU6502::Step CPU6502::brk6_readHigh() {
-    addr |= bus.cpuRead(intVector() + 1) << 8;
-    PC = addr;
-    currentInt = IntKind::None;
-    return DONE_NOPOLL();
-}
+inline CPU6502::Step CPU6502::int5_readLow()  { return emitRead(&CPU6502::int6_readHigh, intVector()); }
+inline CPU6502::Step CPU6502::int6_readHigh() { addr = fetched; return emitRead(&CPU6502::rti5_pullPCH, intVector() + 1); }
 
-inline CPU6502::Step CPU6502::rti1_dummyRead() { bus.cpuRead(PC); return STEP(&CPU6502::rti2_incS); }
-inline CPU6502::Step CPU6502::rti2_incS()      { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::rti3_pullP); }
-inline CPU6502::Step CPU6502::rti3_pullP()     { P = (pull() & ~FLAG_B) | FLAG_U; irqInhibitSnapshot = (P & FLAG_I) != 0; return STEP(&CPU6502::rti4_pullPCL); }
-inline CPU6502::Step CPU6502::rti4_pullPCL()   { addr = pull(); return STEP(&CPU6502::rti5_pullPCH); }
-inline CPU6502::Step CPU6502::rti5_pullPCH()   { addr |= pull() << 8; PC = addr; return DONE(); }
+inline CPU6502::Step CPU6502::rti1_dummyRead() { return emitRead(&CPU6502::rti2_incS, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rti2_incS()      { S++; return emitRead(&CPU6502::rti3_pullP, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rti3_pullP()     { P = (fetched & ~FLAG_B) | FLAG_U; irqInhibitSnapshot = (P & FLAG_I) != 0; S++; return emitRead(&CPU6502::rti4_pullPCL, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rti4_pullPCL()   { addr = fetched; S++; return emitRead(&CPU6502::rti5_pullPCH, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rti5_pullPCH()   { addr |= fetched << 8; PC = addr; return opFetch(); }
 
-inline CPU6502::Step CPU6502::rts1_dummyRead() { bus.cpuRead(PC); return STEP(&CPU6502::rts2_incS); }
-inline CPU6502::Step CPU6502::rts2_incS()      { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::rts3_pullPCL); }
-inline CPU6502::Step CPU6502::rts3_pullPCL()   { addr = pull(); return STEP(&CPU6502::rts4_pullPCH); }
-inline CPU6502::Step CPU6502::rts4_pullPCH()   { addr |= pull() << 8; PC = addr; return STEP(&CPU6502::rts5_incPC); }
-inline CPU6502::Step CPU6502::rts5_incPC()     { bus.cpuRead(PC); PC++; return DONE(); }
+inline CPU6502::Step CPU6502::rts1_dummyRead() { return emitRead(&CPU6502::rts2_incS, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rts2_incS()      { S++; return emitRead(&CPU6502::rts3_pullPCL, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rts3_pullPCL()   { addr = fetched; S++; return emitRead(&CPU6502::rts4_pullPCH, 0x0100 | S); }
+inline CPU6502::Step CPU6502::rts4_pullPCH()   { addr |= fetched << 8; PC = addr; return emitRead(&CPU6502::rts5_incPC, PC); }
+inline CPU6502::Step CPU6502::rts5_incPC()     { PC++; return opFetch(); }
 
-inline CPU6502::Step CPU6502::jsr1_readLow()  { addr = bus.cpuRead(PC++); return STEP(&CPU6502::jsr2_internal); }
-inline CPU6502::Step CPU6502::jsr2_internal() { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::jsr3_pushPCH); }
-inline CPU6502::Step CPU6502::jsr3_pushPCH()  { push((PC >> 8) & 0xFF); return STEP(&CPU6502::jsr4_pushPCL); }
-inline CPU6502::Step CPU6502::jsr4_pushPCL()  { push(PC & 0xFF); return STEP(&CPU6502::jsr5_readHigh); }
-inline CPU6502::Step CPU6502::jsr5_readHigh() { addr |= bus.cpuRead(PC) << 8; PC = addr; return DONE(); }
+inline CPU6502::Step CPU6502::jsr1_readLow()  { addr = fetched; return emitRead(&CPU6502::jsr2_internal, 0x0100 | S); }
+inline CPU6502::Step CPU6502::jsr2_internal() { return emitWrite(&CPU6502::jsr3_pushPCH, 0x0100 | S--, (PC >> 8) & 0xFF); }
+inline CPU6502::Step CPU6502::jsr3_pushPCH()  { return emitWrite(&CPU6502::jsr4_pushPCL, 0x0100 | S--, PC & 0xFF); }
+inline CPU6502::Step CPU6502::jsr4_pushPCL()  { return emitRead(&CPU6502::jsr5_readHigh, PC); }
+inline CPU6502::Step CPU6502::jsr5_readHigh() { addr |= fetched << 8; PC = addr; return opFetch(); }
 
-inline CPU6502::Step CPU6502::pha1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::pha2_push); }
-inline CPU6502::Step CPU6502::pha2_push()  { push(A); return DONE(); }
-inline CPU6502::Step CPU6502::php1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::php2_push); }
-inline CPU6502::Step CPU6502::php2_push()  { push(P | FLAG_B | FLAG_U); return DONE(); }
-inline CPU6502::Step CPU6502::pla1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::pla2_incS); }
-inline CPU6502::Step CPU6502::pla2_incS()  { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::pla3_pull); }
-inline CPU6502::Step CPU6502::pla3_pull()  { A = pull(); setZN(A); return DONE(); }
-inline CPU6502::Step CPU6502::plp1_dummy() { bus.cpuRead(PC); return STEP(&CPU6502::plp2_incS); }
-inline CPU6502::Step CPU6502::plp2_incS()  { bus.cpuRead(0x0100 | S); return STEP(&CPU6502::plp3_pull); }
-inline CPU6502::Step CPU6502::plp3_pull()  { P = (pull() & ~FLAG_B) | FLAG_U; return DONE(); }
+inline CPU6502::Step CPU6502::pha1_dummy() { return emitWrite(&CPU6502::startOpFetch, 0x0100 | S--, A); }
+inline CPU6502::Step CPU6502::php1_dummy() { return emitWrite(&CPU6502::startOpFetch, 0x0100 | S--, P | FLAG_B | FLAG_U); }
+inline CPU6502::Step CPU6502::pla1_dummy() { return emitRead(&CPU6502::pla2_incS, 0x0100 | S); }
+inline CPU6502::Step CPU6502::pla2_incS()  { S++; return emitRead(&CPU6502::pla3_pull, 0x0100 | S); }
+inline CPU6502::Step CPU6502::pla3_pull()  { A = fetched; setZN(A); return opFetch(); }
+inline CPU6502::Step CPU6502::plp1_dummy() { return emitRead(&CPU6502::plp2_incS, 0x0100 | S); }
+inline CPU6502::Step CPU6502::plp2_incS()  { S++; return emitRead(&CPU6502::plp3_pull, 0x0100 | S); }
+inline CPU6502::Step CPU6502::plp3_pull()  { P = (fetched & ~FLAG_B) | FLAG_U; return opFetch(); }
 
 inline CPU6502::Step CPU6502::jam_loop() {
-    bus.cpuRead(PC);
-    return STEP(&CPU6502::jam_loop);
+    return emitRead(&CPU6502::jam_loop, PC);
 }
 
 inline CPU6502::Step CPU6502::decodeAndDispatch() {
     branchTaken = false;
     accessMode  = AccessMode::READ;
     execKind    = ExecKind::NOP_;
+    opcode = fetched;
 
-    auto setRead  = [&](ExecKind k, MicroOp am1) { execKind = k; accessMode = AccessMode::READ;  return STEP(am1); };
-    auto setWrite = [&](StoreKind k, MicroOp am1){ storeKind = k; accessMode = AccessMode::WRITE; return STEP(am1); };
-    auto setRmw   = [&](RmwKind k, MicroOp am1)  { rmwKind = k;  accessMode = AccessMode::RMW;   return STEP(am1); };
-    auto branch   = [&](bool cond)               { branchTaken = cond; return STEP(&CPU6502::am_rel_1); };
-    auto implied  = [&](auto fn)                 { fn(); return STEP(&CPU6502::am_imp_exec); };
+    auto setRead  = [&](ExecKind k, MicroOp am1) { execKind = k; accessMode = AccessMode::READ;  return emitRead(am1, PC++); };
+    auto setWrite = [&](StoreKind k, MicroOp am1){ storeKind = k; accessMode = AccessMode::WRITE; return emitRead(am1, PC++); };
+    auto setRmw   = [&](RmwKind k, MicroOp am1)  { rmwKind = k;  accessMode = AccessMode::RMW;   return emitRead(am1, PC++); };
+    auto branch   = [&](bool cond)               { branchTaken = cond; return emitRead(&CPU6502::am_rel_1, PC++); };
+    auto implied  = [&](ExecKind k)              { execKind = k; return emitRead(&CPU6502::am_imp_exec, PC); };
 
     switch (opcode) {
-    case 0xA9: execKind = ExecKind::LDA; return STEP(&CPU6502::am_imm_exec);
+    case 0xA9: return setRead(ExecKind::LDA, &CPU6502::am_imm_exec);
     case 0xA5: return setRead(ExecKind::LDA, &CPU6502::am_zp_1);
     case 0xB5: return setRead(ExecKind::LDA, &CPU6502::am_zpx_1);
     case 0xAD: return setRead(ExecKind::LDA, &CPU6502::am_abs_1);
@@ -631,13 +573,13 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xA1: return setRead(ExecKind::LDA, &CPU6502::am_izx_1);
     case 0xB1: return setRead(ExecKind::LDA, &CPU6502::am_izy_1);
 
-    case 0xA2: execKind = ExecKind::LDX; return STEP(&CPU6502::am_imm_exec);
+    case 0xA2: return setRead(ExecKind::LDX, &CPU6502::am_imm_exec);
     case 0xA6: return setRead(ExecKind::LDX, &CPU6502::am_zp_1);
     case 0xB6: return setRead(ExecKind::LDX, &CPU6502::am_zpy_1);
     case 0xAE: return setRead(ExecKind::LDX, &CPU6502::am_abs_1);
     case 0xBE: return setRead(ExecKind::LDX, &CPU6502::am_aby_1);
 
-    case 0xA0: execKind = ExecKind::LDY; return STEP(&CPU6502::am_imm_exec);
+    case 0xA0: return setRead(ExecKind::LDY, &CPU6502::am_imm_exec);
     case 0xA4: return setRead(ExecKind::LDY, &CPU6502::am_zp_1);
     case 0xB4: return setRead(ExecKind::LDY, &CPU6502::am_zpx_1);
     case 0xAC: return setRead(ExecKind::LDY, &CPU6502::am_abs_1);
@@ -659,19 +601,19 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x94: return setWrite(StoreKind::STY, &CPU6502::am_zpx_1);
     case 0x8C: return setWrite(StoreKind::STY, &CPU6502::am_abs_1);
 
-    case 0xAA: return implied([&]{ X = A; setZN(X); });
-    case 0xA8: return implied([&]{ Y = A; setZN(Y); });
-    case 0xBA: return implied([&]{ X = S; setZN(X); });
-    case 0x8A: return implied([&]{ A = X; setZN(A); });
-    case 0x9A: return implied([&]{ S = X; });
-    case 0x98: return implied([&]{ A = Y; setZN(A); });
+    case 0xAA: return implied(ExecKind::TAX);
+    case 0xA8: return implied(ExecKind::TAY);
+    case 0xBA: return implied(ExecKind::TSX);
+    case 0x8A: return implied(ExecKind::TXA);
+    case 0x9A: return implied(ExecKind::TXS);
+    case 0x98: return implied(ExecKind::TYA);
 
-    case 0x48: return STEP(&CPU6502::pha1_dummy);
-    case 0x08: return STEP(&CPU6502::php1_dummy);
-    case 0x68: return STEP(&CPU6502::pla1_dummy);
-    case 0x28: return STEP(&CPU6502::plp1_dummy);
+    case 0x48: return emitRead(&CPU6502::pha1_dummy, PC);
+    case 0x08: return emitRead(&CPU6502::php1_dummy, PC);
+    case 0x68: return emitRead(&CPU6502::pla1_dummy, PC);
+    case 0x28: return emitRead(&CPU6502::plp1_dummy, PC);
 
-    case 0x29: execKind = ExecKind::AND_; return STEP(&CPU6502::am_imm_exec);
+    case 0x29: return setRead(ExecKind::AND_, &CPU6502::am_imm_exec);
     case 0x25: return setRead(ExecKind::AND_, &CPU6502::am_zp_1);
     case 0x35: return setRead(ExecKind::AND_, &CPU6502::am_zpx_1);
     case 0x2D: return setRead(ExecKind::AND_, &CPU6502::am_abs_1);
@@ -680,7 +622,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x21: return setRead(ExecKind::AND_, &CPU6502::am_izx_1);
     case 0x31: return setRead(ExecKind::AND_, &CPU6502::am_izy_1);
 
-    case 0x09: execKind = ExecKind::ORA_; return STEP(&CPU6502::am_imm_exec);
+    case 0x09: return setRead(ExecKind::ORA_, &CPU6502::am_imm_exec);
     case 0x05: return setRead(ExecKind::ORA_, &CPU6502::am_zp_1);
     case 0x15: return setRead(ExecKind::ORA_, &CPU6502::am_zpx_1);
     case 0x0D: return setRead(ExecKind::ORA_, &CPU6502::am_abs_1);
@@ -689,7 +631,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x01: return setRead(ExecKind::ORA_, &CPU6502::am_izx_1);
     case 0x11: return setRead(ExecKind::ORA_, &CPU6502::am_izy_1);
 
-    case 0x49: execKind = ExecKind::EOR_; return STEP(&CPU6502::am_imm_exec);
+    case 0x49: return setRead(ExecKind::EOR_, &CPU6502::am_imm_exec);
     case 0x45: return setRead(ExecKind::EOR_, &CPU6502::am_zp_1);
     case 0x55: return setRead(ExecKind::EOR_, &CPU6502::am_zpx_1);
     case 0x4D: return setRead(ExecKind::EOR_, &CPU6502::am_abs_1);
@@ -701,7 +643,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x24: return setRead(ExecKind::BIT_, &CPU6502::am_zp_1);
     case 0x2C: return setRead(ExecKind::BIT_, &CPU6502::am_abs_1);
 
-    case 0x69: execKind = ExecKind::ADC_; return STEP(&CPU6502::am_imm_exec);
+    case 0x69: return setRead(ExecKind::ADC_, &CPU6502::am_imm_exec);
     case 0x65: return setRead(ExecKind::ADC_, &CPU6502::am_zp_1);
     case 0x75: return setRead(ExecKind::ADC_, &CPU6502::am_zpx_1);
     case 0x6D: return setRead(ExecKind::ADC_, &CPU6502::am_abs_1);
@@ -710,7 +652,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x61: return setRead(ExecKind::ADC_, &CPU6502::am_izx_1);
     case 0x71: return setRead(ExecKind::ADC_, &CPU6502::am_izy_1);
 
-    case 0xE9: case 0xEB: execKind = ExecKind::SBC_; return STEP(&CPU6502::am_imm_exec);
+    case 0xE9: case 0xEB: return setRead(ExecKind::SBC_, &CPU6502::am_imm_exec);
     case 0xE5: return setRead(ExecKind::SBC_, &CPU6502::am_zp_1);
     case 0xF5: return setRead(ExecKind::SBC_, &CPU6502::am_zpx_1);
     case 0xED: return setRead(ExecKind::SBC_, &CPU6502::am_abs_1);
@@ -719,7 +661,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xE1: return setRead(ExecKind::SBC_, &CPU6502::am_izx_1);
     case 0xF1: return setRead(ExecKind::SBC_, &CPU6502::am_izy_1);
 
-    case 0xC9: execKind = ExecKind::CMP_; return STEP(&CPU6502::am_imm_exec);
+    case 0xC9: return setRead(ExecKind::CMP_, &CPU6502::am_imm_exec);
     case 0xC5: return setRead(ExecKind::CMP_, &CPU6502::am_zp_1);
     case 0xD5: return setRead(ExecKind::CMP_, &CPU6502::am_zpx_1);
     case 0xCD: return setRead(ExecKind::CMP_, &CPU6502::am_abs_1);
@@ -728,18 +670,18 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xC1: return setRead(ExecKind::CMP_, &CPU6502::am_izx_1);
     case 0xD1: return setRead(ExecKind::CMP_, &CPU6502::am_izy_1);
 
-    case 0xE0: execKind = ExecKind::CPX_; return STEP(&CPU6502::am_imm_exec);
+    case 0xE0: return setRead(ExecKind::CPX_, &CPU6502::am_imm_exec);
     case 0xE4: return setRead(ExecKind::CPX_, &CPU6502::am_zp_1);
     case 0xEC: return setRead(ExecKind::CPX_, &CPU6502::am_abs_1);
 
-    case 0xC0: execKind = ExecKind::CPY_; return STEP(&CPU6502::am_imm_exec);
+    case 0xC0: return setRead(ExecKind::CPY_, &CPU6502::am_imm_exec);
     case 0xC4: return setRead(ExecKind::CPY_, &CPU6502::am_zp_1);
     case 0xCC: return setRead(ExecKind::CPY_, &CPU6502::am_abs_1);
 
-    case 0xE8: return implied([&]{ X++; setZN(X); });
-    case 0xC8: return implied([&]{ Y++; setZN(Y); });
-    case 0xCA: return implied([&]{ X--; setZN(X); });
-    case 0x88: return implied([&]{ Y--; setZN(Y); });
+    case 0xE8: return implied(ExecKind::INX);
+    case 0xC8: return implied(ExecKind::INY);
+    case 0xCA: return implied(ExecKind::DEX);
+    case 0x88: return implied(ExecKind::DEY);
 
     case 0xE6: return setRmw(RmwKind::INC, &CPU6502::am_zp_1);
     case 0xF6: return setRmw(RmwKind::INC, &CPU6502::am_zpx_1);
@@ -750,10 +692,10 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xCE: return setRmw(RmwKind::DEC, &CPU6502::am_abs_1);
     case 0xDE: return setRmw(RmwKind::DEC, &CPU6502::am_abx_1);
 
-    case 0x0A: return implied([&]{ execASL_A(); });
-    case 0x4A: return implied([&]{ execLSR_A(); });
-    case 0x2A: return implied([&]{ execROL_A(); });
-    case 0x6A: return implied([&]{ execROR_A(); });
+    case 0x0A: return implied(ExecKind::ASL_A);
+    case 0x4A: return implied(ExecKind::LSR_A);
+    case 0x2A: return implied(ExecKind::ROL_A);
+    case 0x6A: return implied(ExecKind::ROR_A);
 
     case 0x06: return setRmw(RmwKind::ASL, &CPU6502::am_zp_1);
     case 0x16: return setRmw(RmwKind::ASL, &CPU6502::am_zpx_1);
@@ -772,13 +714,13 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0x6E: return setRmw(RmwKind::ROR, &CPU6502::am_abs_1);
     case 0x7E: return setRmw(RmwKind::ROR, &CPU6502::am_abx_1);
 
-    case 0x18: return implied([&]{ P &= ~FLAG_C; });
-    case 0x38: return implied([&]{ P |=  FLAG_C; });
-    case 0x58: return implied([&]{ P &= ~FLAG_I; });
-    case 0x78: return implied([&]{ P |=  FLAG_I; });
-    case 0xB8: return implied([&]{ P &= ~FLAG_V; });
-    case 0xD8: return implied([&]{ P &= ~FLAG_D; });
-    case 0xF8: return implied([&]{ P |=  FLAG_D; });
+    case 0x18: return implied(ExecKind::CLC);
+    case 0x38: return implied(ExecKind::SEC);
+    case 0x58: return implied(ExecKind::CLI);
+    case 0x78: return implied(ExecKind::SEI);
+    case 0xB8: return implied(ExecKind::CLV);
+    case 0xD8: return implied(ExecKind::CLD);
+    case 0xF8: return implied(ExecKind::SED);
 
     case 0x10: return branch(!(P & FLAG_N));
     case 0x30: return branch( (P & FLAG_N));
@@ -789,33 +731,22 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xD0: return branch(!(P & FLAG_Z));
     case 0xF0: return branch( (P & FLAG_Z));
 
-    case 0x4C: return STEP(&CPU6502::jmpAbs1_low);
-    case 0x6C: return STEP(&CPU6502::am_ind_1);
-    case 0x20: return STEP(&CPU6502::jsr1_readLow);
-    case 0x60: return STEP(&CPU6502::rts1_dummyRead);
-    case 0x40: return STEP(&CPU6502::rti1_dummyRead);
+    case 0x4C: return emitRead(&CPU6502::jmpAbs1_low, PC++);
+    case 0x6C: return emitRead(&CPU6502::am_ind_1, PC++);
+    case 0x20: return emitRead(&CPU6502::jsr1_readLow, PC++);
+    case 0x60: return emitRead(&CPU6502::rts1_dummyRead, PC);
+    case 0x40: return emitRead(&CPU6502::rti1_dummyRead, PC);
 
-    case 0x00:
-        currentInt = IntKind::SoftwareBRK;
-        return STEP(&CPU6502::brk1_dummy);
+    case 0x00: currentInt = IntKind::SoftwareBRK; return emitRead(&CPU6502::int1_dummy, PC);
 
-    case 0xEA: return implied([&]{});
+    case 0xEA: return implied(ExecKind::NOP_IMP);
+    case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xFA: return implied(ExecKind::NOP_IMP);
 
-    case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xFA:
-        return implied([&]{});
-
-    case 0x80: case 0x82: case 0x89: case 0xC2: case 0xE2:
-        execKind = ExecKind::NOP_;
-        return STEP(&CPU6502::am_imm_exec);
-    case 0x04: case 0x44: case 0x64:
-        return setRead(ExecKind::NOP_, &CPU6502::am_zp_1);
-    case 0x14: case 0x34: case 0x54: case 0x74: case 0xD4: case 0xF4:
-        return setRead(ExecKind::NOP_, &CPU6502::am_zpx_1);
-
-    case 0x0C:
-        return setRead(ExecKind::NOP_, &CPU6502::am_abs_1);
-    case 0x1C: case 0x3C: case 0x5C: case 0x7C: case 0xDC: case 0xFC:
-        return setRead(ExecKind::NOP_, &CPU6502::am_abx_1);
+    case 0x80: case 0x82: case 0x89: case 0xC2: case 0xE2: return setRead(ExecKind::NOP_, &CPU6502::am_imm_exec);
+    case 0x04: case 0x44: case 0x64: return setRead(ExecKind::NOP_, &CPU6502::am_zp_1);
+    case 0x14: case 0x34: case 0x54: case 0x74: case 0xD4: case 0xF4: return setRead(ExecKind::NOP_, &CPU6502::am_zpx_1);
+    case 0x0C: return setRead(ExecKind::NOP_, &CPU6502::am_abs_1);
+    case 0x1C: case 0x3C: case 0x5C: case 0x7C: case 0xDC: case 0xFC: return setRead(ExecKind::NOP_, &CPU6502::am_abx_1);
 
     case 0xA7: return setRead(ExecKind::LAX_, &CPU6502::am_zp_1);
     case 0xB7: return setRead(ExecKind::LAX_, &CPU6502::am_zpy_1);
@@ -823,18 +754,18 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     case 0xBF: return setRead(ExecKind::LAX_, &CPU6502::am_aby_1);
     case 0xA3: return setRead(ExecKind::LAX_, &CPU6502::am_izx_1);
     case 0xB3: return setRead(ExecKind::LAX_, &CPU6502::am_izy_1);
-    case 0xAB: execKind = ExecKind::LXA_; return STEP(&CPU6502::am_imm_exec);
+    case 0xAB: return setRead(ExecKind::LXA_, &CPU6502::am_imm_exec);
 
     case 0x87: return setWrite(StoreKind::SAX, &CPU6502::am_zp_1);
     case 0x97: return setWrite(StoreKind::SAX, &CPU6502::am_zpy_1);
     case 0x8F: return setWrite(StoreKind::SAX, &CPU6502::am_abs_1);
     case 0x83: return setWrite(StoreKind::SAX, &CPU6502::am_izx_1);
 
-    case 0x0B: case 0x2B: execKind = ExecKind::ANC_; return STEP(&CPU6502::am_imm_exec);
-    case 0x4B:            execKind = ExecKind::ALR_; return STEP(&CPU6502::am_imm_exec);
-    case 0x6B:            execKind = ExecKind::ARR_; return STEP(&CPU6502::am_imm_exec);
-    case 0x8B:            execKind = ExecKind::XAA_; return STEP(&CPU6502::am_imm_exec);
-    case 0xCB:            execKind = ExecKind::AXS_; return STEP(&CPU6502::am_imm_exec);
+    case 0x0B: case 0x2B: return setRead(ExecKind::ANC_, &CPU6502::am_imm_exec);
+    case 0x4B:            return setRead(ExecKind::ALR_, &CPU6502::am_imm_exec);
+    case 0x6B:            return setRead(ExecKind::ARR_, &CPU6502::am_imm_exec);
+    case 0x8B:            return setRead(ExecKind::XAA_, &CPU6502::am_imm_exec);
+    case 0xCB:            return setRead(ExecKind::AXS_, &CPU6502::am_imm_exec);
 
     case 0xBB: return setRead(ExecKind::LAS_, &CPU6502::am_aby_1);
 
@@ -894,8 +825,8 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
 
     case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52:
     case 0x62: case 0x72: case 0x92: case 0xB2: case 0xD2: case 0xF2:
-        return STEP(&CPU6502::jam_loop);
+        return emitRead(&CPU6502::jam_loop, PC);
 
-    default:   return implied([&]{});
+    default: return implied(ExecKind::NOP_IMP);
     }
 }

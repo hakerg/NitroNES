@@ -5,7 +5,7 @@
 // ----------------------------------------------------------------------------
 // Mapper 225 — 52-in-1 / 58-in-1 / 64-in-1 multicart
 //
-// Specyfikacja: docs/mapper_docs/225.txt
+// Specyfikacja: nes_specs/mappers/225.txt
 //
 // Rejestr konfiguracyjny: zapis pod $8000-$FFFF
 //   A~[.HMO PPPP PPCC CCCC]

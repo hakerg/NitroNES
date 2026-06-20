@@ -42,37 +42,37 @@ public:
         nesHost.renderFrame(ppu.getFramebuffer());
     }
 
-    const PPU2C02* getPPU() const override { return &ppu; }
+    PPU2C02* getPPU() override { return &ppu; }
 
-    bool pollNMI() override {
-        return ppu.nmiLineLow();
-    }
-
-    bool pollIRQ() override {
-        return a2a03.getAPU().irqAsserted() || (cart && cart->irqState());
-    }
+    bool pollNMI() override { return !ppu.pollNmiLow(); }
+    bool irqAsserted() override { return cart && cart->irqState(); }
 
 protected:
     uint8_t memRead(uint16_t addr) override {
-        uint8_t data = a2a03.getDataBus();
+        uint8_t data = a2a03.getBusData();
+
+        const uint16_t prevAddr = lastBusReadAddr;
+        lastBusReadAddr = addr;
 
         if (addr < 0x2000) {
             data = cpuRam[addr & 0x07FF];
-        }
-        else if (addr < 0x4000) {
+        } else if (addr < 0x4000) {
             data = ppu.cpuRead(addr);
-        }
-        else if (addr == 0x4016) {
-            uint8_t bit = (controllerShift & 0x80) ? 1 : 0;
-            if (!controllerStrobe) controllerShift = (controllerShift << 1) | 0x01;
-            data = (data & 0xE0) | bit;
-        }
-        else if (addr == 0x4017) {
-            uint8_t bit = (controllerShift2 & 0x80) ? 1 : 0;
-            if (!controllerStrobe) controllerShift2 = (controllerShift2 << 1) | 0x01;
-            data = (data & 0xE0) | bit;
-        }
-        else if (addr >= 0x4020) {
+        } else if (addr == 0x4016) {
+            const bool newRun = (prevAddr != 0x4016);
+            if (newRun || controllerStrobe)
+                controllerLatch = (controllerShift & 0x80) ? 1 : 0;
+            if (newRun && !controllerStrobe)
+                controllerShift = (controllerShift << 1) | 0x01;
+            data = (data & 0xE0) | controllerLatch;
+        } else if (addr == 0x4017) {
+            const bool newRun = (prevAddr != 0x4017);
+            if (newRun || controllerStrobe)
+                controllerLatch2 = (controllerShift2 & 0x80) ? 1 : 0;
+            if (newRun && !controllerStrobe)
+                controllerShift2 = (controllerShift2 << 1) | 0x01;
+            data = (data & 0xE0) | controllerLatch2;
+        } else if (addr >= 0x4020) {
             data = cart ? cart->cpuRead(addr, data) : data;
         }
 
@@ -80,19 +80,14 @@ protected:
     }
 
     void memWrite(uint16_t addr, uint8_t data) override {
-        if (addr < 0x2000) { cpuRam[addr & 0x07FF] = data; return; }
-        if (addr < 0x4000) { ppu.cpuWrite(addr, data); return; }
-        if (addr == 0x4016) {
-            controllerStrobe = (data & 0x01) != 0;
-            return;
-        }
+        if (addr < 0x2000)  { cpuRam[addr & 0x07FF] = data; return; }
+        if (addr < 0x4000)  { ppu.cpuWrite(addr, data); return; }
+        if (addr == 0x4016) { controllerStrobe = (data & 0x01) != 0; return; }
         if (cart && addr >= 0x4020) cart->cpuWrite(addr, data);
     }
 
     void  clockMapper() override { if (cart) cart->clock(); }
     float mapperAudio() const override { return cart ? cart->audioOutput() : 0.0f; }
-    bool  mapperIRQ() const override { return cart && cart->irqState(); }
-    void  mapperIrqAck() override { if (cart) cart->irqClear(); }
 
     void onPreStep() override {
         if (controllerStrobe) {
@@ -106,6 +101,9 @@ protected:
 
     uint8_t controllerShift  = 0x00;
     uint8_t controllerShift2 = 0x00;
+    uint8_t controllerLatch  = 0x00;
+    uint8_t controllerLatch2 = 0x00;
+    uint16_t lastBusReadAddr = 0xFFFF;
     bool    controllerStrobe = false;
 
 private:

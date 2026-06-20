@@ -64,7 +64,7 @@ public:
 	}
 
 	Mirroring mirror() const override {
-		// Mirroring opisany w docs (zaleznosc od chrInversion) - przyblizenie
+		// Mirroring opisany w nes_specs (zaleznosc od chrInversion) - przyblizenie
 		// horizontal/vertical na podstawie wzorca par NTA/NTB.
 		uint8_t a = ntA, b = ntB, c = ntC, d = ntD;
 		if (a == c && b == d) return Mirroring::VERTICAL;

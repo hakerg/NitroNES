@@ -6,7 +6,7 @@
 // Mapper 058 — 68-in-1 / Study and Game 32-in-1 multicart
 // Mapper 213 — alias (9999999-in-1 / 168-in-1); identyczna logika.
 //
-// Specyfikacja: docs/mapper_docs/058.txt
+// Specyfikacja: nes_specs/mappers/058.txt
 //
 // Rejestr konfiguracyjny: zapis pod $8000-$FFFF
 //   A~[.... .... MOCC CPPP]

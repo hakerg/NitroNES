@@ -9,7 +9,7 @@
 // przez Mapper024/Mapper026 (gry .nes), jak i przez NSFPlayer (utwory NSF z
 // flaga expansion=VRC6) bez wciagania nieuzywanej logiki mappera.
 //
-// Specyfikacja: docs/vrc6 audio.txt + docs/vrc6.txt (sekcja Sound).
+// Specyfikacja: nes_specs/vrc6 audio.txt + nes_specs/vrc6.txt (sekcja Sound).
 //
 // Mapowanie rejestrow (adresy "kanoniczne", jak dla VRC6a; dla VRC6b
 // remap A0<->A1 zalatwia mapper przed wywolaniem writeReg()).

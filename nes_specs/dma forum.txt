@@ -1,0 +1,1332 @@
+blargg
+Posts: 3715
+Joined: Mon Sep 27, 2004 8:33 am
+Location: Central Texas, USA
+Contact: Contact blargg
+Post by blargg » Tue Jun 08, 2010 11:22 pm
+
+Based on the following tests, DMC DMA adds 4 cycles normally, 3 if it lands on a CPU write, 2 if it lands on the $4014 write or during OAM DMA, 1 if on the next-to-next-to-last DMA cycle, 3 if on the last DMA cycle. The test ROMs here print the below outputs, and verify that they match what's expected.
+
+sprdma_and_dmc_dma.zip
+
+They also verify that the bytes copied to OAM match what is expected, so DMC DMA isn't corrupting the data. Further, the DMC sample playing during the test is all $55 bytes, so if the DMC DMA read were corrupted, it'd be audible. I recorded output and don't see any corruption.
+
+This test has DMC DMA occur at each cycle in a piece of code, and prints how many cycles the code took, including any extra cycles the DMA added. For example, this code generates the output after it:
+Code: Select all
+
+sta $100    ; 4
+lda $100    ; 4
+sta $100    ; 4
+sta $100    ; 4
+        
+T+ Clocks (decimal)
+00 20
+01 20
+02 20
+03 19
+04 20
+05 20
+06 20
+07 20
+08 20
+09 20
+0A 20
+0B 19
+0C 20
+0D 20
+0E 20
+0F 19
+The code should take 16 cycles, but DMA adds four. However, when it lands on the write cycles of the three STA instructions, it only takes three. You can clearly see the pattern of the STA-LDA-STA-STA in the result, confirming that it's really measuring something useful.
+
+Now, the code that tests sprite DMA:
+Code: Select all
+
+lda #$07    ; 2
+sta $4014   ; 4 + 513/514
+sta $100    ; 4
+
+T+ Clocks (decimal)
+00 527      +4  LDA #$07    ; 2
+01 528      +4
+02 527      +4  STA $4014   ; 4 + 513/514
+03 528      +4
+04 527      +4
+05 526      +2
+06 525      +2
+07 526      +2
+08 525      +2
+09 526      +2
+0A 525      +2
+0B 526      +2
+0C 525      +2
+0D 526      +2
+0E 525      +2
+0F 526      +2
+...
+200 525     +2
+201 526     +2
+202 525     +2
+203 526     +2
+204 524     +1  DMA next-to-next-to-last cycle
+205 525     +1  DMA next-to-next-to-last cycle
+206 526     +3  DMA last cycle
+207 527     +3  DMA last cycle
+208 527     +4  STA $100 second cycle
+209 528     +4  STA $100 second cycle
+20A 526     +3  STA $100 fourth cycle
+20B 527     +3  STA $100 fourth cycle
+I've manually listed the number of DMA cycles added (clocks-523/524), and what instruction is executing. The main snag is that sprite DMA takes 513 OR 514 cycles, depending on whether it's started on an even or odd 2A03 cycle. I'm assuming this is very similar to $4017 writes being delayed a cycle if on an odd 2A03 cycle.
+
+The way this test works, the test code begins on even/odd 2A03 cycles based on the time it has arranged the DMC DMA to occur. This complicates things. At the end of OAM DMA and after, it means that DMC DMA is only hitting every other cycle of the test code. You can see this in the STA $100 after OAM DMA, where DMC DMA takes three cycles for two different times. This is because both times it's landing on the fourth cycle of STA $100 (I tried other instruction sequences to be sure of this, and it checks out).
+
+Maybe someone with a logic analyzer can see what's really going on. The above is about as much as you're going to get with a CPU test alone. :)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+OAM/DMC DMA tests
+
+Search this topic…
+40 posts 1   
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+OAM/DMC DMA tests
+Post by Disch » Fri Apr 22, 2016 2:34 am
+
+cpow ran some tests with visual2a03 to delve further into DMA behavior. Though his notes were a bit scattered for my tastes, and left me with a few unanswered questions.
+
+So using his notes as a base, I ran my own tests on visual2a03 to verify them, and to fill in a few of the gaps.
+
+Here are my findings:
+
+Code: Select all
+
+==========================================
+==========================================
+==========================================
+General
+==========================================
+
+
+DMA unit alternates between 'get' cycles and 'put' cycles.  Values are read on 'get' cycles and written on 'put' cycles.  'get' cycles can never write -- 'put' cycles can read, but discard any value read.  DMA unit seems to alternate between get/put even when DMA is not active -- effectively meaning that even cycles are 'get' cycles, and odd cycles are 'put' cycles.
+
+"Dummy reads" ALWAYS seem to be performed from whatever address the CPU will want to read from next -- that is, whatever address will be read from once the DMA is complete.
+
+
+When the DMA unit needs to cut into the CPU, it begins a 'halt' process.  The process appears to be as follows:
+
+    1)  The 'halt attempt' cycle -- Let the CPU start its next cycle.  
+        a)  If this cycle is a write, perform it normally.  Repeat step 1
+        b)  If this cycle is a read, hijack the read, discard the value, and prevent all other actions that occur on this cycle (PC not incremented, etc).
+                Presumably, side-effects from performing the read still occur.  Proceed to step 2
+                
+    2)  For DMC DMA ONLY -- do another dummy read, discarding the result.
+    
+    3)  If the DMA unit is currently on a 'put' cycle, do another dummy read  ('alignment' cycle)
+    
+    4)  Actually perform the DMA
+        a)  For DMC, this performs a single read cycle, then returns control to main CPU logic
+        b)  For OAM, this performs 256 alternating reads/writes as you'd expect
+        
+        
+Note that the DMA is effectively delayed as it waits for all CPU write cycles to complete.  Though this is just a delay, and does not actually alter the length of the DMA
+
+What DOES alter the length of the DMA is the optional alignment cycle.
+
+
+
+==========================================
+==========================================
+==========================================
+DMC
+==========================================
+
+DMC DMAs appear to try to halt during the 'put' phase -- meaning they will take 4 cycles normally:
+    1) 'put' - halt
+    2) 'get' - extra DMC dummy read
+    3) 'put' - dummy cycle for alignment
+    4) 'get' - DMA
+    
+When DMC halt happens "on a write cycle", this makes it take 3 cycles because alignment can be skipped:
+    *) 'put' - initial halt attempt -- but if a write cycle, it's delayed
+    1) 'get' - attempt to halt again -- successful this time because it's a read cycle
+    2) 'put' - extra DMC dummy read
+            alignment not needed
+    3) 'get' - DMA
+    
+    (note the '*' write cycle is performed normally, and therefore does not count as a stolen cycle, hence DMC only steals 3 cycles here)
+    
+    
+However the DMC will steal 4 cycles if it attempts to halt during the first write of a RMW instruction (INC/DEC/etc)
+    *) 'put' - halt attempt - fails because CPU is writing (first RMW write)
+    *) 'get' - halt attempt - fails because CPU is writing (second RMW write)
+    1) 'put' - halt attempt - successful
+    2) 'get' - extra DMC dummy read
+    3) 'put' - alignment
+    4) 'get' - DMA
+
+The above logic matches for 3 consecutive writes (interrupts/BRK).  If the halt is during the 1st or 3rd write, it'll steal 3 cycles... but if it's during the 2nd write, it'll steal 4.
+
+==========================================
+==========================================
+==========================================
+OAM / 4014
+==========================================
+    
+OAM DMA behaves similarly, but skips the DMC-only dummy read.  Meaning OAM will take 513 / 514 cycles depending on whether or not
+the alignment cycle is needed
+
+Assuming the write is performed with a STA/STX/STY:
+    *)  $4014 write cycle triggering OAM DMA
+    1)  halt attempt - successful (next cycle is a read for the next opcode, or is an interrupt)
+    ?)  possible alignment
+    2)  'get' - read 1st byte
+    3)  'put' - write 1st byte
+        ...
+        
+        
+Writing to 4014 twice consecutively (INC/DEC/etc) holds expected logic.  Both writes will perform, followed by the halt cycle,
+possible alignment, then 512 cycles of DMA.
+
+
+
+==========================================
+==========================================
+==========================================
+Both at the same time
+==========================================
+
+Things to note:
+- DMC DMA trumps OAM DMA
+- A DMC halt is considered successful if it happens on an OAM DMA cycle
+- under no circumstances can a DMC DMA cycle immediately follow a successful DMC halt cycle.  There must be at least 1 dummy cycle, alignment cycle, or OAM DMA cycle between the halt and the DMA.
+
+
+Examples:
+    Cycles marked with '+' are "DMC stolen"
+    p = must be a 'put' cycle (remember DMC always halts on a put cycle)
+    g = must be a 'get' cycle 
+    * = normal, unaffected CPU cycle
+
+DMC halts on the $4014 write cycle:
+    p *)    $4014 write - unsuccessful DMC halt
+    g 1)    DMC & OAM halt -- successful
+    p 2)    DMC dummy / alignment      not a DMC stolen cycle, since this would have to be alignment regardless
+    g+3)    DMC DMA
+    p+4)    re-alignment
+    g 5)    OAM DMA read 1
+    p 6)    OAM DMA write 1
+            ...
+        
+DMC halts 1 cycle after $4014 write:
+    g *)    $4014 write
+    p 1)    DMC & OAM halt - successful
+    g 2)    OAM read 1      (DMC dummy)
+    p 3)    OAM write 1     (DMC alignment)
+    g+4)    DMC
+    p+5)    re-alignment
+    g 6)    OAM read 2
+    p 7)    OAM write 2
+    ...
+    
+    
+This logic follows for 2 consecutive writes to $4014.
+
+
+
+
+==========================================
+==========================================
+==========================================
+What I was not able to test
+==========================================
+
+
+Visual2a03 gave EXTREMELY weird behavior for OAM DMA.  I suspect it needs more warmup time.  OAM DMA was fetching from the wrong address, and the address being read from was being mangled by DMC DMAs, which was resulting in 700+ stolen cycles... and would also result in extremely corrupted sprites on a real system.  Because of this I was unable to test the following:
+
+1)  What happens on edge case when DMC DMA occurs at the very end of OAM DMA?
+2)  If you INC $4014, does it DMA from the pre-incremented value or post-incremented?
+
+I also uploaded the unpolished / scattered notes which has the results of my tests as well as links to the test programs I ran:
+
+https://www.dropbox.com/s/afvbxers66v9994/dma.txt?dl=0
+Top
+lidnariq
+Site Admin
+Posts: 11899
+Joined: Sun Apr 13, 2008 11:12 am
+Re: OAM/DMC DMA tests
+Post by lidnariq » Fri Apr 22, 2016 12:46 pm
+
+I just want to point out that what you describe as "halt attempt" is describing what the 6502 RDY pin does.
+Top
+User avatar
+Zepper
+Formerly Fx3
+Posts: 3262
+Joined: Fri Nov 12, 2004 4:59 pm
+Location: Brazil
+Contact: Contact Zepper
+Re: OAM/DMC DMA tests
+Post by Zepper » Fri Apr 22, 2016 2:26 pm
+
+If you INC $4014, does it DMA from the pre-incremented value or post-incremented?
+Both. It'll perform a read from $4014 (dummy, should return $40), then write it to $4014 (DMA-ing). The value $40 becomes $41 and another DMA is performed. Now waiting for someone to correct me. :mrgreen: :roll:
+
+Well, that's the expected operation considerating the INC timing diagram. What happens during the 1st or 2nd sprite DMA is another subject. :)
+Top
+lidnariq
+Site Admin
+Posts: 11899
+Joined: Sun Apr 13, 2008 11:12 am
+Re: OAM/DMC DMA tests
+Post by lidnariq » Fri Apr 22, 2016 2:35 pm
+
+DMA can't start until R/W goes high, because that's how the 6502 RDY signal works.
+It definitely only does one of the two DMAs, but I don't remember which.
+Top
+User avatar
+Zepper
+Formerly Fx3
+Posts: 3262
+Joined: Fri Nov 12, 2004 4:59 pm
+Location: Brazil
+Contact: Contact Zepper
+Re: OAM/DMC DMA tests
+Post by Zepper » Fri Apr 22, 2016 2:47 pm
+
+lidnariq wrote:
+DMA can't start until R/W goes high, because that's how the 6502 RDY signal works.
+It definitely only does one of the two DMAs, but I don't remember which.
+So... an INC $4014 wouldn't be correctly performed in the current emulators. Why would it fail in the first write to $4014? A read from $4014 returns $40; then a write should occur. Where is my mistake?
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Fri Apr 22, 2016 3:16 pm
+
+Zepper wrote:
+So... an INC $4014 wouldn't be correctly performed in the current emulators. Why would it fail in the first write to $4014? A read from $4014 returns $40; then a write should occur. Where is my mistake?
+You can think of it this way:
+
+A $4014 write does not immediately perform a DMA. Instead, it sets a flag to indicate that a DMA should start on the next CPU read cycle.
+
+If two $4014 writes happen back-to-back (as with INC), they both set the flag, but no DMA has been performed yet because there hasn't been a read cycle.
+
+lidnariq wrote:
+I just want to point out that what you describe as "halt attempt" is describing what the 6502 RDY pin does.
+Yeah I'm pretty sure a lot of this info was known already. I know cpow posted several posts where he tested a lot of this and came up with similar results. I just wanted to test it myself because the information was scattered and often unclear.
+
+I get feedback sometimes that people like when I make these kinds of summaries because I guess the way I explain it is helpful? *shrug* So I figured I'd post it. =P
+
+If nothing else, doing these tests has certainly helped ME understand it.
+Top
+User avatar
+Zepper
+Formerly Fx3
+Posts: 3262
+Joined: Fri Nov 12, 2004 4:59 pm
+Location: Brazil
+Contact: Contact Zepper
+Re: OAM/DMC DMA tests
+Post by Zepper » Fri Apr 22, 2016 4:55 pm
+
+Disch wrote:
+A $4014 write does not immediately perform a DMA. Instead, it sets a flag to indicate that a DMA should start on the next CPU read cycle.
+
+If two $4014 writes happen back-to-back (as with INC), they both set the flag, but no DMA has been performed yet because there hasn't been a read cycle.
+Wait. Lemme think...
+1. read instruction opcode ($EE)
+2. read low byte of address ($14)
+3. read high byte of address ($40)
+4. read from effective address ($4014 should return $40)
+5. write the value back to effective address (should set the SPRDMA flag?)
+6. do the operation (INC) and write the new value ($41) to the effective address (SPRDMA flag already set)
+*7. read the next instruction opcode (trigger SPRDMA?)
+Disch wrote:
+I get feedback sometimes that people like when I make these kinds of summaries because I guess the way I explain it is helpful? *shrug* So I figured I'd post it. =P
+Always welcome. ^_^;;
+
+EDIT: *I mean... if the SPRDMA flag is waiting for a CPU read to trigger, it should do on the first cycle of the next instruction... no??
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Fri Apr 22, 2016 5:53 pm
+
+Your summary looks correct.
+
+
+- write: 1st $4014 write (original value)
+- write: 2nd $4014 write (new value)
+- read: next opcode -- but DMA halts here, so this read is thrown away
+> optional read: next opcode again & thrown away. This only done if this is an odd cycle (DMA unit has to align so reads are on even cycles)
+- read: $xx00
+- write: $2004
+- read: $xx01
+- write: $2004
+...
+- read: $xxFF
+- write: $2004
+- read: next opcode
+Top
+Rahsennor
+Posts: 479
+Joined: Thu Aug 20, 2015 3:09 am
+Re: OAM/DMC DMA tests
+Post by Rahsennor » Fri Apr 22, 2016 7:06 pm
+
+Disch wrote:
+I get feedback sometimes that people like when I make these kinds of summaries because I guess the way I explain it is helpful? *shrug* So I figured I'd post it. =P
+
+If nothing else, doing these tests has certainly helped ME understand it.
+I've been wanting to make the DMC reads in my NSF player accurate for some time now (not that it actually matters for an NSF player), and this is the first time anyone has described it in terms I can understand. Thank you muchly.
+
+One quick question: is the DMA put/get cycle in any way related to the APU clock? Are they aligned in a specific way, or can the alignment change between resets?
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Fri Apr 22, 2016 7:39 pm
+
+Glad it's useful! :mrgreen:
+
+Regarding your questions: I have no idea. This is something I wouldn't want to test on visual2a03 -- but would want to do on a real cart... and making an actual test ROM for it would be a lot of work =x
+Top
+Rahsennor
+Posts: 479
+Joined: Thu Aug 20, 2015 3:09 am
+Re: OAM/DMC DMA tests
+Post by Rahsennor » Fri Apr 22, 2016 9:24 pm
+
+I was hoping someone might have traced the circuit to see if they were driven by the same divider. Never mind.
+
+The reason I asked is that if the APU (and therefore DMC output unit) always clocks on a "get" cycle, that might explain why the DMC DMA always starts on a "put" cycle.
+Top
+lidnariq
+Site Admin
+Posts: 11899
+Joined: Sun Apr 13, 2008 11:12 am
+Re: OAM/DMC DMA tests
+Post by lidnariq » Fri Apr 22, 2016 9:36 pm
+
+They're the same divider. In Visual2A03 they're called apu_clk1 and apu_clk2e and control the OAM DMA cadence. Tracing down the exact even/odd clock used by the DPCM DMA is more of a pain, but I see apu_/clk2 poking around it.
+Top
+Rahsennor
+Posts: 479
+Joined: Thu Aug 20, 2015 3:09 am
+Re: OAM/DMC DMA tests
+Post by Rahsennor » Fri Apr 22, 2016 11:27 pm
+
+Chip internals are way beyond me, so thanks for looking into it.
+
+I implemented the above logic for DMC DMA in my NSF player, and got... no observable result, as expected. :P It still passes all the same tests as it did before, but I don't have anything picky enough to spot the difference.
+Top
+fred
+Posts: 71
+Joined: Fri Dec 30, 2011 7:15 am
+Location: Sweden
+Re: OAM/DMC DMA tests
+Post by fred » Sat Apr 23, 2016 3:11 pm
+
+2) If you INC $4014, does it DMA from the pre-incremented value or post-incremented?
+Visual2A03 seems to be able to DMA only from zero page, even though I can see enough memory for two pages. Hmm...
+
+
+Btw, can someone clarify for me what the wiki means here regarding DMAs? "1 dummy read cycle while waiting for writes to complete, +1 if on an odd CPU cycle, then 256 alternating read/write cycles."
+Does the "while waiting for writes to complete" refer to what happens if you R&W(2 write cycles) to 0x4014? Isn't it easier to say that a DMA (and only one DMA) starts after an instruction finishes? Did I miss something here or is it referring to something else?
+Last edited by fred on Mon Apr 25, 2016 1:21 am, edited 1 time in total.
+Top
+Rahsennor
+Posts: 479
+Joined: Thu Aug 20, 2015 3:09 am
+Re: OAM/DMC DMA tests
+Post by Rahsennor » Sat Apr 23, 2016 5:36 pm
+
+fred wrote:
+Isn't it easier to say that a DMA (and only one DMA) starts after an instruction finishes? Did I miss something here or is it referring to something else?
+The DMA starts after the writes finish. The DMA unit has no knowledge of where instructions start and end. It can only watch the bus to see if the CPU is writing or reading, and it can only pause the CPU after a read, so it always waits for a single read to complete before it starts. The result of that read is then discarded, turning it into a dummy read.
+
+
+
+
+User avatarZepper
+Formerly Fx3
+Posts: 3262
+Joined: Fri Nov 12, 2004 4:59 pm
+Location: Brazil
+Contact: Contact Zepper
+Re: OAM/DMC DMA tests
+Post by Zepper » Sat Apr 23, 2016 5:57 pm
+
+Rahsennor wrote:
+fred wrote:
+Isn't it easier to say that a DMA (and only one DMA) starts after an instruction finishes? Did I miss something here or is it referring to something else?
+The DMA starts after the writes finish. The DMA unit has no knowledge of where instructions start and end. It can only watch the bus to see if the CPU is writing or reading, and it can only pause the CPU after a read, so it always waits for a single read to complete before it starts. The result of that read is then discarded, turning it into a dummy read.
+Almost. From previous posts, the DMA won't start before the next CPU read. As I said, it doesn't trigger in the 1st write because the following cycle is the operation + another write to $4014. So, the opcode fetch (instruction read) triggers the DMA.
+Top
+Rahsennor
+Posts: 479
+Joined: Thu Aug 20, 2015 3:09 am
+Re: OAM/DMC DMA tests
+Post by Rahsennor » Sat Apr 23, 2016 6:04 pm
+
+That's what I just said. One read, then the DMA.
+Top
+User avatar
+Zepper
+Formerly Fx3
+Posts: 3262
+Joined: Fri Nov 12, 2004 4:59 pm
+Location: Brazil
+Contact: Contact Zepper
+Re: OAM/DMC DMA tests
+Post by Zepper » Sat Apr 23, 2016 8:11 pm
+
+Here is the ambiguous part:
+The DMA starts after the writes finish.
+It's after the second write and on the next CPU read. Just to be crystal clear, sorry.
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Sat Apr 23, 2016 8:39 pm
+
+I like examples!
+Code: Select all
+
+        This code:
+INC $4014
+NOP
+
+        Yields these cycles
+        
+read:   'INC' opcode
+read:   #$14
+read:   #$40
+read:   $4014
+write:  $4014           <- trigger
+write:  $4014           <- DMA attempts to halt, can't because it's a write
+read:   'NOP' opcode    <- DMA attempts to halt, success!  This becomes a dummy read
+  -rd:  'NOP' opcode    <- 'alignment' dummy read **ONLY IF** DMA unit is on a 'put' cycle
+read:   $xx00           <- DMA starts here .. this is a DMA read
+write:  $2004           <- DMA write
+...
+Top
+Rahsennor
+Posts: 479
+Joined: Thu Aug 20, 2015 3:09 am
+Re: OAM/DMC DMA tests
+Post by Rahsennor » Sat Apr 23, 2016 9:06 pm
+
+Zepper wrote:
+Here is the ambiguous part:
+fred asked if the DMA occured after the instruction finishes. That's true, but misleading; it's the write cycles the DMA is actually waiting on. That's what the statement you just quoted was addressing.
+
+The rest of my post explained exactly the same thing you just felt the need to correct, twice, although my choice of words was admittedly very poor. I do that a lot, and from what I gather English isn't your first language, so the miscommunication is understandable. I'll shut up now.
+
+This is why I don't help people. :roll:
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Sat Apr 23, 2016 9:19 pm
+
+Ah.
+
+In that case, it's worth nothing that on BRK/interrupt, the writes are NOT the end of the instruction. That is why the distinction is important. While a $4014 write can't happen during an interrupt, a DMC fetch certainly can.
+
+More examples!
+Code: Select all
+
+        This code:
+BRK
+
+        Can yield these cycles, assuming DMC wants to fetch on the indicated cycle:
+        
+read:   'BRK' opcode
+read:   byte following opcode
+write:  $01xx push PCH      <- DMC DMA tries to halt here, fails
+write:  $01xx push PCL      <- tries to halt here, fails
+write:  $01xx push status   <- tries to halt here, fails
+read:   $FFFE               <- tries to halt here, success -- this is a dummy read
+read:   $FFFE               <- another dummy read for DMC
+--rd:   $FFFE               <- 'alignment' dummy read only if DMA unit is on a put cycle
+read:   $xxxx               <- DMC DMA fetch
+read:   $FFFE               <- normal BRK read
+read:   $FFFF
+Top
+Drag
+Posts: 1764
+Joined: Mon Sep 27, 2004 2:57 pm
+Contact: Contact Drag
+Re: OAM/DMC DMA tests
+Post by Drag » Sun Apr 24, 2016 1:22 am
+
+Is it only the halting read cycle that shows up outside the 6502? Do the DMA's dummy reads not cause actual pin activity?
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Sun Apr 24, 2016 1:30 am
+
+There shouldn't be any functional difference between dummy reads and normal reads.
+Top
+fred
+Posts: 71
+Joined: Fri Dec 30, 2011 7:15 am
+Location: Sweden
+Re: OAM/DMC DMA tests
+Post by fred » Sun Apr 24, 2016 2:45 am
+
+That's true, but misleading; it's the write cycles the DMA is actually waiting on.
+Oh, I see! I just assumed it worked similarly to interrupts. Thanks for explaining it.
+Top
+Drag
+Posts: 1764
+Joined: Mon Sep 27, 2004 2:57 pm
+Contact: Contact Drag
+Re: OAM/DMC DMA tests
+Post by Drag » Sun Apr 24, 2016 10:59 am
+
+If the CPU is interrupted during a $4016 read, it was only a single bit deletion. Is that information incorrect or is there another explanation for it? Would this also mean that an interrupted $2007 read triggers up to three extra PPU address increments?
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Sun Apr 24, 2016 11:11 am
+
+the wiki wrote:
+For the controller registers, this can cause an extra rising clock edge to occur, and thus shift an extra bit out. For the others, the PPU will see multiple reads, which will cause extra increments of the address latches, or clear the vblank flag.
+Sounds like controller ports only process 1 extra read, but the PPU processes all of them. That suggests multiple reads do in fact take place, but 4016/7 process them in a way where some of them get ignored. Maybe they ignore successive reads similar to how MMC1 ignores successive writes?
+Top
+lidnariq
+Site Admin
+Posts: 11899
+Joined: Sun Apr 13, 2008 11:12 am
+Re: OAM/DMC DMA tests
+Post by lidnariq » Sun Apr 24, 2016 11:18 am
+
+Disch wrote:
+Sounds like controller ports only process 1 extra read, but the PPU processes all of them. That suggests multiple reads do in fact take place, but 4016/7 process them in a way where some of them get ignored. Maybe they ignore successive reads similar to how MMC1 ignores successive writes?
+$4016 and $4017 have no special logic to that effect. If you're seeing different behavior between $2007 and $4016, there's got to be something else going on.
+Top
+Drag
+Posts: 1764
+Joined: Mon Sep 27, 2004 2:57 pm
+Contact: Contact Drag
+Re: OAM/DMC DMA tests
+Post by Drag » Sun Apr 24, 2016 12:07 pm
+
+Knowing the logic involved in generating the CLK pulse sent to the controller ports would help. /OE1 and /OE2 might be involved, though it's hard to imagine that the DMA disconnects those (seemingly unrelated) signals as well. The wiki could also be wrong, and we might be misremembering the effects of the conflict.
+Top
+lidnariq
+Site Admin
+Posts: 11899
+Joined: Sun Apr 13, 2008 11:12 am
+Re: OAM/DMC DMA tests
+Post by lidnariq » Sun Apr 24, 2016 12:11 pm
+
+The clock pulse is exactly
+
+NOT(A15…A0 = h'4016' AND M2 = 1 AND R/W = 1)
+
+You can trace it in visual2a03, it's called "r4016"
+Last edited by lidnariq on Sun Apr 24, 2016 4:54 pm, edited 1 time in total.
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Sun Apr 24, 2016 2:44 pm
+
+If a $4016 read is triggered on r4016 going low, then it would ignore successive reads because r4016 stays low for the entire duration (it does not toggle with phi2):
+
+
+http://www.qmtpro.com/~nes/chipimages/v ... 4010fe30fe
+Code: Select all
+
+
+cyc      ab  db rw               pc   a  x  y  s    p          r4016
+=======================================================================
+1398    0084 ad 1 LDA&nbsp;Abs  0084 00 a2 00 bd Nv&#8209BdIzc   1      <- LDA $4016 
+1399    0084 ad 1 LDA&nbsp;Abs  0084 00 a2 00 bd Nv&#8209BdIzc   1 
+1399    0085 16 1               0085 00 a2 00 bd Nv&#8209BdIzc   1 
+1400    0085 16 1               0085 00 a2 00 bd Nv&#8209BdIzc   1
+1400    0086 40 1               0086 00 a2 00 bd Nv&#8209BdIzc   1
+1401    0086 40 1               0086 00 a2 00 bd Nv&#8209BdIzc   1
+1401    4016 00 1               0087 00 a2 00 bd Nv&#8209BdIzc   0      <- DMA halt
+1402    4016 00 1               0087 00 a2 00 bd Nv&#8209BdIzc   0
+1402    4016 00 1               0087 00 a2 00 bd nv&#8209BdIZc   0
+1403    4016 00 1               0087 00 a2 00 bd nv&#8209BdIZc   0
+1403    4016 00 1               0087 00 a2 00 bd nv&#8209BdIZc   0
+1404    4016 00 1               0087 00 a2 00 bd nv&#8209BdIZc   0
+1404    c001 00 1               0087 00 a2 00 bd nv&#8209BdIZc   1      <- actual DMA read
+1405    c001 00 1               0087 00 a2 00 bd nv&#8209BdIZc   1
+1405    4016 00 1               0087 00 a2 00 bd nv&#8209BdIZc   0      <- proper 4016 read
+1406    4016 00 1               0087 00 a2 00 bd nv&#8209BdIZc   0
+1406    0087 10 1 BPL&nbsp;     0087 00 a2 00 bd nv&#8209BdIZc   1      <- next instruction
+
+
+
+
+Drag
+Posts: 1764
+Joined: Mon Sep 27, 2004 2:57 pm
+Contact: Contact Drag
+Re: OAM/DMC DMA tests
+Post by Drag » Sun Apr 24, 2016 8:43 pm
+
+I see! I thought the CPU's clock signal was also used for the logic, but considering rams and roms aren't synchronous, they don't need to know the CPU's clock, and same with the controller ports. It makes sense now, thanks!
+Top
+fred
+Posts: 71
+Joined: Fri Dec 30, 2011 7:15 am
+Location: Sweden
+Re: OAM/DMC DMA tests
+Post by fred » Mon Apr 25, 2016 1:52 am
+
+I didn't think about the fact that INC 4014 also reads from 4014, hah. What's the expected return value? Visual2A03 returns whatever was written there last, but is this an "open bus" case?
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Re: OAM/DMC DMA tests
+Post by cpow » Mon Apr 25, 2016 6:48 am
+
+I tested DEC -- and posted about it long ago. Not INC, but similar behavior.
+
+viewtopic.php?f=3&t=9033&hilit=+Visual2A03
+
+The RDY is triggered by the first write but the address given to the DMA engine is based on the second write -- which in INC and DEC case happens to be the "result write". The "dummy write" is the first one because the CPU needs a cycle to do the increment/decrement of A.
+
+However, having said all of that, I just went back through my programs and adjusted the URL to accomodate the new location of the simulator.
+
+Something's changed/BROKEN? The program I used in the above post provides DIFFERENT RESULTS than what I reported back then??
+
+This is the program.
+
+The difference? The original post shows the sprite DMA occurring from the DEC result address ($FF00...). But the new simulator shows the sprite DMA occurring from the DEC dummy address ($0000...).
+
+What? The earlier result didn't confuse me because it made sense. This one confuses me because it doesn't!
+Top
+User avatar
+thefox
+Posts: 3134
+Joined: Mon Jan 03, 2005 10:36 am
+Location: the universe
+Contact: Contact thefox
+Re: OAM/DMC DMA tests
+Post by thefox » Mon Apr 25, 2016 7:20 am
+
+cpow wrote:
+The difference? The original post shows the sprite DMA occurring from the DEC result address ($FF00...). But the new simulator shows the sprite DMA occurring from the DEC dummy address ($0000...).
+I think there's a bug that it's forcing the OAM source address to $00. Probably just coincidental that it happens to be the DEC dummy address, would be better to DEC a non-zero value. (I'm not sure if Visual 2A03 is mapping readable RAM under the $4014 address, might be hard to change the value if not.)
+Download STREEMERZ for NES from fauxgame.com! — Some other stuff I've done: fo.aspekt.fi
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Re: OAM/DMC DMA tests
+Post by cpow » Mon Apr 25, 2016 7:38 am
+
+thefox wrote:
+I think there's a bug that it's forcing the OAM source address to $00. Probably just coincidental that it happens to be the DEC dummy address, would be better to DEC a non-zero value. (I'm not sure if Visual 2A03 is mapping readable RAM under the $4014 address, might be hard to change the value if not.)
+Confirmed with this program that attempts to DEC sprite DMA with A set to $02. Instead of DMAing from $01xx... the simulator DMAs from $00xx...
+
+This is a new bug because clearly the DMAing previously worked as I described in the simulator. With $00 in A the DMAing occurred from $FF..
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Mon Apr 25, 2016 8:34 am
+
+There's other bugs with the OAM DMA, too. If the DMC cuts in during the OAM DMA, it mangles the OAM source address, possibly adding or removing reads. I had one OAM DMA run over 700 cycles because the DMC would interrupt and move the OAM source back like $40 places
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Re: OAM/DMC DMA tests
+Post by cpow » Mon Apr 25, 2016 9:04 am
+
+Disch wrote:
+There's other bugs with the OAM DMA, too. If the DMC cuts in during the OAM DMA, it mangles the OAM source address, possibly adding or removing reads. I had one OAM DMA run over 700 cycles because the DMC would interrupt and move the OAM source back like $40 places
+I've confirmed there are indeed "other bugs" but they are "new bugs" not "always there bugs.
+
+RE my DMC DMA during Sprite DMA testing, discussed here, the DMC DMA occurs on cycles 40 and 822. In the latest simulator the same program has a DMC DMA at cycle 38, 1404, 1836, and 2268. So it seems the engine skips a couple of cycles but then "rights itself"?!?
+
+Additionally, I noticed that previously the DMA cycles were two half-cycles of the same "clock cycle". In other words, the DMA occurs on both half-cycles of CPU cycle 40. In the new simulation it's like this:
+Code: Select all
+
+39	0017	8d	1	STA&nbsp;Abs	0018	01	c0	00	bd	nv&#8209Bdizc	1
+39	c000	00	1	BRK	0018	01	c0	00	bd	nv&#8209Bdizc	0
+38	c000	00	1	BRK	0018	01	c0	00	bd	nv&#8209Bdizc	0
+38	0017	8d	1	STA&nbsp;Abs	0018	01	c0	00	bd	nv&#8209Bdizc	0
+The DMC DMA occurs on one half-cycle of CPU cycle 38 and one half-cycle of CPU cycle 39. I'm not sure which way is properly representative of what actually happens, but something VERY strange in that it's now *different*.
+
+Here's what it looked like originally:
+Code: Select all
+
+39   0018   14   1      0019   01   c0   00   bd   nv-Bdizc   0
+39   0018   14   1      0019   01   c0   00   bd   nv-Bdizc   0
+40   c000   00   1      0019   01   c0   00   bd   nv-Bdizc   0
+40   c000   00   1      0019   01   c0   00   bd   nv-Bdizc   0
+41   0018   14   1      0019   01   c0   00   bd   nv-Bdizc   1
+41   0018   14   1      0019   01   c0   00   bd   nv-Bdizc   1
+RE the simulator crashing, have you hidden the chip display? It runs much faster when not bothering with that, but still slows down once I get to ~800 cycles. But no crash.
+Top
+User avatar
+Disch
+Posts: 1848
+Joined: Wed Nov 10, 2004 6:47 pm
+Re: OAM/DMC DMA tests
+Post by Disch » Mon Apr 25, 2016 9:23 am
+
+I got the crashing problem sorted a while ago.
+
+Also it looks like Visual2a03 has had this OAM problem since at least November, as in the thread you linked, thefox mentions he's having the same problem when he tried to reproduce your tests.
+
+Anyway, cpow, were you ever able to test what happens when DMC DMA occurs on the last few cycles of OAM? That's really the last piece of the puzzle as far as I can tell.
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Re: OAM/DMC DMA tests
+Post by cpow » Mon Apr 25, 2016 9:52 am
+
+Disch wrote:
+Anyway, cpow, were you ever able to test what happens when DMC DMA occurs on the last few cycles of OAM? That's really the last piece of the puzzle as far as I can tell.
+I'm not confident in the simulator given the recent observations. I'll wait until it's "fixed". If ever. Too bad.
+Top
+Alyosha_TAS
+Posts: 243
+Joined: Wed Jun 15, 2016 11:49 am
+Re: OAM/DMC DMA tests
+Post by Alyosha_TAS » Tue Jun 28, 2016 5:27 pm
+
+Hi,
+
+I am working on DMC DMA currently and found this thread immensely helpful, thanks for all the wealth of knowledge.
+
+I do have a question though about something Disch wrote in his dropbox notes in the opening post of this thread:
+; LDX starts at cycle 8 (after reset)
+; $4015 write happens on cycle 23
+; first DMA takes 3 cycles @ 26, 27, 28 (ignoring this because
+; APU hasn't fully primed yet apparently)
+I found this interesting, so I did a test on Visual 2A03. Instead of performing STA $4015 early on, I performed it on cycle 1400 (where the second DMC DMA usually occurs in Disch's code. )
+
+The result is also 3 DMA cycles instead of the normal 4:
+Code: Select all
+
+cycle	ab	db	rw	Fetch	pc	a	x	y	s	p	c_rdy
+1406	0089	ea	1	NOP	0089	1f	a2	00	bd	nv&#8209BdIzc	1
+1406	0089	ea	1		0089	1f	a2	00	bd	nv&#8209BdIzc	1
+1405	0089	ea	1		0089	1f	a2	00	bd	nv&#8209BdIzc	1
+1405	0088	ea	1	NOP	0088	1f	a2	00	bd	nv&#8209BdIzc	1
+1404	0088	ea	1	NOP	0088	1f	a2	00	bd	nv&#8209BdIzc	1
+1404	0088	ea	1		0088	1f	a2	00	bd	nv&#8209BdIzc	1
+1403	0088	ea	1		0088	1f	a2	00	bd	nv&#8209BdIzc	1
+1403	c000	00	1		0088	1f	a2	00	bd	nv&#8209BdIzc	0  
+1402	c000	00	1		0088	1f	a2	00	bd	nv&#8209BdIzc	0  vvvvv three dead cycles instead of usual 4
+1402	0088	ea	1		0088	1f	a2	00	bd	nv&#8209BdIzc	0
+1401	0088	ea	1		0088	1f	a2	00	bd	nv&#8209BdIzc	0
+1401	0088	ea	1		0088	1f	a2	00	bd	nv&#8209BdIzc	0
+1400	0088	ea	1		0088	1f	a2	00	bd	nv&#8209BdIzc	1
+1400	0087	ea	1	NOP	0087	1f	a2	00	bd	nv&#8209BdIzc	1  ^^^^ Dummy read
+1399	0087	ea	1	NOP	0087	1f	a2	00	bd	nv&#8209BdIzc	1
+1399	0087	ea	1		0087	1f	a2	00	bd	nv&#8209BdIzc	1
+1398	0087	ea	1		0087	1f	a2	00	bd	nv&#8209BdIzc	1
+1398	0086	ea	1	NOP	0086	1f	a2	00	bd	nv&#8209BdIzc	1
+1397	0086	ea	1	NOP	0086	1f	a2	00	bd	nv&#8209BdIzc	1
+1397	4015	1f	0		0086	1f	a2	00	bd	nv&#8209BdIzc	1
+1396	4015	40	0		0086	1f	a2	00	bd	nv&#8209BdIzc	1
+1396	0085	40	1		0085	1f	a2	00	bd	nv&#8209BdIzc	1
+1395	0085	40	1		0085	1f	a2	00	bd	nv&#8209BdIzc	1
+1395	0084	15	1		0084	1f	a2	00	bd	nv&#8209BdIzc	1
+1394	0084	15	1		0084	1f	a2	00	bd	nv&#8209BdIzc	1
+1394	0083	8d	1	STA&nbsp;Abs	0083	1f	a2	00	bd	nv&#8209BdIzc	1
+1393	0083	8d	1	STA&nbsp;Abs	0083	1f	a2	00	bd	nv&#8209BdIzc	1
+1393	0083	8d	1		0083	1f	a2	00	bd	nv&#8209BdIzc	1
+Could it be that DMC DMA's are seperately triggered by writes to $4015 and the DMC bits remaining counter reaching zero? The latter seems to take 4 cycles, but does the former take 3?
+
+I also noticed a few cycles between when the write occurs and when the DMA starts, a few NOPs worth actually.
+
+So is this behaviour correct? I am trying to get sprdma_and_dmc_dma test to pass but I cannot for the life of me make it work. I always end up with exactly 1 more cycle happening for each step then I should. I think this is the reason but am not sure how to implement it.
+
+Any more experienced people have any ideas?
+
+Thanks!
+
+EDIT: I implemented this behaviour and now pass sprdma_and_dmc_dma perfectly. I a pretty confident it is correct.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Fiskbit
+Site Admin
+Posts: 1551
+Joined: Sat Nov 18, 2017 9:15 pm
+Re: Glitch-free controller reads with DMC?
+Post by Fiskbit » Sat Jan 05, 2019 9:38 pm
+
+By testing this on real hardware via Everdrive, I believe I've been able to confirm this write behavior, and also discovered that the only emulator that seems to be getting this totally correct right now is Nintendulator 0.980. Testing this is a bit tricky because it seems that you can have timing alignments where the DMA avoids landing on certain cycles of the loop, which can cause it to miss an odd write cycle (manifesting as tests showing black when they should show white), but I found that by adding variable delay into the loop, it seems to land on the target cycle reliably. I'd appreciate another set of eyes on this to make sure it all makes sense, but I'm fairly confident in the results because my test ROMs show different behavior despite the only meaningful difference being the timing of the ROL write cycles (all other timing, code positioning, and register values remain the same).
+
+I've attached two modified versions of dma_sync_test_v2. Both of these change the loop to no longer include the OAM DMA, so code has to stay synced indefinitely for the controller port reads to work reliably. They also add a variably delay to try to mix up where DMC DMA lands within the function. The difference between these versions is in the second ROL instruction, which ends on an odd cycle in badrol and an even cycle in goodrol. badrol is expected to exhibit bit deletion (screen turns white) because DMA landing on the odd ROL write cycle (cycle 5/5) will be delayed by 1 to an even cycle and thus take only 3 cycles, changing the parity so that future joypad bits can be lost. goodrol is expected to never encounter bit deletion (screen stays black unless right is manually pressed) because DMA landing on the odd ROL write cycle (cycle 5/6) will be delayed by 2 to an odd cycle, where it takes 4 cycles as usual.
+
+Both tests are verified to give the expected result on real hardware and Nintendulator 0.980, and but not on Mesen 0.9.7.37 (goodrol turns white), puNES 0.100 (goodrol turns white), Nestopia UE 1.49 (goodrol turns white), and Nintaco 2018.12.31 (goodrol turns white on some resets). Other emulators I'm aware of don't emulate the bit deletion at all and will show black on both ROMs. There hasn't been much progress in a couple years on emulator support for this, so I'm really hoping to get the ball rolling so hacks and homebrews can use synced reads and still work properly in emulators.
+
+
+
+
+
+
+
+
+
+
+
+
+
+DMC DMA during sprite DMA on Visual2A03
+
+Search this topic…
+14 posts • Page 1 of 1
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+DMC DMA during sprite DMA on Visual2A03
+Post by cpow » Wed Jun 13, 2012 9:57 am
+
+Using the Visual2A03 and about three hours on my computer to process >1000 CPU cycles, I was able to create a program that started a DMC sample which required fetching a new byte coincident with an in-progress sprite DMA.
+
+The Visual2A03 'program'
+
+Equivalent code:
+Code: Select all
+
+.org 0
+CLI
+LDA #$C0
+STA $4017
+LDA #$01
+STA $4013
+LDA #$8F
+STA $4010
+LDA #$10
+STA $4015
+LDA #$01
+STA $4014
+STA $4014
+forever: BPL forever
+As I was going through this I first thought I'd only need to wait for one sprite DMA completion since the DMC is set for a period of 54 cycles per bit or 432 cycles between DMAs. That turned out not to be the case because I forgot that I would have to wait both the currently-in-progress 'silence' byte and my newly DMA'd first byte to pass through the DMC output stage before the DMC would fetch another byte using DMA. I decided to just do two back-to-back sprite DMAs, rather than play with other code to delay a single sprite DMA.
+
+Here is the log output from the Visual2A03 'program'...cut down significantly. The interesting cycle is cycle 822. This log shows that the DMC DMA happens *right in the middle of* the sprite DMA without one impacting the other in any way [sprite data and DMC data are not 'clobbered']. Cycle 823 is the CPU driving the address bus for one cycle, presumably because the sprite DMA logic needs two cycles per transfer, and since it was held off, it has nothing to put on the bus until cycle 824.
+
+Another interesting thing...I'd read that the DMC DMA always takes 4 cycles. But starting at cycle 38 c_rdy (the internal RDY to the 6502) is pulled low and the CPU is held off for what appears to be 3 cycles with the DMC fetch from $C000 being the last of the three. [Not 4?]
+Code: Select all
+
+cycle	ab	db	rw	Fetch	pc	a	x	y	s	p	c_rdy
+31	0012	8d	1	STA Abs	0012	10	c0	00	bd	nv-Bdizc	1
+31	0012	8d	1	STA Abs	0012	10	c0	00	bd	nv-Bdizc	1
+32	0013	15	1		0013	10	c0	00	bd	nv-Bdizc	1
+32	0013	15	1		0013	10	c0	00	bd	nv-Bdizc	1
+33	0014	40	1		0014	10	c0	00	bd	nv-Bdizc	1
+33	0014	40	1		0014	10	c0	00	bd	nv-Bdizc	1
+34	4015	40	0		0015	10	c0	00	bd	nv-Bdizc	1
+34	4015	10	0		0015	10	c0	00	bd	nv-Bdizc	1
+35	0015	a9	1	LDA #	0015	10	c0	00	bd	nv-Bdizc	1
+35	0015	a9	1	LDA #	0015	10	c0	00	bd	nv-Bdizc	1
+36	0016	01	1		0016	10	c0	00	bd	nv-Bdizc	1
+36	0016	01	1		0016	10	c0	00	bd	nv-Bdizc	1
+37	0017	8d	1	STA Abs	0017	01	c0	00	bd	nv-Bdizc	1
+37	0017	8d	1	STA Abs	0017	01	c0	00	bd	nv-Bdizc	1
+38	0018	14	1		0018	01	c0	00	bd	nv-Bdizc	1
+38	0018	14	1		0018	01	c0	00	bd	nv-Bdizc	0
+39	0018	14	1		0019	01	c0	00	bd	nv-Bdizc	0
+39	0018	14	1		0019	01	c0	00	bd	nv-Bdizc	0
+40	c000	00	1		0019	01	c0	00	bd	nv-Bdizc	0
+40	c000	00	1		0019	01	c0	00	bd	nv-Bdizc	0
+41	0018	14	1		0019	01	c0	00	bd	nv-Bdizc	1
+41	0018	14	1		0019	01	c0	00	bd	nv-Bdizc	1
+42	0019	40	1		0019	01	c0	00	bd	nv-Bdizc	1
+42	0019	40	1		0019	01	c0	00	bd	nv-Bdizc	1
+43	4014	40	0		001a	01	c0	00	bd	nv-Bdizc	1
+43	4014	01	0		001a	01	c0	00	bd	nv-Bdizc	0
+44	001a	8d	1	STA Abs	001a	01	c0	00	bd	nv-Bdizc	0
+44	001a	8d	1	STA Abs	001a	01	c0	00	bd	nv-Bdizc	0
+45	001a	8d	1	STA Abs	001b	01	c0	00	bd	nv-Bdizc	0
+45	001a	8d	1	STA Abs	001b	01	c0	00	bd	nv-Bdizc	0
+46	0100	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+46	0100	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+47	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+47	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+48	0101	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+48	0101	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+49	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+49	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+50	0102	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+50	0102	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+51	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+51	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+...
+554	01fe	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+554	01fe	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+555	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+555	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+556	01ff	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+556	01ff	00	1	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+557	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+557	2004	00	0	BRK	001b	01	c0	00	bd	nv-Bdizc	0
+558	001a	8d	1	STA Abs	001b	01	c0	00	bd	nv-Bdizc	1
+558	001a	8d	1	STA Abs	001b	01	c0	00	bd	nv-Bdizc	1
+559	001b	14	1		001b	01	c0	00	bd	nv-Bdizc	1
+559	001b	14	1		001b	01	c0	00	bd	nv-Bdizc	1
+560	001c	40	1		001c	01	c0	00	bd	nv-Bdizc	1
+560	001c	40	1		001c	01	c0	00	bd	nv-Bdizc	1
+561	4014	40	0		001d	01	c0	00	bd	nv-Bdizc	1
+561	4014	01	0		001d	01	c0	00	bd	nv-Bdizc	0
+562	001d	10	1	BPL 	001d	01	c0	00	bd	nv-Bdizc	0
+562	001d	10	1	BPL 	001d	01	c0	00	bd	nv-Bdizc	0
+563	001d	10	1	BPL 	001e	01	c0	00	bd	nv-Bdizc	0
+563	001d	10	1	BPL 	001e	01	c0	00	bd	nv-Bdizc	0
+564	0100	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+564	0100	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+565	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+565	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+566	0101	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+566	0101	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+567	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+567	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+...
+818	017f	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+818	017f	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+819	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+819	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+820	0180	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+820	0180	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+821	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+821	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+822	c001	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+822	c001	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+823	001d	10	1	BPL 	001e	01	c0	00	bd	nv-Bdizc	0
+823	001d	10	1	BPL 	001e	01	c0	00	bd	nv-Bdizc	0
+824	0181	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+824	0181	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+825	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+825	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+826	0182	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+826	0182	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+827	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+827	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+...
+1074	01fe	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1074	01fe	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1075	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1075	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1076	01ff	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1076	01ff	00	1	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1077	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1077	2004	00	0	BRK	001e	01	c0	00	bd	nv-Bdizc	0
+1078	001d	10	1	BPL 	001e	01	c0	00	bd	nv-Bdizc	1
+1078	001d	10	1	BPL 	001e	01	c0	00	bd	nv-Bdizc	1
+1079	001e	fe	1		001e	01	c0	00	bd	nv-Bdizc	1
+1079	001e	fe	1		001e	01	c0	00	bd	nv-Bdizc	1
+1080	001f	00	1		001f	01	c0	00	bd	nv-Bdizc	1
+1080	001f	00	1		001f	01	c0	00	bd	nv-Bdizc	1
+1081	001d	10	1	BPL 	001d	01	c0	00	bd	nv-Bdizc	1
+1081	001d	10	1	BPL 	001d	01	c0	00	bd	nv-Bdizc	1
+1082	001e	fe	1		001e	01	c0	00	bd	nv-Bdizc	1
+1082	001e	fe	1		001e	01	c0	00	bd	nv-Bdizc	1
+1083	001f	00	1		001f	01	c0	00	bd	nv-Bdizc	1
+1083	001f	00	1		001f	01	c0	00	bd	nv-Bdizc	1
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Re: DMC DMA during sprite DMA on Visual2A03
+Post by cpow » Tue Jun 19, 2012 10:51 am
+
+cpow wrote:
+...
+Forever Alone? :(
+Top
+User avatar
+Dwedit
+Posts: 5326
+Joined: Fri Nov 19, 2004 7:35 pm
+Contact: Contact Dwedit
+Post by Dwedit » Tue Jun 19, 2012 11:37 am
+
+You need to annotate the long tables of numbers, say what's significant and why.
+Here come the fortune cookies! Here come the fortune cookies! They're wearing paper hats!
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Post by cpow » Tue Jun 19, 2012 11:41 am
+
+Dwedit wrote:
+You need to annotate the long tables of numbers, say what's significant and why.
+My annotation was above the long table. :D
+cpow wrote:
+The interesting cycle is cycle 822. This log shows that the DMC DMA happens *right in the middle of* the sprite DMA without one impacting the other in any way [sprite data and DMC data are not 'clobbered']. Cycle 823 is the CPU driving the address bus for one cycle, presumably because the sprite DMA logic needs two cycles per transfer, and since it was held off, it has nothing to put on the bus until cycle 824.
+
+Another interesting thing...I'd read that the DMC DMA always takes 4 cycles. But starting at cycle 38 c_rdy (the internal RDY to the 6502) is pulled low and the CPU is held off for what appears to be 3 cycles with the DMC fetch from $C000 being the last of the three. [Not 4?]
+Top
+User avatar
+Dwedit
+Posts: 5326
+Joined: Fri Nov 19, 2004 7:35 pm
+Contact: Contact Dwedit
+Post by Dwedit » Tue Jun 19, 2012 11:55 am
+
+I heard from that other thread that DMC DMA takes 4 cycles normally, 3 if it happens on a CPU write cycle, and 2 if it happens during sprite DMA. Seems consistent with Blargg's tests. Then a couple of other rare cases where it happens on the last or second-last cycle of Sprite DMA.
+
+But games generally don't care if you don't emulate DMC cycle theft. Even games that are picky about the DMC channel working correctly (Fire Hawk, Mig 29 Soviet Fighter) run with no glitches if the DMC channel isn't stealing any cycles.
+
+Konami games on the other hand need DMC cycle theft to be accurate. Konami games use a random number generator that repeatedly runs until Vlbank happens. So any cycle that's wrong will give a different RNG result.
+
+Now we just need to find the initial state of the DMC counters. I suspect it is random. I base that on the demo of Blades of Steel. It plays differently every time you power on the NES. Since DMC cycle theft works differently depending on whether or not it hits a CPU write cycle, that can throw off the RNG easily. An inconsistent PPU starting state will also throw off the demo, so it's hard to tell why the game is so unpredictable.
+Here come the fortune cookies! Here come the fortune cookies! They're wearing paper hats!
+Top
+User avatar
+jwdonal
+Posts: 719
+Joined: Sat Jun 27, 2009 11:05 pm
+Location: New Mexico, USA
+Contact: Contact jwdonal
+Post by jwdonal » Tue Jun 19, 2012 9:17 pm
+
+cpow wrote:
+This log shows that the DMC DMA happens *right in the middle of* the sprite DMA without one impacting the other in any way [sprite data and DMC data are not 'clobbered'].
+I must be misunderstanding what you're saying. The CPU cannot possibly read two different addresses at the same time. The CPU only has one address bus. So obviously one of them has to get clobbered. I agree that neither of the operations is "stalled" if that's what you meant (which was discovered in this thread), but only _one_ of the addresses (either sprite address or DMC address) can be driven on the CPU's address bus. You can't have both. :) So either the DMC read gets sprite data or the sprite read gets DMC data. Those are your only choices.
+
+Can you clarify what you meant?
+Top
+User avatar
+Dwedit
+Posts: 5326
+Joined: Fri Nov 19, 2004 7:35 pm
+Contact: Contact Dwedit
+Post by Dwedit » Tue Jun 19, 2012 9:33 pm
+
+No clobbering anywhere, sprite DMA just gets interrupted to do the DMC DMA.
+
+But let's see here...
+Sprite DMA begins reading bytes at cycle 564 and finishes before cycle 1078.
+514 cycles total. So that's 256 reads due to sprite DMA, 256 writes due to sprite DMA, one read due to DMC, and one dummy read at address 1D (program counter) for some reason.
+So Visual2A03 says it gets interrupted in the middle of the sprite DMA transfer. Nothing gets corrupted. All reads and writes happen properly. Just one extra read at the program counter.
+Here come the fortune cookies! Here come the fortune cookies! They're wearing paper hats!
+Top
+tepples
+Posts: 23121
+Joined: Sun Sep 19, 2004 11:12 pm
+Location: NE Indiana, USA (NTSC)
+Contact: Contact tepples
+Post by tepples » Wed Jun 20, 2012 4:25 am
+
+Interesting. Can you get two DMC DMAs to happen during one sprite DMA using playback speed $F? I'd love to be able to close this out by leaving it at "Each DMC DMA extends sprite DMA by two cycles", but I need this one final validation before I can commit to that wording.
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Post by cpow » Wed Jun 20, 2012 6:12 am
+
+Dwedit wrote:
+No clobbering anywhere, sprite DMA just gets interrupted to do the DMC DMA.
+Exactly. That's why I got excited. :D I'd only ever seen it assumed that one or the other gets clobbered. Not true!
+Dwedit wrote:
+But let's see here...
+and one dummy read at address 1D (program counter) for some reason.
+Probably because, like I said in the other thread, the sprite DMA read/write/read/write beat is maintained since it is still going on, but the DMC DMA only needs to read, so when it's done with its read in the cycle where the sprite DMA would have done a read, there's nothing for either of the two 'controllers' to do in the next bus cycle, so the bus is yielded back to the CPU which puts out its last address as a read. Most likely due to these transistors (centered in the image) which control which of the internal AB's go to the AB pins on the 2A03. [If you click on some of the lines around there you'll find ab_use_spr_w, ab_use_spr_r, ab_use_pcm, ab_use_cpu].
+Dwedit wrote:
+So Visual2A03 says it gets interrupted in the middle of the sprite DMA transfer. Nothing gets corrupted. All reads and writes happen properly. Just one extra read at the program counter.
+
+Correct.
+tepples wrote:
+Interesting. Can you get two DMC DMAs to happen during one sprite DMA using playback speed $F? I'd love to be able to close this out by leaving it at "Each DMC DMA extends sprite DMA by two cycles", but I need this one final validation before I can commit to that wording.
+I'll work on that. Should be fairly easy.
+Last edited by cpow on Sat Jan 26, 2013 12:31 pm, edited 1 time in total.
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Post by cpow » Wed Jun 20, 2012 7:19 am
+
+The following Visual2A03 program was used to capture sprite DMA being interrupted by two consecutive DMC DMA fetches at DMC period $F. Here's the relevant portions of the logged output:
+Code: Select all
+
+cycle	ab	db	rw	Fetch	pc	a	x	y	s	p	c_rdy
+820	0200	a0	1	LDY #	009e	02	c0	00	bd	nv-Bdizc
+820	0200	a0	1	LDY #	009e	02	c0	00	bd	nv-Bdizc
+821	2004	a0	0	LDY #	009e	02	c0	00	bd	nv-Bdizc
+821	2004	a0	0	LDY #	009e	02	c0	00	bd	nv-Bdizc
+822	c001	e1	1	SBC (zp,X)	009e	02	c0	00	bd	nv-Bdizc
+822	c001	e1	1	SBC (zp,X)	009e	02	c0	00	bd	nv-Bdizc
+823	009d	10	1	BPL 	009e	02	c0	00	bd	nv-Bdizc
+823	009d	10	1	BPL 	009e	02	c0	00	bd	nv-Bdizc
+824	0201	a1	1	LDA (zp,X)	009e	02	c0	00	bd	nv-Bdizc
+824	0201	a1	1	LDA (zp,X)	009e	02	c0	00	bd	nv-Bdizc
+825	2004	a1	0	LDA (zp,X)	009e	02	c0	00	bd	nv-Bdizc
+825	2004	a1	0	LDA (zp,X)	009e	02	c0	00	bd	nv-Bdizc
+The sprite DMA starts at cycle 820. The first DMC DMA is at cycles 822-823. The sprite RAM being fetched and the DMC RAM being fetched have been filled with different breadcrumbs so we can see that the fetches occur correctly. [Sprite DMA gets $a0 then $a1 while DMC DMA gets $e1 in between].
+Code: Select all
+
+cycle	ab	db	rw	Fetch	pc	a	x	y	s	p	c_rdy
+1252	02d7	a7	1	unknown	009e	02	c0	00	bd	nv-Bdizc
+1252	02d7	a7	1	unknown	009e	02	c0	00	bd	nv-Bdizc
+1253	2004	a7	0	unknown	009e	02	c0	00	bd	nv-Bdizc
+1253	2004	a7	0	unknown	009e	02	c0	00	bd	nv-Bdizc
+1254	c002	e2	1	unknown	009e	02	c0	00	bd	nv-Bdizc
+1254	c002	e2	1	unknown	009e	02	c0	00	bd	nv-Bdizc
+1255	009d	10	1	BPL 	009e	02	c0	00	bd	nv-Bdizc
+1255	009d	10	1	BPL 	009e	02	c0	00	bd	nv-Bdizc
+1256	02d8	a8	1	TAY	009e	02	c0	00	bd	nv-Bdizc
+1256	02d8	a8	1	TAY	009e	02	c0	00	bd	nv-Bdizc
+1257	2004	a8	0	TAY	009e	02	c0	00	bd	nv-Bdizc
+1257	2004	a8	0	TAY	009e	02	c0	00	bd	nv-Bdizc
+The sprite DMA is still going on, and there's a second DMC DMA interruption of it at cycles 1254-1255. Here again the breadcrumbs show the memory properly being fetched for each operation. [Sprite DMA gets $a7 then $a8 while DMC DMA gets $e2 in between].
+Code: Select all
+
+cycle	ab	db	rw	Fetch	pc	a	x	y	s	p	c_rdy
+1334	02ff	af	1	unknown	009e	02	c0	00	bd	nv-Bdizc
+1334	02ff	af	1	unknown	009e	02	c0	00	bd	nv-Bdizc
+1335	2004	af	0	unknown	009e	02	c0	00	bd	nv-Bdizc
+1335	2004	af	0	unknown	009e	02	c0	00	bd	nv-Bdizc
+1336	009d	10	1	BPL 	009e	02	c0	00	bd	nv-Bdizc
+1336	009d	10	1	BPL 	009e	02	c0	00	bd	nv-Bdizc
+1337	009e	fe	1		009e	02	c0	00	bd	nv-Bdizc
+1337	009e	fe	1		009e	02	c0	00	bd	nv-Bdizc
+1338	009f	00	1		009f	02	c0	00	bd	nv-Bdizc
+1338	009f	00	1		009f	02	c0	00	bd	nv-Bdizc
+The sprite DMA completes and the CPU resumes at cycle 1336, so the sprite DMA has taken 516 cycles total, with two DMC DMA interruptions.
+Top
+User avatar
+Zepper
+Formerly Fx3
+Posts: 3262
+Joined: Fri Nov 12, 2004 4:59 pm
+Location: Brazil
+Contact: Contact Zepper
+Post by Zepper » Wed Jun 20, 2012 7:44 am
+
+Doesn't it break blargg's dmc dma test roms, regarding the extra cycle?
+Zepper
+RockNES author
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Post by cpow » Wed Jun 20, 2012 7:52 am
+
+Zepper wrote:
+Doesn't it break blargg's dmc dma test roms, regarding the extra cycle?
+The test ROMs I think you're referring to use DMC period $0 which would not generate more than one potential DMC DMA fetch during a sprite DMA.
+Top
+User avatar
+cpow
+NESICIDE developer
+Posts: 1097
+Joined: Mon Oct 13, 2008 7:55 pm
+Location: Minneapolis, MN
+Contact: Contact cpow
+Post by cpow » Wed Jun 20, 2012 10:42 am
+
+tepples wrote:
+Interesting. Can you get two DMC DMAs to happen during one sprite DMA using playback speed $F? I'd love to be able to close this out by leaving it at "Each DMC DMA extends sprite DMA by two cycles", but I need this one final validation before I can commit to that wording.
+Closed. Explanation is three posts above. 8)
+Top
+User avatar
+thefox
+Posts: 3134
+Joined: Mon Jan 03, 2005 10:36 am
+Location: the universe
+Contact: Contact thefox
+Re: DMC DMA during sprite DMA on Visual2A03
+Post by thefox » Sun Nov 01, 2015 11:41 pm
+
+I was trying to rerun the test from the first post, but something seems to be wrong in Visual2A03. The test writes $01 to $4014 but the DMA fetches are happening from $00, $01, ... (not from $100, $101, ... like they should). Has OAM DMA been broken in Visual2A03 at some point?
+
+NOTE: Looks like expert.html has been removed, so have to replace expert.html => index.html in the URL: http://www.qmtpro.com/~nes/chipimages/v ... more=c_rdy
+Download STREEMERZ for NES from fauxgame.com! — Some other stuff I've done: fo.aspekt.fi

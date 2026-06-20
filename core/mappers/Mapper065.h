@@ -9,7 +9,7 @@ public:
 	using Mapper::Mapper;
 	void reset() override {
 		prg[0] = 0; prg[1] = 1;
-		// $C000 init = $FE (zgodnie z docs)
+		// $C000 init = $FE (zgodnie z nes_specs)
 		prg[2] = (uint8_t)(prgBanks * 2 - 2);
 		for (auto& c : chr) c = 0;
 		mirrorMode = Mirroring::VERTICAL;

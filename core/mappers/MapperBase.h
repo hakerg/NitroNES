@@ -67,7 +67,7 @@ public:
     virtual bool irqState() const { return false; }
     virtual void irqClear() {}
 
-    virtual void clockA12(bool /*a12High*/) {}
+    virtual void clockA12(uint16_t /*addr*/) {}
 
     virtual void clock() {}
 

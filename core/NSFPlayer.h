@@ -65,13 +65,13 @@ public:
         cpuRam.fill(0x00);
         extRam.fill(0x00);
 
-        for (uint16_t a = 0x4000; a <= 0x400F; a++) a2a03.cpuWrite(a, 0x00);
-        a2a03.cpuWrite(0x4010, 0x10);
-        a2a03.cpuWrite(0x4011, 0x00);
-        a2a03.cpuWrite(0x4012, 0x00);
-        a2a03.cpuWrite(0x4013, 0x00);
-        a2a03.cpuWrite(NES::APU_STATUS_ADDR, 0x0F);
-        a2a03.cpuWrite(NES::APU_FRAME_CTR_ADDR, 0x40);
+        for (uint16_t a = 0x4000; a <= 0x400F; a++) a2a03.getAPU().writeData(a, 0x00, false);
+        a2a03.getAPU().writeData(0x4010, 0x10, false);
+        a2a03.getAPU().writeData(0x4011, 0x00, false);
+        a2a03.getAPU().writeData(0x4012, 0x00, false);
+        a2a03.getAPU().writeData(0x4013, 0x00, false);
+        a2a03.getAPU().writeData(0x4015, 0x0F, false);
+        a2a03.getAPU().writeData(0x4017, 0x40, false);
 
         if (isBankswitched()) {
             for (int i = 0; i < 8; i++)
@@ -87,10 +87,10 @@ public:
         a2a03.getCPU().S = 0xFD;
 
         pushWord(TRAMPOLINE_ADDR - 1);
-        a2a03.getCPU().PC = nsfHeader.initAddr;
+        a2a03.getCPU().jumpTo(nsfHeader.initAddr);
 
         int initCycles = 0;
-        for (; initCycles < 200000 && a2a03.getCPU().PC != TRAMPOLINE_ADDR; initCycles++) {
+        for (; initCycles < 200000 && !isAtTrampoline(); initCycles++) {
             a2a03.clockPhi1();
             a2a03.clockPhi2();
         }
@@ -113,19 +113,14 @@ public:
 
     void reset() override { initSong(currentSong); }
 
-    bool pollNMI() override {
-        return false;
-    }
-
-    bool pollIRQ() override {
-        return false;
-    }
+    bool pollNMI()     override { return true; }
+    bool irqAsserted() override { return false; }
 
 protected:
     void onPreStep() override {
         trampolineMaintenance();
         playTimer -= 1.0;
-        if (!callDone && a2a03.getCPU().PC == TRAMPOLINE_ADDR) {
+        if (!callDone && isAtTrampoline()) {
             callDone = true;
         }
     }
@@ -134,7 +129,7 @@ protected:
     float mapperAudio() const override { return expChip ? expChip->audioOutput() : 0.0f; }
 
     uint8_t memRead(uint16_t addr) override {
-        uint8_t data = a2a03.getDataBus();
+        uint8_t data = a2a03.getBusData();
         if (addr <= 0x07FF) {
             data = cpuRam[addr];
         }
@@ -164,8 +159,8 @@ protected:
         if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
         if (addr >= 0x2000 && addr <= 0x3FFF) return;
         if (addr >= 0x6000 && addr <= 0x7FFF) { extRam[addr - 0x6000] = data; return; }
-        if (addr >= NES::NSF_BANK_BASE && addr <= 0x5FFF) {
-            banks[addr - NES::NSF_BANK_BASE] = data;
+        if (addr >= 0x5FF8 && addr <= 0x5FFF) {
+            banks[addr - 0x5FF8] = data;
             return;
         }
         if (expChip && addr >= 0x8000) {
@@ -175,6 +170,11 @@ protected:
     }
 
 private:
+    bool isAtTrampoline() {
+        const uint16_t pc = a2a03.getCPU().PC;
+        return pc >= TRAMPOLINE_ADDR && pc <= TRAMPOLINE_ADDR + 3;
+    }
+
     void trampolineMaintenance() {
         if (callDone && playTimer <= 0.0) {
             if (!a2a03.getCPU().isAtInstructionBoundary()) return;
@@ -182,7 +182,7 @@ private:
             a2a03.getCPU().S = 0xFD;
             callDone = false;
             pushWord(TRAMPOLINE_ADDR - 1);
-            a2a03.getCPU().PC = nsfHeader.playAddr;
+            a2a03.getCPU().jumpTo(nsfHeader.playAddr);
 
             playTimer += playCycles;
         }

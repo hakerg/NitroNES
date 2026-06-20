@@ -21,7 +21,7 @@ public:
 		irqCounter = 0; irqReload = 0;
 		for (auto& r : pRegister) r = 0;
 		pCHRBank.fill(0);
-		// PRG: domyœlnie {R6,R7,-2,-1}
+		// PRG: domyï¿½lnie {R6,R7,-2,-1}
 		pPRGBank[0] = 0;
 		pPRGBank[1] = 0x2000;
 		pPRGBank[2] = (uint32_t)(prgBanks * 2 - 2) * 0x2000;
@@ -56,7 +56,7 @@ public:
 			if ((addr & 1) == 0) {
 				mirrorMode = (data & 0x01) ? Mirroring::HORIZONTAL : Mirroring::VERTICAL;
 			} else {
-				// PRG-RAM protect – ignorujemy
+				// PRG-RAM protect ï¿½ ignorujemy
 			}
 		} else if (addr < 0xE000) {
 			// $C000-$DFFF
@@ -97,7 +97,7 @@ public:
 	Mirroring mirror() const override { return mirrorMode; }
 	bool hasDynamicMirror() const override { return true; }
 
-	// Klasyczna scanline-based zliczanka (zachowana dla kompatybilnoœci wstecznej).
+	// Klasyczna scanline-based zliczanka (zachowana dla kompatybilnoï¿½ci wstecznej).
 	void scanline() override {
 		if (irqCounter == 0 || irqReloadFlag) {
 			irqCounter = irqReload;
@@ -110,10 +110,11 @@ public:
 		}
 	}
 
-	// Precyzyjny licznik MMC3: dekrementuje przy ka¿dym rosn¹cym zboczu A12
-	// generowanym przez PPU (typowo raz na liniê, gdy sprite'y u¿ywaj¹ drugiej
-	// tablicy patternów albo gdy t³o i sprite'y u¿ywaj¹ ró¿nych tablic).
-	void clockA12(bool a12High) override {
+	// Precyzyjny licznik MMC3: dekrementuje przy kaï¿½dym rosnï¿½cym zboczu A12
+	// generowanym przez PPU (typowo raz na liniï¿½, gdy sprite'y uï¿½ywajï¿½ drugiej
+	// tablicy patternï¿½w albo gdy tï¿½o i sprite'y uï¿½ywajï¿½ rï¿½nych tablic).
+	void clockA12(uint16_t addr) override {
+		const bool a12High = (addr & 0x1000) != 0;
 		if (a12High && !lastA12) {
 			if (irqCounter == 0 || irqReloadFlag) {
 				irqCounter = irqReload;

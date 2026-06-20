@@ -4,7 +4,7 @@
 #include <array>
 
 // Mapper 064 - Tengen RAMBO-1. Podobny do MMC3 z paroma rozszerzeniami.
-// Implementujemy podstawow¹ logikê banków + IRQ (zarówno tryb scanline jak i CPU).
+// Implementujemy podstawowï¿½ logikï¿½ bankï¿½w + IRQ (zarï¿½wno tryb scanline jak i CPU).
 class Mapper064 : public Mapper {
 public:
 	using Mapper::Mapper;
@@ -93,7 +93,8 @@ public:
 	Mirroring mirror() const override { return mirrorMode; }
 	bool hasDynamicMirror() const override { return true; }
 
-	void clockA12(bool a12High) override {
+	void clockA12(uint16_t addr) override {
+		const bool a12High = (addr & 0x1000) != 0;
 		if (!irqCpuMode && a12High && !lastA12) tickIrq();
 		lastA12 = a12High;
 	}
