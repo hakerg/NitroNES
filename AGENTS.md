@@ -6,7 +6,7 @@ Możesz używać ninja do budowania.
 
 Ważne katalogi:
  - nes_specs - cała specyfikacja NES, źródło prawdy, emulator musi być z nią zgodny. Jeśli czegoś w niej brakuje, poinformuj, żeby uzupełnić
- - nes-test-roms-master - są tam romy testowe, przy każdym istotnym jest kod źródłowy oraz readme z oczekiwanymi wynikami
+ - nes-test-roms-master - są tam ROM-y testowe, przy każdym istotnym jest kod źródłowy z komentarzami oraz readme z oczekiwanymi wynikami
  - test - zawiera kod do executable accuracy_coin i nes_test:
    - accuracy_coin_main.cpp - odpala wszystkie testy accuracy coin i zwraca ładnie sformatowane info, co jest jeszcze nie tak z emulatorem. Kod źródłowy accuracy coin (nes-test-roms-master\AccuracyCoin-main) zawiera wiele użytecznych komentarzy.
-   - nes_test_main.cpp - odpala wskazany rom na kilka sekund i zwraca zawartość ekranu - użyteczne np. do testów blargga. Po podaniu katalogu odpala wszystkie testy w nim (recursive)
+   - nes_test_main.cpp - odpala wskazany ROM na kilka sekund i zwraca zawartość ekranu - użyteczne np. do testów blargga. Po podaniu katalogu odpala wszystkie testy w nim (recursive)

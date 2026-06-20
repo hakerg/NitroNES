@@ -189,6 +189,7 @@ public:
         if (scanline == NES::SCANLINE_VBLANK_START && cycle == 1) {
             if (!suppressVblThisFrame) status.vertical_blank = 1;
             suppressVblThisFrame = false;
+            ppuOpenBus = 0x00;
         }
 
         if (scanline == NES::SCANLINE_VBLANK_START && cycle == 0) nmiVbl = true;

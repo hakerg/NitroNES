@@ -60,6 +60,7 @@ public:
         irqDetected = !irqLevel;
 
         if (isStalled()) {
+            origHigh = 0xFE;
             return;
         }
 
@@ -141,7 +142,6 @@ private:
     bool nmiPollSignal = false;
     bool irqDetected = false;
     bool rdyLevel = false;
-
     ExecKind execKind = ExecKind::NOP_;
     RmwKind rmwKind = RmwKind::ASL;
     StoreKind storeKind = StoreKind::STA;
@@ -173,7 +173,8 @@ private:
     }
 
     Step startOpFetch() {
-        return opFetch();
+        irqInhibitSnapshot = (P & FLAG_I) != 0;
+        return emitRead(&CPU6502::decodeAndDispatch, PC++);
     }
 
     Step opFetch() {
@@ -474,6 +475,10 @@ inline CPU6502::Step CPU6502::am_izy_4_fixup() { return afterAddressing_ReadWrit
 inline CPU6502::Step CPU6502::am_rel_1() {
     branchOffset = fetched;
     if (!branchTaken) return opFetch();
+    uint8_t oldL = PC & 0xFF;
+    uint8_t newL = oldL + branchOffset;
+    bool wouldCross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
+    if (wouldCross) pollInterrupts();
     return emitRead(&CPU6502::am_rel_2_taken, PC);
 }
 inline CPU6502::Step CPU6502::am_rel_2_taken() {
@@ -482,7 +487,7 @@ inline CPU6502::Step CPU6502::am_rel_2_taken() {
     uint8_t  newL  = oldL + branchOffset;
     PC = (oldPC & 0xFF00) | newL;
     bool cross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
-    if (!cross) return opFetch();
+    if (!cross) return startOpFetch();
     pageCross = ((int8_t)branchOffset < 0);
     return emitRead(&CPU6502::am_rel_3_pagefix, PC);
 }
