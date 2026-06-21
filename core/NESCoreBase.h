@@ -58,10 +58,12 @@ public:
     }
 
     uint8_t a2a03ReadData(uint16_t addr) override { return memRead(addr); }
+    uint8_t a2a03ReadDataExternal(uint16_t addr) override { return memReadExternal(addr); }
     void    a2a03WriteData(uint16_t addr, uint8_t data) override { memWrite(addr, data); }
 
 protected:
     virtual uint8_t memRead(uint16_t addr) = 0;
+    virtual uint8_t memReadExternal(uint16_t addr) { return memRead(addr); }
     virtual void    memWrite(uint16_t addr, uint8_t data) = 0;
     virtual void    clockMapper() {}
     virtual float   mapperAudio() const { return 0.0f; }

@@ -79,6 +79,13 @@ protected:
         return data;
     }
 
+    uint8_t memReadExternal(uint16_t addr) override {
+        const uint16_t saved = lastBusReadAddr;
+        const uint8_t data = memRead(addr);
+        lastBusReadAddr = saved;
+        return data;
+    }
+
     void memWrite(uint16_t addr, uint8_t data) override {
         if (addr < 0x2000)  { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000)  { ppu.cpuWrite(addr, data); return; }
@@ -90,7 +97,10 @@ protected:
     float mapperAudio() const override { return cart ? cart->audioOutput() : 0.0f; }
 
     void onPreStep() override {
-        if (controllerStrobe) {
+    }
+
+    void onPostStep() override {
+        if (controllerStrobe && !a2a03.lastWasPutCycle()) {
             controllerShift  = nesHost.readController(0);
             controllerShift2 = nesHost.readController(1);
         }

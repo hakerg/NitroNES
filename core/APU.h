@@ -431,6 +431,7 @@ public:
         dmc.irqPending       = false;
 
         frameIRQPending = false;
+        frame4015ClearPending = false;
         delay4017 = -1;
     }
 
@@ -457,6 +458,7 @@ public:
     }
 
     bool frameIRQPending = false;
+    bool frame4015ClearPending = false;
     bool dmcIRQPending() const { return dmc.irqPending; }
 
     void writeData(uint16_t addr, uint8_t data, bool isAPUPutCycle) {
@@ -516,13 +518,17 @@ public:
             if (dmc.bytesRemaining     > 0) status |= 0x10;
             if (frameIRQPending)            status |= 0x40;
             if (dmc.irqPending)             status |= 0x80;
-            frameIRQPending = false;
+            frame4015ClearPending = true;
             return status;
         }
         return 0x00;
     }
 
     void clock(bool isAPUCycle) {
+        if (!isAPUCycle && frame4015ClearPending) {
+            frameIRQPending = false;
+            frame4015ClearPending = false;
+        }
         frameCounter++;
         serviceFrameCounterWrite();
         triangle.clockTimer();
