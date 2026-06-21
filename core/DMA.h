@@ -126,6 +126,7 @@ public:
     bool dmcIsActive()  const { return dmcPhase != DMCPhase::Idle; }
     bool oamIsActive()  const { return oamPhase != OAMPhase::Idle; }
     int  dmcPhaseId()   const { return (int)dmcPhase; }
+    int  oamPhaseId()   const { return (int)oamPhase; }
     int  actionId()     const { return (int)action; }
 
 private:

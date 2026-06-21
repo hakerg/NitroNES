@@ -52,6 +52,7 @@ public:
 
     CPU6502& getCPU() { return cpu; }
     APU& getAPU() { return apu; }
+    DMA& getDMA() { return dma; }
     uint8_t getBusData() { return busData; }
 
     uint8_t cpuReadData() override {

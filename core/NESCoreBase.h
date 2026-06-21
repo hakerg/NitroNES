@@ -67,6 +67,7 @@ protected:
     virtual float   mapperAudio() const { return 0.0f; }
 
     virtual void onPreStep() {}
+    virtual void onPostStep() {}
 
     A2A03 a2a03;
     std::array<uint8_t, 2048> cpuRam;
@@ -88,6 +89,8 @@ private:
         if (ppu) ppu->clock();
 
         a2a03.clockPhi2();
+
+        onPostStep();
 
         double dt = 1.0 / (getCPUClockRate() * speed);
         pendingDT += dt;

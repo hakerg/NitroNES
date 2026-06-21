@@ -212,6 +212,7 @@ public:
     }
 
     int16_t getScanline() const { return scanline; }
+    int16_t getCycle()    const { return cycle; }
 
 private:
     std::array<std::array<uint8_t, 1024>, 2> nameTable{};

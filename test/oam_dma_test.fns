@@ -1,0 +1,8 @@
+; C:\Users\PC COMPUTER\source\repos\NES Emulator\test\oam_dma_test.asm
+reset                            = $C000
+nmi_handler                      = $C02E
+fill_oam                         = $C01E
+forever                          = $C02B
+wait_vbl1                        = $C012
+irq_handler                      = $C02F
+wait_vbl2                        = $C017
