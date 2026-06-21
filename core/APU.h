@@ -445,7 +445,7 @@ public:
     }
 
     bool isPAL() const { return palMode; }
-    bool irqAsserted() const { return (frameIRQPending && !frameIRQInhibit) || dmc.irqPending; }
+    bool irqAsserted() const { return frameIRQLine || dmc.irqPending; }
 
     PulseChannel<true>  pulse1;
     PulseChannel<false> pulse2;
@@ -464,6 +464,7 @@ public:
 
     bool frameIRQPending = false;
     bool frame4015ClearPending = false;
+    bool frameIRQLine = false;
     bool dmcIRQPending() const { return dmc.irqPending; }
 
     void writeData(uint16_t addr, uint8_t data, bool isAPUPutCycle) {
@@ -538,6 +539,10 @@ public:
             frameIRQPending = false;
             frame4015ClearPending = false;
         }
+        // The frame interrupt flag drives the CPU's IRQ line one CPU cycle after it
+        // is set (the level detector is sampled the following cycle), so snapshot it
+        // before the sequencer can update the flag this cycle.
+        frameIRQLine = frameIRQPending && !frameIRQInhibit;
         dmc.tickDMADelay();
         frameCounter++;
         serviceFrameCounterWrite();

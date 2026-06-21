@@ -37,6 +37,10 @@ public:
 
     const uint32_t* framebuffer() const { return lastFrame; }
 
+    uint8_t  peekRAM(uint16_t addr) { return cpuRam[addr & 0x07FF]; }
+    uint16_t cpuPC() { return a2a03.getCPU().PC; }
+
+
 private:
     uint8_t controller1 = 0x00;
     uint8_t controller2 = 0x00;
