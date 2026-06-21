@@ -324,6 +324,7 @@ struct DMCChannel {
     bool     sampleBufferEmpty = true;
     bool     silenceFlag   = true;
     bool     irqPending    = false;
+    uint8_t  dmaDelay      = 0;
     // Per nes_specs/dma.txt: a "load" DMC DMA (after $4015 D4 set with empty buffer)
     // attempts to halt the CPU on a get cycle (3 cycles), while a "reload" DMC DMA
     // (buffer emptied during playback) attempts to halt on a put cycle (4 cycles).
@@ -354,10 +355,18 @@ struct DMCChannel {
         bytesRemaining = sampleLength;
         // A fetch caused directly by (re)starting playback is a "load" DMA: halt on get.
         dmaHaltOnPut  = false;
+        // The load DMA is scheduled to halt on a get cycle during the 2nd APU cycle
+        // after the $4015 write (nes_specs/dma.txt), so the request is delayed a
+        // couple of CPU cycles rather than being issued immediately.
+        dmaDelay = 3;
+    }
+
+    void tickDMADelay() {
+        if (dmaDelay > 0) dmaDelay--;
     }
 
     bool needsDMAFetch() const {
-        return sampleBufferEmpty && bytesRemaining > 0;
+        return sampleBufferEmpty && bytesRemaining > 0 && dmaDelay == 0;
     }
 
     void loadSampleBuffer(uint8_t data) {
@@ -529,6 +538,7 @@ public:
             frameIRQPending = false;
             frame4015ClearPending = false;
         }
+        dmc.tickDMADelay();
         frameCounter++;
         serviceFrameCounterWrite();
         triangle.clockTimer();
