@@ -12,11 +12,11 @@ Emulator NES robiony pod kątem zgodności z fizycznym sprzętem. Cel: zaliczeni
 
 ## Ważne katalogi
 
-- `nes_specs/` - cała specyfikacja NES, źródło prawdy. Jeśli czegoś brakuje, poinformuj żeby uzupełnić.
-- `nes-test-roms-master/` - ROM-y testowe; przy każdym istotnym jest kod źródłowy z komentarzami oraz readme z oczekiwanymi wynikami.
+- `nes_specs/` - cała specyfikacja NES, źródło prawdy. Może być niekompletna - jeśli czegoś brakuje, poinformuj, żeby uzupełnić.
+- `nes-test-roms-master/` - ROM-y testowe; przy większości jest kod źródłowy z komentarzami oraz readme z oczekiwanymi wynikami.
 - `test/` - kod narzędzi diagnostycznych (patrz niżej).
 
-## Workflow diagnostyczny
+## Zalecany workflow diagnostyczny
 
 Gdy test accuracy_coin nie przechodzi:
 1. Przeczytaj opis błędu i kod źródłowy testu w `nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.asm`
@@ -24,7 +24,9 @@ Gdy test accuracy_coin nie przechodzi:
 3. Uruchom `asm_run` z odpowiednim triggerem, żeby dostać trace.tsv
 4. Przeanalizuj trace - każda linia to jeden cykl CPU, widać co robi DMA, PPU, CPU
 5. Porównaj z oczekiwanym zachowaniem ze specyfikacji w `nes_specs/`
+6. Możesz też odpalić inne testy, aby pozyskać więcej informacji
 
+Dokumentacja różnych komponentów jest rozbita na wiele plików, więc pamiętaj, żeby sprawdzić wszystkie, bo każdy zawiera cenne informacje. Oszczędzi to wiele czasu przy analizie.
 Aktualny stan testów: zbuduj `accuracy_coin` przez ninja, a następnie uruchom `cmake-build-release/accuracy_coin.exe`.
 
 ## Narzędzia diagnostyczne
