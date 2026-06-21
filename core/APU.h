@@ -355,10 +355,6 @@ struct DMCChannel {
         bytesRemaining = sampleLength;
         // A fetch caused directly by (re)starting playback is a "load" DMA: halt on get.
         dmaHaltOnPut  = false;
-        // The load DMA is scheduled to halt on a get cycle during the 2nd APU cycle
-        // after the $4015 write (nes_specs/dma.txt), so the request is delayed a
-        // couple of CPU cycles rather than being issued immediately.
-        dmaDelay = 3;
     }
 
     void tickDMADelay() {
@@ -504,6 +500,10 @@ public:
                     dmc.bytesRemaining = 0;
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
+                    // The load DMA after a $4015 enable is scheduled to halt on a get
+                    // cycle during the 2nd APU cycle after the write (nes_specs/dma.txt),
+                    // so its request is delayed a couple of CPU cycles.
+                    dmc.dmaDelay = 3;
                 }
 
                 dmc.irqPending = false;

@@ -55,12 +55,24 @@ public:
                     dmcHaltArmed = true;
                 if (dmcHaltArmed && cpuRead)
                     dmcPhase = DMCPhase::Dummy;
+                else if (!idma.isDMCSampleNeeded())
+                    // Playback was stopped before the DMA could halt: with the halt
+                    // delayed by a write cycle, the aborted DMA does not occur at all.
+                    dmcPhase = DMCPhase::Idle;
                 break;
             case DMCPhase::Dummy:
-                dmcPhase = DMCPhase::Read;
+                if (!idma.isDMCSampleNeeded())
+                    // Playback was stopped after the halt cycle: the DMA is aborted
+                    // after that single cycle (nes_specs/dma.txt "Bugs").
+                    dmcPhase = DMCPhase::Idle;
+                else
+                    dmcPhase = DMCPhase::Read;
                 break;
             case DMCPhase::Read:
-                if (getCycle) action = Action::DMCGet;
+                if (!idma.isDMCSampleNeeded())
+                    dmcPhase = DMCPhase::Idle;
+                else if (getCycle)
+                    action = Action::DMCGet;
                 break;
         }
 
