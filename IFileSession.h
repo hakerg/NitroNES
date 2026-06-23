@@ -69,7 +69,7 @@ public:
     }
 
     double adjustedSpeed(double baseSpeed) const {
-        if (settings.matchRefreshRate)
+        if (!settings.matchRefreshRate)
             return baseSpeed;
         double m = calcSpeedMultiplier(baseSpeed);
         return m > 0.0 ? baseSpeed * m : baseSpeed;

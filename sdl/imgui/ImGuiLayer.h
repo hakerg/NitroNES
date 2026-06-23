@@ -7,8 +7,8 @@
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_sdlrenderer3.h"
 #include "imgui.h"
+#include "PressStart2P-Regular.h"
 #include <SDL3/SDL.h>
-#include <array>
 #include <format>
 #include <string>
 
@@ -22,8 +22,13 @@ public:
         ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
         ImGui_ImplSDLRenderer3_Init(renderer);
 
+        ImFontConfig fontConfig;
+        fontConfig.FontDataOwnedByAtlas = false;
+        fontConfig.GlyphOffset.y = -2.0f;
+        fontConfig.ExtraSizeScale = 16.0f / 24.0f;
+
         ImGuiIO &io = ImGui::GetIO();
-        io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 20.0f);
+        io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 24.0f, &fontConfig);
         io.Fonts->Build();
         io.IniFilename = nullptr;
     }
@@ -125,60 +130,16 @@ public:
                 }
                 ImGui::Separator();
 
-                if (ImGui::BeginMenu(tr("settings.sync"))) {
-                    ImGui::BeginDisabled(settings->allowScanlineSync);
-                    if (ImGui::Checkbox(tr("settings.vsync"),
-                                        &settings->vsync)) {
-                        SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
-                    }
-                    {
-                        double speed =
-                            session ? session->calcSpeedMultiplier(1.0) : 0.0;
-                        std::string matchLabel =
-                            speed > 0.0 ? std::format("{} ({:.2f}%)",
-                                                      tr("settings.match_hz"),
-                                                      speed * 100.0)
-                                        : std::string(tr("settings.match_hz"));
-                        ImGui::Checkbox(matchLabel.c_str(),
-                                        &settings->matchRefreshRate);
-                    }
-                    ImGui::EndDisabled();
+                // Zamiast podmenu, otwieramy oddzielne okna
+                if (ImGui::MenuItem(tr("settings.sync")))
+                    syncSettingsOpen = true;
 
-                    if (settings->scanlineBufferMs) {
-                        if (ImGui::BeginMenu(tr("settings.scanline"))) {
-                            if (ImGui::Checkbox(tr("settings.scanline.enabled"),
-                                                &settings->allowScanlineSync)) {
-                                settings->vsync = false;
-                                settings->matchRefreshRate = true;
-                            }
-                            ImGui::BeginDisabled(!settings->allowScanlineSync);
-                            ImGui::SliderInt(tr("settings.scanline.buffer"),
-                                             &settings->scanlineBufferMs, 0,
-                                             20);
-                            ImGui::EndDisabled();
-                            ImGui::EndMenu();
-                        }
-                    }
-                    ImGui::EndMenu();
-                }
+                if (ImGui::MenuItem(tr("settings.audio")))
+                    audioSettingsOpen = true;
 
-                if (ImGui::BeginMenu(tr("settings.audio"))) {
-                    AudioSettings &audioSettings = settings->audioSettings;
-                    ImGui::SliderFloat(tr("settings.volume"),
-                                       &audioSettings.volume, 0.0f, 2.5f);
-                    if (ImGui::BeginMenu(tr("settings.audio.filters"))) {
-                        ImGui::Checkbox(tr("settings.audio.hp90"),
-                                        &audioSettings.useFilter90);
-                        ImGui::Checkbox(tr("settings.audio.hp440"),
-                                        &audioSettings.useFilter440);
-                        ImGui::Checkbox(tr("settings.audio.lp14k"),
-                                        &audioSettings.useFilter14k);
-                        ImGui::EndMenu();
-                    }
-                    ImGui::EndMenu();
-                }
                 if (ImGui::MenuItem(tr("settings.controls")))
                     controlsOpen = true;
+
                 ImGui::EndMenu();
             }
 
@@ -186,6 +147,9 @@ public:
             ImGui::EndMainMenuBar();
         }
 
+        // Renderowanie oddzielnych okien
+        renderSyncWindow(renderer, session);
+        renderAudioWindow();
         renderControlsWindow();
 
         ImGui::Render();
@@ -381,13 +345,81 @@ private:
         }
     }
 
+    // Nowe okno synchronizacji
+    void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session) {
+        if (!syncSettingsOpen || !settings)
+            return;
+
+        menuOpen = true;
+        if (!ImGui::Begin(tr("settings.sync"), &syncSettingsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::End();
+            return;
+        }
+
+        ImGui::BeginDisabled(settings->allowScanlineSync);
+        if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
+            SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
+        }
+
+        ImGui::Checkbox(tr("settings.match_hz"), &settings->matchRefreshRate);
+        ImGui::EndDisabled();
+
+        if (session) {
+            double speed = session->core().speed;
+            ImGui::TextUnformatted(
+                std::format("{}: {:.2f}%", tr("settings.current_speed"),
+                            speed * 100.0).c_str());
+        }
+
+        ImGui::Spacing();
+
+        if (settings->scanlineBufferMs) {
+            if (ImGui::CollapsingHeader(tr("settings.scanline"), ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::Checkbox(tr("settings.scanline.enabled"), &settings->allowScanlineSync)) {
+                    settings->vsync = false;
+                    settings->matchRefreshRate = true;
+                }
+                ImGui::BeginDisabled(!settings->allowScanlineSync);
+                ImGui::SliderInt(tr("settings.scanline.buffer"),
+                                 &settings->scanlineBufferMs, 0, 20);
+                ImGui::EndDisabled();
+            }
+        }
+
+        ImGui::End();
+    }
+
+    // Nowe okno ustawień dźwięku
+    void renderAudioWindow() {
+        if (!audioSettingsOpen || !settings)
+            return;
+
+        menuOpen = true;
+        if (!ImGui::Begin(tr("settings.audio"), &audioSettingsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::End();
+            return;
+        }
+
+        AudioSettings &audioSettings = settings->audioSettings;
+        ImGui::SliderFloat(tr("settings.volume"), &audioSettings.volume, 0.0f, 2.5f);
+
+        ImGui::Spacing();
+
+        if (ImGui::CollapsingHeader(tr("settings.audio.filters"), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Checkbox(tr("settings.audio.hp90"), &audioSettings.useFilter90);
+            ImGui::Checkbox(tr("settings.audio.hp440"), &audioSettings.useFilter440);
+            ImGui::Checkbox(tr("settings.audio.lp14k"), &audioSettings.useFilter14k);
+        }
+
+        ImGui::End();
+    }
+
     void renderControlsWindow() {
         if (!controlsOpen || !input)
             return;
         menuOpen = true;
-        ImGui::SetNextWindowSize(ImVec2(620, 520), ImGuiCond_FirstUseEver);
         bool wasOpen = controlsOpen;
-        if (!ImGui::Begin(tr("controls.title"), &controlsOpen)) {
+        if (!ImGui::Begin(tr("controls.title"), &controlsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::End();
             if (wasOpen && !controlsOpen && waitingForKey)
                 cancelBinding();
@@ -409,7 +441,12 @@ private:
     bool menuOpen = false;
     IMenuHandler *handler = nullptr;
     IInputContext *input = nullptr;
+
+    // Zmienne stanu otwartych okien
     bool controlsOpen = false;
+    bool syncSettingsOpen = false;
+    bool audioSettingsOpen = false;
+
     bool waitingForKey = false;
     bool bindAll = false;
     int bindingIndex = 0;
