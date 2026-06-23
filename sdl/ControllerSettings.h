@@ -21,25 +21,25 @@ struct ControllerSettings {
         s.key_TurboB = SDL_SCANCODE_KP_6;
         s.key_Select = SDL_SCANCODE_SPACE;
         s.key_Start = SDL_SCANCODE_RETURN;
-        s.key_Up = SDL_SCANCODE_R;
-        s.key_Down = SDL_SCANCODE_F;
-        s.key_Left = SDL_SCANCODE_D;
-        s.key_Right = SDL_SCANCODE_G;
+        s.key_Up = SDL_SCANCODE_W;
+        s.key_Down = SDL_SCANCODE_S;
+        s.key_Left = SDL_SCANCODE_A;
+        s.key_Right = SDL_SCANCODE_D;
         return s;
     }
 
     static ControllerSettings player2() {
         ControllerSettings s;
-        s.key_A = SDL_SCANCODE_Z;
-        s.key_B = SDL_SCANCODE_X;
-        s.key_TurboA = SDL_SCANCODE_A;
-        s.key_TurboB = SDL_SCANCODE_S;
+        s.key_A = SDL_SCANCODE_UNKNOWN;
+        s.key_B = SDL_SCANCODE_UNKNOWN;
+        s.key_TurboA = SDL_SCANCODE_UNKNOWN;
+        s.key_TurboB = SDL_SCANCODE_UNKNOWN;
         s.key_Select = SDL_SCANCODE_UNKNOWN;
         s.key_Start = SDL_SCANCODE_UNKNOWN;
-        s.key_Up = SDL_SCANCODE_UP;
-        s.key_Down = SDL_SCANCODE_DOWN;
-        s.key_Left = SDL_SCANCODE_LEFT;
-        s.key_Right = SDL_SCANCODE_RIGHT;
+        s.key_Up = SDL_SCANCODE_UNKNOWN;
+        s.key_Down = SDL_SCANCODE_UNKNOWN;
+        s.key_Left = SDL_SCANCODE_UNKNOWN;
+        s.key_Right = SDL_SCANCODE_UNKNOWN;
         return s;
     }
 };
