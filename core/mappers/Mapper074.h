@@ -11,7 +11,7 @@
 // ----------------------------------------------------------------------------
 class Mapper074 : public Mapper004 {
 public:
-	using Mapper004::Mapper004;
+    using Mapper004::Mapper004;
 };
 
 REGISTER_MAPPER(74, Mapper074)

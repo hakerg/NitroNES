@@ -1,5 +1,6 @@
 #include "App.h"
 #include "AppSettings.h"
+#include "lang/LanguageRegistry.h"
 #include "sdl/SDLAudioStream.h"
 #include "sdl/SDLInputContext.h"
 #include "sdl/SDLWindow.h"
@@ -16,13 +17,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     int argc;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
-    if (argc < 2) {
-        MessageBoxW(NULL, L"Usage: NESEmulator <file.nsf | file.nes>", L"Error", MB_OK | MB_ICONERROR);
-        LocalFree(argv);
-        return 1;
-    }
-
-    std::wstring wPath = argv[1];
+    std::wstring wPath = (argc >= 2) ? argv[1] : L"";
     LocalFree(argv);
 
     auto u8 = std::filesystem::path(wPath).u8string();
@@ -32,8 +27,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         WindowAPI platformAPI;
         SDLWindow window(platformAPI);
         AppSettings settings;
+        LanguageRegistry::instance().bindIndex(&settings.languageIndex);
         SDLAudioStream audio(settings.audioSettings);
-        SDLInputContext input;
+        SDLInputContext input(settings);
 
         App app(romPath, window, input, audio, settings);
         app.run();

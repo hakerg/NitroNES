@@ -3,175 +3,189 @@
 #include "AppEvent.h"
 #include "AppSettings.h"
 #include "IFileSession.h"
-#include "IWindow.h"
 #include "IInputContext.h"
 #include "IMenuHandler.h"
+#include "IWindow.h"
 #include "NESSession.h"
 #include "NSFSession.h"
-#include <string>
 #include <memory>
+#include <string>
 
 class App : public IEmulatorHost, public IMenuHandler {
 public:
-	App(const std::string& romPath,
-		IWindow& window,
-		IInputContext& input,
-		AppAudioStream& audio,
-		AppSettings& settings)
-		: window(window)
-		, input(input)
-		, audio(audio)
-		, settings(settings)
-		, session(makeSession(romPath))
-	{
-		window.initMenu(settings, *this);
-	}
+    App(const std::string &romPath, IWindow &window, IInputContext &input,
+        AppAudioStream &audio, AppSettings &settings)
+        : window(window), input(input), audio(audio), settings(settings),
+          session(romPath.empty() ? nullptr : makeSession(romPath)) {
+        window.initMenu(settings, *this, input);
+    }
 
-	void run() {
-		while (running) {
-			AppEvent ev;
-			while (window.pollEvent(ev))
-				processEvent(ev);
+    void run() {
 
-			session->runFrame(calcSpeed());
+        while (running) {
+            AppEvent ev;
+            while (window.pollEvent(ev))
+                processEvent(ev);
 
-			if (guiActive && !window.isMenuOpen() && window.getTicks() - lastMouseMoveTime >= 1000) {
-				window.showCursor(false);
-				guiActive = false;
-			}
+            if (session) {
+                session->runFrame(calcSpeed());
+            } else {
+                window.presentBlank();
+            }
 
-			window.delay(1);
-		}
-	}
+            if (guiActive && !window.isMenuOpen() && session &&
+                window.getTicks() - lastMouseMoveTime >= 1000) {
+                window.showCursor(false);
+                guiActive = false;
+            }
 
-	void pushAudioSample(float sample, double dt) override {
-		audio.addNESSample(sample, dt);
-	}
+            if (session)
+                window.delay(1);
+        }
+    }
 
-	void onFrameReady() override {
-		input.tickFrame();
-	}
+    void pushAudioSample(float sample, double dt) override {
+        audio.addNESSample(sample, dt);
+    }
 
-	void onOpen() override {
-		std::string newPath = window.openFileDialog();
-		if (newPath.empty()) return;
-		session.reset();
-		session = makeSession(newPath);
-	}
+    void onFrameReady() override { input.tickFrame(); }
 
-	void onReload() override {
-		const std::string p = session->path;
-		session.reset();
-		session = makeSession(p);
-	}
+    void onOpen() override {
+        std::string newPath = window.openFileDialog();
+        if (newPath.empty())
+            return;
+        session.reset();
+        session = makeSession(newPath);
+    }
 
-	void onReset() override {
-		std::lock_guard lock(session->coreMutex);
-		session->core().reset();
-	}
+    void onReload() override {
+        if (!session)
+            return;
+        const std::string p = session->path;
+        session.reset();
+        session = makeSession(p);
+    }
 
-	void onQuit() override {
-		running = false;
-	}
+    void onReset() override {
+        if (!session)
+            return;
+        std::lock_guard lock(session->coreMutex);
+        session->core().reset();
+    }
 
-	bool isVisible() override {
-		return guiActive;
-	}
+    void onQuit() override { running = false; }
+
+    bool isVisible() override { return guiActive; }
 
 private:
-	std::unique_ptr<IFileSession> makeSession(const std::string& path) {
-		if (IFileSession::isNesRomFile(path)) {
-			return std::make_unique<NESSession>(
-				path,
-				input,
-				window,
-				settings,
-				*this,
-				audio);
-		}
-		return std::make_unique<NSFSession>(path, window, *this, audio, settings);
-	}
+    std::unique_ptr<IFileSession> makeSession(const std::string &path) {
+        if (IFileSession::isNesRomFile(path)) {
+            return std::make_unique<NESSession>(path, input, window, settings,
+                                                *this, audio);
+        }
+        return std::make_unique<NSFSession>(path, window, *this, audio,
+                                            settings);
+    }
 
-	void processEvent(const AppEvent& ev) {
-		switch (ev.type) {
-		case AppEventType::Quit:
-			running = false;
-			return;
-		case AppEventType::WindowResized:
-			session->core().renderFrame();
-			return;
-		case AppEventType::MouseMoved:
-			lastMouseMoveTime = window.getTicks();
-			if (!guiActive) { window.showCursor(true); guiActive = true; }
-			return;
-		case AppEventType::KeyDown:
-			handleKey(ev.key);
-			return;
-		case AppEventType::KeyUp:
-			if (ev.key == AppKey::SpeedUp || ev.key == AppKey::SpeedDown) {
-				keyFast = false; keySlow = false;
-			}
-			return;
-		case AppEventType::GamepadAxisRightTrigger:
-			padFast = ev.axisDown;
-			if (!padFast && !padSlow) speedPadId = 0;
-			else                      speedPadId = ev.deviceId;
-			return;
-		case AppEventType::GamepadAxisLeftTrigger:
-			padSlow = ev.axisDown;
-			if (!padFast && !padSlow) speedPadId = 0;
-			else                      speedPadId = ev.deviceId;
-			return;
-		case AppEventType::GamepadAdded:
-			input.onGamepadAdded(ev.deviceId);
-			return;
-		case AppEventType::GamepadRemoved:
-			input.onGamepadRemoved(ev.deviceId);
-			return;
-		default:
-			break;
-		}
-	}
+    void processEvent(const AppEvent &ev) {
+        switch (ev.type) {
+        case AppEventType::Quit:
+            running = false;
+            return;
+        case AppEventType::WindowResized:
+            if (session)
+                session->core().renderFrame();
+            return;
+        case AppEventType::MouseMoved:
+            lastMouseMoveTime = window.getTicks();
+            if (!guiActive) {
+                window.showCursor(true);
+                guiActive = true;
+            }
+            return;
+        case AppEventType::KeyDown:
+            handleKey(ev.key);
+            return;
+        case AppEventType::KeyUp:
+            if (ev.key == AppKey::SpeedUp || ev.key == AppKey::SpeedDown) {
+                keyFast = false;
+                keySlow = false;
+            }
+            return;
+        case AppEventType::GamepadAxisRightTrigger:
+            padFast = ev.axisDown;
+            if (!padFast && !padSlow)
+                speedPadId = 0;
+            else
+                speedPadId = ev.deviceId;
+            return;
+        case AppEventType::GamepadAxisLeftTrigger:
+            padSlow = ev.axisDown;
+            if (!padFast && !padSlow)
+                speedPadId = 0;
+            else
+                speedPadId = ev.deviceId;
+            return;
+        case AppEventType::GamepadAdded:
+            input.onGamepadAdded(ev.deviceId);
+            return;
+        case AppEventType::GamepadRemoved:
+            input.onGamepadRemoved(ev.deviceId);
+            return;
+        default:
+            break;
+        }
+    }
 
-	void handleKey(AppKey key) {
-		switch (key) {
-		case AppKey::Pause:
-			session->core().paused = !session->core().paused;
-			return;
-		case AppKey::FullScreen:
-			window.toggleFullscreen();
-			return;
-		case AppKey::SpeedUp:
-			keyFast = true; keySlow = false;
-			return;
-		case AppKey::SpeedDown:
-			keySlow = true; keyFast = false;
-			return;
-		default:
-			session->processKeyDown(key);
-			return;
-		}
-	}
+    void handleKey(AppKey key) {
+        switch (key) {
+        case AppKey::Pause:
+            if (session)
+                session->core().paused = !session->core().paused;
+            return;
+        case AppKey::FullScreen:
+            window.toggleFullscreen();
+            return;
+        case AppKey::SpeedUp:
+            keyFast = true;
+            keySlow = false;
+            return;
+        case AppKey::SpeedDown:
+            keySlow = true;
+            keyFast = false;
+            return;
+        case AppKey::Reset:
+            onReset();
+            return;
+        default:
+            if (session)
+                session->processKeyDown(key);
+            return;
+        }
+    }
 
-	double calcSpeed() const {
-		if (keyFast || padFast) return 4.0;
-		else if (keySlow || padSlow) return 0.5;
-		else                         return 1.0;
-	}
+    double calcSpeed() const {
+        if (keyFast || padFast)
+            return 4.0;
+        else if (keySlow || padSlow)
+            return 0.5;
+        else
+            return 1.0;
+    }
 
-	IWindow& window;
-	IInputContext& input;
-	AppAudioStream& audio;
-	AppSettings& settings;
+    IWindow &window;
+    IInputContext &input;
+    AppAudioStream &audio;
+    AppSettings &settings;
 
-	std::unique_ptr<IFileSession> session;
+    std::unique_ptr<IFileSession> session;
 
-	bool     running = true;
-	bool     guiActive = true;
-	bool     keyFast = false;
-	bool     keySlow = false;
-	bool     padFast = false;
-	bool     padSlow = false;
-	uint32_t speedPadId = 0;
-	uint64_t lastMouseMoveTime = 0;
+    bool running = true;
+    bool guiActive = true;
+    bool keyFast = false;
+    bool keySlow = false;
+    bool padFast = false;
+    bool padSlow = false;
+    uint32_t speedPadId = 0;
+    uint64_t lastMouseMoveTime = 0;
 };

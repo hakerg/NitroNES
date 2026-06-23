@@ -7,7 +7,7 @@
 // traktujemy jak czysty MMC3 - wiekszosc grafiki dziala poprawnie z ROMu.
 class Mapper191 : public Mapper004 {
 public:
-	using Mapper004::Mapper004;
+    using Mapper004::Mapper004;
 };
 
 REGISTER_MAPPER(191, Mapper191)

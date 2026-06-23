@@ -6,7 +6,7 @@
 // CHR-RAM storage'u w kartridzu traktujemy jak czysty MMC3 (mapper 004).
 class Mapper192 : public Mapper004 {
 public:
-	using Mapper004::Mapper004;
+    using Mapper004::Mapper004;
 };
 
 REGISTER_MAPPER(192, Mapper192)

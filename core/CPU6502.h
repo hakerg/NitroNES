@@ -384,7 +384,7 @@ inline CPU6502::Step CPU6502::executeWrite() {
     if (isAnySh && pageCross) {
         addr = ((uint16_t)val << 8) | (addr & 0xFF);
     }
-    return emitWrite(&CPU6502::startOpFetch, addr, val);
+    return emitWrite(&CPU6502::opFetch, addr, val);
 }
 
 inline CPU6502::Step CPU6502::afterAddressing_ReadWrite() {
@@ -404,7 +404,7 @@ inline CPU6502::Step CPU6502::rmw_dummyWrite() {
 }
 
 inline CPU6502::Step CPU6502::rmw_finalWrite() {
-    return emitWrite(&CPU6502::startOpFetch, addr, tmp);
+    return emitWrite(&CPU6502::opFetch, addr, tmp);
 }
 
 inline CPU6502::Step CPU6502::am_imm_exec() {
@@ -543,8 +543,8 @@ inline CPU6502::Step CPU6502::jsr3_pushPCH()  { return emitWrite(&CPU6502::jsr4_
 inline CPU6502::Step CPU6502::jsr4_pushPCL()  { return emitRead(&CPU6502::jsr5_readHigh, PC); }
 inline CPU6502::Step CPU6502::jsr5_readHigh() { addr |= fetched << 8; PC = addr; return opFetch(); }
 
-inline CPU6502::Step CPU6502::pha1_dummy() { return emitWrite(&CPU6502::startOpFetch, 0x0100 | S--, A); }
-inline CPU6502::Step CPU6502::php1_dummy() { return emitWrite(&CPU6502::startOpFetch, 0x0100 | S--, P | FLAG_B | FLAG_U); }
+inline CPU6502::Step CPU6502::pha1_dummy() { return emitWrite(&CPU6502::opFetch, 0x0100 | S--, A); }
+inline CPU6502::Step CPU6502::php1_dummy() { return emitWrite(&CPU6502::opFetch, 0x0100 | S--, P | FLAG_B | FLAG_U); }
 inline CPU6502::Step CPU6502::pla1_dummy() { return emitRead(&CPU6502::pla2_incS, 0x0100 | S); }
 inline CPU6502::Step CPU6502::pla2_incS()  { S++; return emitRead(&CPU6502::pla3_pull, 0x0100 | S); }
 inline CPU6502::Step CPU6502::pla3_pull()  { A = fetched; setZN(A); return opFetch(); }

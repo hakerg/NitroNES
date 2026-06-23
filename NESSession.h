@@ -1,102 +1,109 @@
 #pragma once
 #include "AppSettings.h"
 #include "IFileSession.h"
-#include "IWindow.h"
 #include "IInputContext.h"
-#include "core/NESSystem.h"
+#include "IWindow.h"
 #include "core/NESConst.h"
 #include "core/NESCoordUtils.h"
+#include "core/NESSystem.h"
 #include <chrono>
 #include <cmath>
 #include <stdexcept>
 
 class NESSession : public IFileSession, public INESSystemHost {
 public:
-	NESSession(
-		const std::string& path,
-		IInputContext& input,
-		IWindow& window,
-		AppSettings& settings,
-		IEmulatorHost& host,
-		AppAudioStream& audio)
-		: IFileSession(path, audio, window, settings)
-		, nes(host, *this, path)
-		, input(input)
-	{}
+    NESSession(const std::string &path, IInputContext &input, IWindow &window,
+               AppSettings &settings, IEmulatorHost &host,
+               AppAudioStream &audio)
+        : IFileSession(path, audio, window, settings), nes(host, *this, path),
+          input(input) {}
 
-	~NESSession() override { nes.shutdown(); }
+    ~NESSession() override { nes.shutdown(); }
 
-	NESCoreBase& core() const override { return nes; }
+    NESCoreBase &core() const override { return nes; }
 
-	void runFrame(double baseSpeed) override {
-		if (canUseScanlineSync(baseSpeed))
-			runScanlineSync(baseSpeed);
-		else
-			runTimerSync(baseSpeed);
+    void runFrame(double baseSpeed) override {
+        if (canUseScanlineSync(baseSpeed))
+            runScanlineSync(baseSpeed);
+        else
+            runTimerSync(baseSpeed);
 
-		nes.renderFrame();
-	}
-	void renderFrame(const uint32_t* frameBuffer) override {
-		window.presentNESFrame(frameBuffer, *this);
-	}
+        nes.renderFrame();
+    }
+    void renderFrame(const uint32_t *frameBuffer) override {
+        window.presentNESFrame(frameBuffer, *this);
+    }
 
-	uint8_t readController(int port) override {
-		return input.readController(port);
-	}
+    uint8_t readController(int port) override {
+        return input.readController(port);
+    }
 
 private:
-	void runTimerSync(double baseSpeed) {
-		auto now = std::chrono::steady_clock::now();
-		double elapsed = std::chrono::duration<double>(now - timerPrev).count();
-		timerPrev = now;
-		timerLag += elapsed;
-		if (timerLag > MAX_LAG) timerLag = MAX_LAG;
+    void runTimerSync(double baseSpeed) {
+        auto now = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double>(now - timerPrev).count();
+        timerPrev = now;
+        timerLag += elapsed;
+        if (timerLag > MAX_LAG)
+            timerLag = MAX_LAG;
 
-		if (nes.paused) {
-			nes.renderFrame();
-			return;
-		}
+        if (nes.paused) {
+            nes.renderFrame();
+            return;
+        }
 
-		updateSpeed(baseSpeed);
-		while (timerLag > 0.0) {
-			double dt;
-			std::lock_guard lock(coreMutex);
-			nes.tickFrame(dt);
-			timerLag -= dt;
-		}
-	}
+        updateSpeed(baseSpeed);
+        while (timerLag > 0.0) {
+            double dt;
+            std::lock_guard lock(coreMutex);
+            nes.tickFrame(dt);
+            timerLag -= dt;
+        }
+    }
 
-	void runScanlineSync(double baseSpeed) {
-		int monitorScanline = 0;
-		if (!window.getScanLine(monitorScanline)) { runTimerSync(baseSpeed); return; }
+    void runScanlineSync(double baseSpeed) {
+        int monitorScanline = 0;
+        if (!window.getScanLine(monitorScanline)) {
+            runTimerSync(baseSpeed);
+            return;
+        }
 
-		double monitorHz = window.getRefreshHz();
-		if (monitorHz <= 0.0) { runTimerSync(baseSpeed); return; }
+        double monitorHz = window.getRefreshHz();
+        if (monitorHz <= 0.0) {
+            runTimerSync(baseSpeed);
+            return;
+        }
 
-		int geoW = 0, geoH = 0;
-		window.getMonitorGeometry(geoW, geoH);
-		if (geoW <= 0 || geoH <= 0) { runTimerSync(baseSpeed); return; }
+        int geoW = 0, geoH = 0;
+        window.getMonitorGeometry(geoW, geoH);
+        if (geoW <= 0 || geoH <= 0) {
+            runTimerSync(baseSpeed);
+            return;
+        }
 
-		double delta = (settings.scanlineBufferMs / 1000.0) * monitorHz * geoH;
-		double predicted = monitorScanline + delta;
+        double delta = (settings.scanlineBufferMs / 1000.0) * monitorHz * geoH;
+        double predicted = monitorScanline + delta;
 
-		float dstX, dstY, dstW, dstH;
-		NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH);
-		float nesY = ((float)predicted - dstY) / dstH * (float)NES::VISIBLE_H + (float)NES::OVERSCAN_TOP;
+        float dstX, dstY, dstW, dstH;
+        NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH);
+        float nesY = ((float)predicted - dstY) / dstH * (float)NES::VISIBLE_H +
+                     (float)NES::OVERSCAN_TOP;
 
-		int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
-		if (target < 0) target += NES::TOTAL_SCANLINES;
+        int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
+        if (target < 0)
+            target += NES::TOTAL_SCANLINES;
 
-		updateSpeed(baseSpeed);
-		std::lock_guard lock(coreMutex);
-		nes.tickWhile([&] { return nes.getCurrentScanline() != target; });
-	}
+        updateSpeed(baseSpeed);
+        std::lock_guard lock(coreMutex);
+        nes.tickWhile([&] { return nes.getCurrentScanline() != target; });
+    }
 
-	static constexpr double MAX_LAG = 0.02;
+    static constexpr double MAX_LAG = 0.02;
 
-	mutable NESSystem nes;
-	IInputContext& input;
+    mutable NESSystem nes;
+    IInputContext &input;
 
-	std::chrono::steady_clock::time_point timerPrev = std::chrono::steady_clock::now();
-	double timerLag = 0.0;
+    std::chrono::steady_clock::time_point timerPrev =
+        std::chrono::steady_clock::now();
+    double timerLag = 0.0;
 };

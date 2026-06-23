@@ -7,7 +7,7 @@
 // obsługę CHR-RAM można dodać później – większość typowych ROM-ów działa.
 class Mapper119 : public Mapper004 {
 public:
-	using Mapper004::Mapper004;
+    using Mapper004::Mapper004;
 };
 
 REGISTER_MAPPER(119, Mapper119)

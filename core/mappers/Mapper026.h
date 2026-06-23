@@ -11,9 +11,10 @@
 // ============================================================================
 class Mapper026 : public VRC6Mapper {
 public:
-	using VRC6Mapper::VRC6Mapper;
+    using VRC6Mapper::VRC6Mapper;
+
 protected:
-	bool swapA01() const override { return true; }
+    bool swapA01() const override { return true; }
 };
 
 REGISTER_MAPPER(26, Mapper026)

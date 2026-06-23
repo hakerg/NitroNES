@@ -17,61 +17,83 @@
 // ----------------------------------------------------------------------------
 class Mapper243 : public Mapper {
 public:
-	using Mapper::Mapper;
+    using Mapper::Mapper;
 
-	void reset() override {
-		addrPort = 0; prg = 0;
-		chrH = chrL = 0; chrD = 0;
-		mirrorMode = Mirroring::HORIZONTAL;
-	}
+    void reset() override {
+        addrPort = 0;
+        prg = 0;
+        chrH = chrL = 0;
+        chrD = 0;
+        mirrorMode = Mirroring::HORIZONTAL;
+    }
 
-	bool cpuMapRead(uint16_t addr, uint32_t& mapped, uint8_t&) override {
-		if (addr < 0x8000) return false;
-		mapped = mapper_helpers::mapPrg32k(addr, prg, prgBanks);
-		return true;
-	}
+    bool cpuMapRead(uint16_t addr, uint32_t &mapped, uint8_t &) override {
+        if (addr < 0x8000)
+            return false;
+        mapped = mapper_helpers::mapPrg32k(addr, prg, prgBanks);
+        return true;
+    }
 
-	void cpuMapWrite(uint16_t addr, uint32_t&, uint8_t data) override {
-		if (addr < 0x4020 || addr >= 0x5000) return;
-		if ((addr & 0x4101) == 0x4100) {
-			addrPort = data & 0x07;
-		} else if ((addr & 0x4101) == 0x4101) {
-			switch (addrPort) {
-			case 2: chrH = data & 0x01; break;
-			case 4: chrL = data & 0x01; break;
-			case 5: prg  = data & 0x07; break;
-			case 6: chrD = data & 0x03; break;
-			case 7: {
-				uint8_t m = (data >> 1) & 0x03;
-				switch (m) {
-				case 0: mirrorMode = Mirroring::HORIZONTAL; break;
-				case 1: mirrorMode = Mirroring::VERTICAL;   break;
-				case 2: mirrorMode = Mirroring::ONESCREEN_LO; break; // przyblizenie
-				case 3: mirrorMode = Mirroring::ONESCREEN_HI; break;
-				}
-				break;
-			}
-			default: break;
-			}
-		}
-	}
+    void cpuMapWrite(uint16_t addr, uint32_t &, uint8_t data) override {
+        if (addr < 0x4020 || addr >= 0x5000)
+            return;
+        if ((addr & 0x4101) == 0x4100) {
+            addrPort = data & 0x07;
+        } else if ((addr & 0x4101) == 0x4101) {
+            switch (addrPort) {
+            case 2:
+                chrH = data & 0x01;
+                break;
+            case 4:
+                chrL = data & 0x01;
+                break;
+            case 5:
+                prg = data & 0x07;
+                break;
+            case 6:
+                chrD = data & 0x03;
+                break;
+            case 7: {
+                uint8_t m = (data >> 1) & 0x03;
+                switch (m) {
+                case 0:
+                    mirrorMode = Mirroring::HORIZONTAL;
+                    break;
+                case 1:
+                    mirrorMode = Mirroring::VERTICAL;
+                    break;
+                case 2:
+                    mirrorMode = Mirroring::ONESCREEN_LO;
+                    break; // przyblizenie
+                case 3:
+                    mirrorMode = Mirroring::ONESCREEN_HI;
+                    break;
+                }
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
 
-	bool ppuMapRead(uint16_t addr, uint32_t& mapped) override {
-		if (addr > 0x1FFF) return false;
-		uint8_t bank = (uint8_t)((chrH << 3) | (chrD << 1) | chrL);
-		mapped = mapper_helpers::mapChr8k(addr, bank, chrBanks);
-		return true;
-	}
-	bool ppuMapWrite(uint16_t addr, uint32_t& mapped) override {
-		return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
-	}
-	Mirroring mirror() const override { return mirrorMode; }
-	bool hasDynamicMirror() const override { return true; }
+    bool ppuMapRead(uint16_t addr, uint32_t &mapped) override {
+        if (addr > 0x1FFF)
+            return false;
+        uint8_t bank = (uint8_t)((chrH << 3) | (chrD << 1) | chrL);
+        mapped = mapper_helpers::mapChr8k(addr, bank, chrBanks);
+        return true;
+    }
+    bool ppuMapWrite(uint16_t addr, uint32_t &mapped) override {
+        return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
+    }
+    Mirroring mirror() const override { return mirrorMode; }
+    bool hasDynamicMirror() const override { return true; }
 
 private:
-	uint8_t addrPort = 0;
-	uint8_t prg = 0, chrH = 0, chrL = 0, chrD = 0;
-	Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    uint8_t addrPort = 0;
+    uint8_t prg = 0, chrH = 0, chrL = 0, chrD = 0;
+    Mirroring mirrorMode = Mirroring::HORIZONTAL;
 };
 
 REGISTER_MAPPER(243, Mapper243)

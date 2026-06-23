@@ -7,7 +7,7 @@
 // zachować zachowanie identyczne z normalnym MMC3 (większość gier działa).
 class Mapper118 : public Mapper004 {
 public:
-	using Mapper004::Mapper004;
+    using Mapper004::Mapper004;
 };
 
 REGISTER_MAPPER(118, Mapper118)
