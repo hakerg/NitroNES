@@ -1,11 +1,9 @@
 #include "App.h"
 #include "AppSettings.h"
-#include "lang/LanguageRegistry.h"
 #include "sdl/SDLAudioStream.h"
 #include "sdl/SDLInputContext.h"
 #include "sdl/SDLWindow.h"
 #include "sdl/windows/WindowAPI.h"
-#include <SDL3/SDL.h>
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
@@ -27,7 +25,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         WindowAPI platformAPI;
         SDLWindow window(platformAPI);
         AppSettings settings;
-        LanguageRegistry::instance().bindIndex(&settings.languageIndex);
         SDLAudioStream audio(settings.audioSettings);
         SDLInputContext input(settings);
 

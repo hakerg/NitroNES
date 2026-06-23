@@ -2,42 +2,47 @@
 #include "English.h"
 #include "ILanguage.h"
 #include "Polish.h"
+#include <map>
 #include <memory>
-#include <vector>
+#include <string>
 
 class LanguageRegistry {
 public:
+    using Map = std::map<std::string, std::unique_ptr<ILanguage>>;
+
     static LanguageRegistry &instance() {
         static LanguageRegistry reg;
         return reg;
     }
 
-    const std::vector<std::unique_ptr<ILanguage>> &languages() const {
-        return langs;
-    }
-
-    void bindIndex(int *external) {
-        indexPtr = external ? external : &fallbackIndex;
-    }
-
-    int &currentIndex() { return *indexPtr; }
+    const Map &languages() const { return langs; }
 
     const ILanguage *current() const {
-        int i = *indexPtr;
-        if (i >= 0 && i < (int)langs.size())
-            return langs[i].get();
-        return langs[0].get();
+        auto it = langs.find(*currentCode);
+        return it != langs.end() ? it->second.get()
+                                 : langs.begin()->second.get();
+    }
+
+    const std::string &getCurrentCode() const { return *currentCode; }
+
+    void setCode(const std::string &code) {
+        if (langs.count(code))
+            *currentCode = code;
+    }
+
+    void bindStorage(std::string *external) {
+        currentCode = external ? external : &fallback;
     }
 
 private:
     LanguageRegistry() {
-        langs.push_back(std::make_unique<Polish>());
-        langs.push_back(std::make_unique<English>());
+        langs.emplace("en", std::make_unique<English>());
+        langs.emplace("pl", std::make_unique<Polish>());
     }
 
-    std::vector<std::unique_ptr<ILanguage>> langs;
-    int fallbackIndex = 0;
-    int *indexPtr = &fallbackIndex;
+    Map langs;
+    std::string fallback = "en";
+    std::string *currentCode = &fallback;
 };
 
 inline const char *tr(const char *id) {

@@ -6,12 +6,14 @@
 class English : public ILanguage {
 public:
     const char *getName() const override { return "English"; }
+    const char *getCode() const override { return "en"; }
 
     const char *tr(const char *id) const override {
         static const std::unordered_map<std::string, const char *> dict = {
             {"file", "File"},
             {"file.open", "Open..."},
             {"file.reload", "Reload"},
+            {"file.close", "Close"},
             {"file.quit", "Quit"},
             {"emulation", "Emulation"},
             {"emulation.system", "Subsystem"},

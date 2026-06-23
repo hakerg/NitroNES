@@ -92,6 +92,8 @@ public:
                     handler->onOpen();
                 if (session && ImGui::MenuItem(tr("file.reload")))
                     handler->onReload();
+                if (session && ImGui::MenuItem(tr("file.close")))
+                    handler->onClose();
                 ImGui::Separator();
                 if (ImGui::MenuItem(tr("file.quit")))
                     handler->onQuit();
@@ -122,9 +124,10 @@ public:
                 menuOpen = true;
                 if (ImGui::BeginMenu(tr("settings.language"))) {
                     auto &reg = LanguageRegistry::instance();
-                    for (int i = 0; i < (int)reg.languages().size(); i++) {
-                        ImGui::RadioButton(reg.languages()[i]->getName(),
-                                           &reg.currentIndex(), i);
+                    for (auto &[code, lang] : reg.languages()) {
+                        if (ImGui::RadioButton(lang->getName(),
+                                               reg.getCurrentCode() == code))
+                            reg.setCode(code);
                     }
                     ImGui::EndMenu();
                 }

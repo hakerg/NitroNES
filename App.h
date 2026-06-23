@@ -66,6 +66,10 @@ public:
         session = makeSession(p);
     }
 
+    void onClose() override {
+        session.reset();
+    }
+
     void onReset() override {
         if (!session)
             return;
