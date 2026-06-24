@@ -404,7 +404,7 @@ private:
         }
 
         AudioSettings &audioSettings = settings->audioSettings;
-        ImGui::SliderFloat(tr("settings.volume"), &audioSettings.volume, 0.0f, 2.5f);
+        ImGui::SliderFloat(tr("settings.volume"), &audioSettings.volume, 0.0f, 2.5f, "%.1f");
 
         ImGui::Spacing();
 

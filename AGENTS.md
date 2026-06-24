@@ -97,6 +97,51 @@ Przykłady:
   nes_test ROM.nes frames:120 pad1+START frames:1 pad1-START frames:600 screen
   nes_test ROM.nes frames:600 reset frames:600 mem:0x6000:32
 
+### Uruchamianie pojedynczego testu AccuracyCoin z trace
+
+`accuracy_coin.exe` automatycznie naciska START i odpala wszystkie testy
+naraz — nie da się wtedy włączyć trace tylko dla jednego (bo `trace.log` by
+spuchł do gigabajtów). Zamiast tego buduj `AccuracyCoin.asm` przez `nes_test`,
+ręcznie naprowadź menu pad-em na konkretny test, włącz trace tuż przed
+naciśnięciem A i tylko ten test ląduje w log-u.
+
+Menu AccuracyCoin:
+- Strony testów (suity) wybiera się **RIGHT/LEFT** (kolumna)
+- Pojedynczy test wybiera się **DOWN/UP** (wiersz)
+- **A** uruchamia podświetlony test
+- Suity są zdefiniowane w `AccuracyCoin.asm` jako etykiety `Suite_*`
+  (kolejność = numer strony, kolejność `table ...` w suicie = numer wiersza)
+
+Między każdym wciśnięciem a puszczeniem przycisku musi upłynąć ok. **20 klatek**,
+żeby gra zdążyła odczytać input (jedno wciśnięcie = pad1+X, frames:20,
+pad1-X, frames:20).
+
+Symbole `.fns` (generowane automatycznie przy buildzie `.asm`) ujawniają nazwę
+funkcji testu w trace — np. `TEST_DeltaModulationChannel`,
+`TEST_ExplicitDMAAbort`, `TEST_APULengthCounter`. Dzięki temu od razu wiadomo
+który fragment AccuracyCoin.asm robi co — można porównać krok po kroku
+sekwencję dostępów do magistrali z kodem źródłowym testu.
+
+Przykład (DMC — strona 14, wiersz 6):
+```
+nes_test AccuracyCoin.asm frames:60 \
+   pad1+RIGHT frames:20 pad1-RIGHT frames:20  ; powtórzyć 13× = strona 14 (zaczynamy od strony 1)
+   ... \
+   pad1+DOWN  frames:20 pad1-DOWN  frames:20  ; powtórzyć 6× = wiersz 6
+   ... \
+   trace:cpu:on trace:dma:on \
+   pad1+A frames:20 pad1-A frames:60
+```
+
+Co da analiza takiego trace:
+- pełna sekwencja zapisów do APU/PPU robiona przez konkretny test
+- odpowiada na pytania "jaki bajt poszedł do $4012", "kiedy DMC wystartował
+  DMA", "jaki PC był aktywny w momencie failu" itd.
+- dzięki anotacjom `(DMC_START)`, `(PPUCTRL)`, `(symbol_z_fns)` nie trzeba
+  ręcznie korelować adresów z dokumentacją
+- ułatwia napisanie minimalnego reproducera (`test/nes_template.asm`) gdy okaże
+  się, że bug jest w jakimś konkretnym podetapie testu
+
 ### Szablon ASM (test/nes_template.asm)
 Minimalny ROM gotowy do wypełnienia kodem testowym.
 Krytyczne zasady formatu NESASM3:

@@ -59,6 +59,7 @@ public:
 
     bool run(const std::vector<std::string>& commands) {
         for (const auto& cmd : commands) {
+            std::cerr << "[nes_test] > " << cmd << "\n";
             if (!dispatch(cmd)) {
                 std::cerr << "[nes_test] unknown command: " << cmd << "\n";
                 return false;
@@ -137,6 +138,15 @@ private:
         if (cmd == "reset") { nes.reset(); return true; }
         if (cmd == "screen"){ printScreen(); return true; }
 
+        if (cmd.size() >= 5 && cmd.compare(0, 3, "pad") == 0
+            && (cmd[3] == '1' || cmd[3] == '2'))
+        {
+            int  port = cmd[3] - '1';
+            char op   = cmd[4];
+            if (op != '=' && op != '+' && op != '-') return false;
+            return padCmd(port, op, cmd.substr(5));
+        }
+
         auto parts = splitArgs(cmd, ':');
         const std::string& head = parts[0];
 
@@ -167,21 +177,16 @@ private:
             if (traceAny() && !traceFp) openTrace();
             return true;
         }
-        if (head.size() > 4 && head.substr(0, 4) == "pad1") return padCmd(0, head.substr(4), parts);
-        if (head.size() > 4 && head.substr(0, 4) == "pad2") return padCmd(1, head.substr(4), parts);
-
         return false;
     }
 
-    bool padCmd(int port, const std::string& op, const std::vector<std::string>& parts) {
-        uint8_t cur = port == 0 ? nes.getController1() : nes.getController2();
-        if (parts.size() != 2 && !(op == "=" && parts.size() == 1)) return false;
-        const std::string arg = parts.size() == 2 ? parts[1] : "";
+    bool padCmd(int port, char op, const std::string& arg) {
+        uint8_t cur  = port == 0 ? nes.getController1() : nes.getController2();
         uint8_t mask = arg.empty() ? 0 : parseButtons(arg);
 
-        if      (op == "=") cur = mask;
-        else if (op == "+") cur |= mask;
-        else if (op == "-") cur &= ~mask;
+        if      (op == '=') cur = mask;
+        else if (op == '+') cur |= mask;
+        else if (op == '-') cur &= ~mask;
         else return false;
 
         if (port == 0) nes.setController1(cur); else nes.setController2(cur);
