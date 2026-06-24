@@ -28,7 +28,6 @@ public:
         irqReloadFlag = false;
         irqCounter = 0;
         irqReload = 0;
-        lastA12 = false;
         for (auto &r : pRegister)
             r = 0;
         pCHRBank.fill(0);
@@ -130,12 +129,8 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    void scanline() override { tickIrq(); }
-    void clockA12(uint16_t addr) override {
-        const bool a12High = (addr & 0x1000) != 0;
-        if (a12High && !lastA12)
-            tickIrq();
-        lastA12 = a12High;
+    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
+        if (a12RisingEdge(addr, ppuCycle)) tickIrq();
     }
     bool irqState() const override { return irqActive; }
     void irqClear() override { irqActive = false; }
@@ -156,8 +151,7 @@ private:
     uint8_t targetReg = 0;
     bool prgMode = false, chrInversion = false;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
-    bool irqActive = false, irqEnable = false, irqReloadFlag = false,
-         lastA12 = false;
+    bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
 };
 

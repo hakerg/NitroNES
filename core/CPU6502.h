@@ -49,8 +49,8 @@ public:
 
     void jumpTo(uint16_t pc) {
         PC = pc;
-        currentStep = emitRead(&CPU6502::startOpFetch, pc);
-        nextOp = &CPU6502::startOpFetch;
+        currentStep = emitRead(&CPU6502::opFetch, pc);
+        nextOp = &CPU6502::opFetch;
     }
 
     void clockPhi1() {
@@ -170,11 +170,6 @@ private:
 
     void setZN(uint8_t v) {
         P = (P & ~(FLAG_Z | FLAG_N)) | (v == 0 ? FLAG_Z : 0) | (v & 0x80);
-    }
-
-    Step startOpFetch() {
-        irqInhibitSnapshot = (P & FLAG_I) != 0;
-        return emitRead(&CPU6502::decodeAndDispatch, PC++);
     }
 
     Step opFetch() {
@@ -487,7 +482,7 @@ inline CPU6502::Step CPU6502::am_rel_2_taken() {
     uint8_t  newL  = oldL + branchOffset;
     PC = (oldPC & 0xFF00) | newL;
     bool cross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
-    if (!cross) return startOpFetch();
+    if (!cross) return opFetch();
     pageCross = ((int8_t)branchOffset < 0);
     return emitRead(&CPU6502::am_rel_3_pagefix, PC);
 }

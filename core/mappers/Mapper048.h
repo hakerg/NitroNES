@@ -24,7 +24,6 @@ public:
         mirrorMode = Mirroring::HORIZONTAL;
         irqActive = irqEnable = irqReloadFlag = false;
         irqCounter = irqReload = 0;
-        lastA12 = false;
     }
 
     bool cpuMapRead(uint16_t addr, uint32_t &mapped, uint8_t &) override {
@@ -128,12 +127,8 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    void scanline() override { tickIrq(); }
-    void clockA12(uint16_t addr) override {
-        const bool a12High = (addr & 0x1000) != 0;
-        if (a12High && !lastA12)
-            tickIrq();
-        lastA12 = a12High;
+    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
+        if (a12RisingEdge(addr, ppuCycle)) tickIrq();
     }
     bool irqState() const override { return irqActive; }
     void irqClear() override { irqActive = false; }
@@ -152,8 +147,7 @@ private:
     uint8_t prg0 = 0, prg1 = 0;
     uint8_t chr0 = 0, chr1 = 0, chr2 = 0, chr3 = 0, chr4 = 0, chr5 = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
-    bool irqActive = false, irqEnable = false, irqReloadFlag = false,
-         lastA12 = false;
+    bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
 };
 

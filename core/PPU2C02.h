@@ -65,11 +65,14 @@ public:
                 tram_addr.reg = (tram_addr.reg & 0xFF00) | data;
                 vram_addr.reg = tram_addr.reg;
                 address_latch = 0;
+                clockMapperA12();
             }
             break;
         case 7:
             ppuWrite(vram_addr.reg, data);
+            clockMapperA12();
             incrementVramAddr();
+            clockMapperA12();
             break;
         }
     }
@@ -134,6 +137,7 @@ public:
         vram_addr.reg = tram_addr.reg = 0;
         oamAddr = 0;
         frame_odd = odd_frame_skip = false;
+        totalPpuCycle = 0;
         sprite_count = 0;
         bSpriteZeroHitPossible = false;
         sprite_overflow_cycle  = -1;
@@ -181,7 +185,7 @@ public:
                 status.sprite_overflow = 1;
 
             if (visible && cycle == 257 && renderingEnabled()) evaluateSprites();
-            if (visible && cycle == 340) loadSpritePatterns();
+            spriteFetchPhase();
 
             if (renderingEnabled() && cycle >= 257 && cycle <= 320) oamAddr = 0;
         }
@@ -196,9 +200,6 @@ public:
         if (scanline == NES::SCANLINE_PRERENDER     && cycle == 0) nmiVbl = false;
 
         renderPixel();
-
-        if (renderingEnabled() && cycle == 260 && scanline <= NES::SCANLINE_VISIBLE_LAST)
-            if (cart) cart->scanline();
 
         if (nmiLineLow()) nmiCycleLatch = true;
 
@@ -277,6 +278,7 @@ private:
     int16_t  cycle                = 0;
     bool     frame_odd            = false;
     bool     suppressVblThisFrame = false;
+    uint64_t totalPpuCycle        = 0;
     bool     odd_frame_skip       = false;
     bool     nmiCycleLatch        = false;
     bool     nmiVbl               = false;
@@ -363,7 +365,11 @@ private:
             ppu_data_buffer = ppuRead(busAddr);
             if (!bReadOnly) refreshOpenBus(0xFF, data);
         }
-        if (!bReadOnly) incrementVramAddr();
+        if (!bReadOnly) {
+            clockMapperA12();
+            incrementVramAddr();
+            clockMapperA12();
+        }
         return data;
     }
 
@@ -541,17 +547,44 @@ private:
     }
 
     void loadSpritePatterns() {
-        for (uint8_t i = 0; i < sprite_count; i++) {
-            uint8_t y    = spriteScanline[i * 4 + 0];
-            uint8_t tile = spriteScanline[i * 4 + 1];
-            uint8_t attr = spriteScanline[i * 4 + 2];
+        for (uint8_t i = 0; i < 8; i++) {
+            uint8_t y    = (i < sprite_count) ? spriteScanline[i * 4 + 0] : 0xFF;
+            uint8_t tile = (i < sprite_count) ? spriteScanline[i * 4 + 1] : 0xFF;
+            uint8_t attr = (i < sprite_count) ? spriteScanline[i * 4 + 2] : 0xFF;
             uint16_t addrLo = spritePatternAddress(tile, attr, scanline - y);
             uint8_t lo = busRead(addrLo);
             uint8_t hi = busRead(addrLo + 8);
+            if (i >= sprite_count) continue;
             if (attr & 0x40) { lo = flipByte(lo); hi = flipByte(hi); }
             sprite_shifter_pattern_lo[i] = lo;
             sprite_shifter_pattern_hi[i] = hi;
         }
+    }
+
+    void spriteFetchPhase() {
+        if (!renderingEnabled()) return;
+        if (cycle < 257 || cycle > 320) return;
+
+        const bool visible = (scanline >= NES::SCANLINE_VISIBLE_FIRST && scanline <= NES::SCANLINE_VISIBLE_LAST);
+        const int spriteIdx = (cycle - 257) / 8;
+        const int phase     = (cycle - 257) & 7;
+
+        if (phase == 0 || phase == 2) {
+            busRead(0x2000 | (vram_addr.reg & 0x0FFF));
+            return;
+        }
+        if (phase != 4 && phase != 6) return;
+
+        const bool active = visible && spriteIdx < sprite_count;
+        const uint8_t y    = active ? spriteScanline[spriteIdx * 4 + 0] : 0xFF;
+        const uint8_t tile = active ? spriteScanline[spriteIdx * 4 + 1] : 0xFF;
+        const uint8_t attr = active ? spriteScanline[spriteIdx * 4 + 2] : 0xFF;
+        const uint16_t base = spritePatternAddress(tile, attr, scanline - y);
+        const uint8_t data = busRead(base + (phase == 6 ? 8 : 0));
+        if (!active) return;
+        const uint8_t v = (attr & 0x40) ? flipByte(data) : data;
+        if (phase == 4) sprite_shifter_pattern_lo[spriteIdx] = v;
+        else            sprite_shifter_pattern_hi[spriteIdx] = v;
     }
 
     struct Pixel { uint8_t color; uint8_t palette; bool nonzero; };
@@ -628,6 +661,7 @@ private:
             odd_frame_skip = frame_odd && renderingEnabled();
 
         cycle++;
+        totalPpuCycle++;
 
         if (scanline == NES::SCANLINE_PRERENDER && cycle == (NES::PPU_CYCLES_PER_SCANLINE - 1) && odd_frame_skip) {
             cycle    = 0;
@@ -703,7 +737,11 @@ private:
 
     uint8_t busRead(uint16_t addr) {
         addr &= 0x3FFF;
-        if (cart) cart->clockA12(addr);
+        if (cart) cart->clockA12(addr, totalPpuCycle);
         return ppuRead(addr);
+    }
+
+    void clockMapperA12() {
+        if (cart) cart->clockA12(vram_addr.reg & 0x3FFF, totalPpuCycle);
     }
 };

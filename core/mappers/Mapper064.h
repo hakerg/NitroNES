@@ -24,7 +24,6 @@ public:
         irqReloadFlag = false;
         irqCpuMode = false;
         prescaler = 0;
-        lastA12 = false;
     }
 
     bool cpuMapRead(uint16_t a, uint32_t &mapped, uint8_t &) override {
@@ -138,11 +137,9 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    void clockA12(uint16_t addr) override {
-        const bool a12High = (addr & 0x1000) != 0;
-        if (!irqCpuMode && a12High && !lastA12)
+    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
+        if (!irqCpuMode && a12RisingEdge(addr, ppuCycle))
             tickIrq();
-        lastA12 = a12High;
     }
     void clock() override {
         if (!irqCpuMode)
@@ -179,7 +176,6 @@ private:
     bool irqEnable = false, irqActive = false, irqReloadFlag = false,
          irqCpuMode = false;
     uint8_t prescaler = 0;
-    bool lastA12 = false;
 };
 
 REGISTER_MAPPER(64, Mapper064)

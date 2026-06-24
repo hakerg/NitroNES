@@ -25,7 +25,6 @@ public:
         irqEnable = false;
         irqActive = false;
         irqReloadFlag = false;
-        lastA12 = false;
     }
 
     bool cpuMapRead(uint16_t addr, uint32_t &mapped, uint8_t &) override {
@@ -90,12 +89,8 @@ public:
         return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
     }
 
-    void scanline() override { tickIrq(); }
-    void clockA12(uint16_t addr) override {
-        const bool a12High = (addr & 0x1000) != 0;
-        if (a12High && !lastA12)
-            tickIrq();
-        lastA12 = a12High;
+    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
+        if (a12RisingEdge(addr, ppuCycle)) tickIrq();
     }
     bool irqState() const override { return irqActive; }
     void irqClear() override { irqActive = false; }
@@ -114,8 +109,7 @@ private:
     std::array<uint8_t, 4> chr{};
     std::array<uint8_t, 2> prg{};
     uint16_t irqCounter = 0;
-    bool irqEnable = false, irqActive = false, irqReloadFlag = false,
-         lastA12 = false;
+    bool irqEnable = false, irqActive = false, irqReloadFlag = false;
 };
 
 REGISTER_MAPPER(91, Mapper091)

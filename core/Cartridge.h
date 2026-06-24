@@ -91,8 +91,7 @@ public:
 
     bool irqState() const { return pMapper && pMapper->irqState(); }
     void irqClear()       { if (pMapper) pMapper->irqClear(); }
-    void scanline()       { if (pMapper) pMapper->scanline(); }
-    void clockA12(uint16_t addr)  { if (pMapper) pMapper->clockA12(addr); }
+    void clockA12(uint16_t addr, uint64_t ppuCycle)  { if (pMapper) pMapper->clockA12(addr, ppuCycle); }
     void clock()          { if (pMapper) pMapper->clock(); }
 
     float audioOutput() const { return pMapper ? pMapper->audioOutput() : 0.0f; }

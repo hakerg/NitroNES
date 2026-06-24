@@ -85,7 +85,6 @@ set_property(TARGET asm_run PROPERTY CXX_STANDARD_REQUIRED ON)
 target_include_directories(asm_run PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_options(asm_run PRIVATE -static-libgcc -static-libstdc++ -static)
 
-
 add_executable(ac_debug test/ac_debug_main.cpp)
 set_property(TARGET ac_debug PROPERTY CXX_STANDARD 23)
 set_property(TARGET ac_debug PROPERTY CXX_STANDARD_REQUIRED ON)

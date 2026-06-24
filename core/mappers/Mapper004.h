@@ -124,9 +124,8 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    // Klasyczna scanline-based zliczanka (zachowana dla kompatybilno�ci
-    // wstecznej).
-    void scanline() override {
+    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
+        if (!a12RisingEdge(addr, ppuCycle)) return;
         if (irqCounter == 0 || irqReloadFlag) {
             irqCounter = irqReload;
             irqReloadFlag = false;
@@ -138,24 +137,6 @@ public:
         }
     }
 
-    // Precyzyjny licznik MMC3: dekrementuje przy ka�dym rosn�cym zboczu A12
-    // generowanym przez PPU (typowo raz na lini�, gdy sprite'y u�ywaj� drugiej
-    // tablicy pattern�w albo gdy t�o i sprite'y u�ywaj� r�nych tablic).
-    void clockA12(uint16_t addr) override {
-        const bool a12High = (addr & 0x1000) != 0;
-        if (a12High && !lastA12) {
-            if (irqCounter == 0 || irqReloadFlag) {
-                irqCounter = irqReload;
-                irqReloadFlag = false;
-            } else {
-                irqCounter--;
-            }
-            if (irqCounter == 0 && irqEnable) {
-                irqActive = true;
-            }
-        }
-        lastA12 = a12High;
-    }
 
     bool irqState() const override { return irqActive; }
     void irqClear() override { irqActive = false; }
@@ -202,7 +183,6 @@ protected:
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
 
     bool irqActive = false, irqEnable = false, irqReloadFlag = false;
-    bool lastA12 = false;
     uint16_t irqCounter = 0, irqReload = 0;
 };
 

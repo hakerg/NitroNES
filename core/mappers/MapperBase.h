@@ -74,11 +74,10 @@ public:
     virtual Mirroring mirror() const { return Mirroring::HORIZONTAL; }
     virtual bool hasDynamicMirror() const { return false; }
 
-    virtual void scanline() {}
     virtual bool irqState() const { return false; }
     virtual void irqClear() {}
 
-    virtual void clockA12(uint16_t /*addr*/) {}
+    virtual void clockA12(uint16_t /*addr*/, uint64_t /*ppuCycle*/) {}
 
     virtual void clock() {}
 
@@ -87,6 +86,22 @@ public:
     virtual bool hasBusConflicts() const { return false; }
 
 protected:
+    bool a12RisingEdge(uint16_t addr, uint64_t ppuCycle) {
+        const bool a12High = (addr & 0x1000) != 0;
+        bool edge = false;
+        if (a12High) {
+            if (!a12Prev && (ppuCycle - a12FallCycle) >= 12) edge = true;
+        } else if (a12Prev) {
+            a12FallCycle = ppuCycle;
+        }
+        a12Prev = a12High;
+        return edge;
+    }
+
     uint8_t prgBanks;
     uint8_t chrBanks;
+
+private:
+    bool a12Prev = false;
+    uint64_t a12FallCycle = 0;
 };
