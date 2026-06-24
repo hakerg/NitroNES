@@ -35,7 +35,7 @@ FetchContent_MakeAvailable(imgui)
 # ------------------------------------
 
 # Dodaj główne źródło pliku wykonywalnego
-add_executable(NESEmulator "NES Emulator.cpp")
+add_executable(NESEmulator "src/NES Emulator.cpp")
 set_property(TARGET NESEmulator PROPERTY OUTPUT_NAME "NES Emulator")
 
 # Ustawienie standardu C++23
@@ -76,17 +76,5 @@ add_executable(accuracy_coin test/accuracy_coin_main.cpp)
 set_property(TARGET accuracy_coin PROPERTY CXX_STANDARD 23)
 set_property(TARGET accuracy_coin PROPERTY CXX_STANDARD_REQUIRED ON)
 target_include_directories(accuracy_coin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-#target_compile_definitions(accuracy_coin PRIVATE ACCURACY_DMA_TRACE)
 target_link_options(accuracy_coin PRIVATE -static-libgcc -static-libstdc++ -static)
 
-add_executable(asm_run test/asm_run_main.cpp)
-set_property(TARGET asm_run PROPERTY CXX_STANDARD 23)
-set_property(TARGET asm_run PROPERTY CXX_STANDARD_REQUIRED ON)
-target_include_directories(asm_run PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_options(asm_run PRIVATE -static-libgcc -static-libstdc++ -static)
-
-add_executable(ac_debug test/ac_debug_main.cpp)
-set_property(TARGET ac_debug PROPERTY CXX_STANDARD 23)
-set_property(TARGET ac_debug PROPERTY CXX_STANDARD_REQUIRED ON)
-target_include_directories(ac_debug PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_options(ac_debug PRIVATE -static-libgcc -static-libstdc++ -static)

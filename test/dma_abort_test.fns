@@ -1,7 +1,0 @@
-; C:\Users\PC COMPUTER\source\repos\NES Emulator\test\dma_abort_test.asm
-reset                            = $C000
-nmi_handler                      = $C04A
-forever                          = $C047
-wait_vbl1                        = $C012
-irq_handler                      = $C04B
-wait_vbl2                        = $C017

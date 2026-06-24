@@ -1,0 +1,7 @@
+; C:\Users\PC COMPUTER\source\repos\NES Emulator\test\nes_template.asm
+reset                            = $C000
+nmi_handler                      = $C024
+forever                          = $C021
+wait_vbl1                        = $C012
+irq_handler                      = $C025
+wait_vbl2                        = $C017
