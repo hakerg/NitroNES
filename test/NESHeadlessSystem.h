@@ -58,6 +58,7 @@ public:
     A2A03&   getA2A03()  { return a2a03; }
     PPU2C02& getPPURef() { return ppu;   }
 
+    std::function<void()> preStepHook;
     std::function<void()> postStepHook;
     std::function<void(int)> ppuStepHook;
 
@@ -65,6 +66,7 @@ protected:
     void onPreStep() override {
         NESSystem::onPreStep();
         ++cpuCycle;
+        if (preStepHook) preStepHook();
     }
 
     void onPostStep() override {

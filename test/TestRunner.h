@@ -17,6 +17,7 @@ class TestRunner {
 public:
     explicit TestRunner(const std::string& romPath)
         : nes(romPath) {
+        nes.preStepHook  = [this]{ snapshotCpu(); };
         nes.postStepHook = [this]{ traceTick(); };
         nes.ppuStepHook  = [this](int){ tracePpuSub(); };
     }
@@ -71,6 +72,12 @@ public:
 private:
     NESHeadlessSystem nes;
     std::map<uint16_t, std::string> symbolByAddr;
+
+    struct CpuSnap {
+        uint16_t PC;
+        uint8_t  A, X, Y, S, P;
+    };
+    CpuSnap preStep{};
 
     // tracer
     bool traceCpu = false, tracePpu = false, traceDma = false;
@@ -226,6 +233,11 @@ private:
     // tracer -----------------------------------------------------------------
     bool traceAny() const { return traceCpu || tracePpu || traceDma; }
 
+    void snapshotCpu() {
+        auto& cpu = nes.getA2A03().getCPU();
+        preStep = { cpu.PC, cpu.A, cpu.X, cpu.Y, cpu.S, cpu.P };
+    }
+
     void openTrace() {
         traceFp = std::fopen(tracePath.c_str(), "w");
         if (!traceFp) {
@@ -306,12 +318,12 @@ private:
 
             std::fprintf(traceFp,
                 " PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%s %c %-26s %-4s %-18s",
-                cpu.PC, cpu.A, cpu.X, cpu.Y, cpu.S,
-                flagStr(cpu.P).c_str(),
+                preStep.PC, preStep.A, preStep.X, preStep.Y, preStep.S,
+                flagStr(preStep.P).c_str(),
                 rw, addrField,
                 cpu.currentOpName(),
                 cpu.currentStepName());
-            const std::string sym = symbolNear(cpu.PC);
+            const std::string sym = symbolNear(preStep.PC);
             if (!sym.empty()) std::fprintf(traceFp, " ; %s", sym.c_str());
         }
 
