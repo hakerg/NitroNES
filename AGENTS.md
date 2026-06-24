@@ -39,8 +39,9 @@ Odpala AccuracyCoin.nes i zwraca listę testów z wynikami pass/fail.
 Skryptowalny harness — zamiast hard-coded logiki dostaje listę komend.
 Akceptowane wejście:
 - `*.nes` — uruchamia od razu
-- `*.asm` — kompiluje przez nesasm3 (in-place, obok źródła pojawia się
-  `*.nes` + `*.fns` z symbolami)
+- `*.asm` — kompiluje przez nesasm3. Zawartość katalogu źródłowego jest
+  kopiowana do `%TEMP%/nes_test_build/<hash>/<basename>/` i build leci tam —
+  repo nigdy nie jest modyfikowane. Obok wynikowego `.nes` pojawia się `.fns`.
 - `*.s`  — kompiluje przez ca65 + linkuje przez ld65 (z `--feature force_range`
   dla zgodności z kodem blargga); artefakty trafiają do
   `%TEMP%/nes_test_build/<hash>/<basename>/` — repo nigdy nie jest dotykane.
