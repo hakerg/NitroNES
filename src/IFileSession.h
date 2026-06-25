@@ -124,7 +124,7 @@ public:
 
     void updateSpeed(double baseSpeed) {
         core().speed = adjustedSpeed(baseSpeed);
-        settings.audioSettings.pitch = settings.adjustPitch ? float(1.0 / core().speed) : 1.0f;
+        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core().speed);
     }
 
     static bool isNesRomFile(const std::string &path) {

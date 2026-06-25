@@ -123,7 +123,7 @@ private:
         if (!sdlStream || !session)
             return;
 
-        while (outBuf.size() < samplesNeeded) {
+        while (outBuf.size() < samplesNeeded && !session->core().paused) {
             if (!session->coreMutex.try_lock())
                 continue;
             session->core().tickWhile(
