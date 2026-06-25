@@ -367,20 +367,13 @@ private:
             return;
         }
 
-        ImGui::BeginDisabled(settings->allowScanlineSync);
+        ImGui::BeginDisabled(settings->syncMode == 2);
         if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
             SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
         }
         ImGui::EndDisabled();
 
         alignedText("");
-
-        int syncMode = 0;
-        if (settings->allowScanlineSync) {
-            syncMode = 2;
-        } else if (settings->matchRefreshRate) {
-            syncMode = 1;
-        }
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
 
@@ -390,16 +383,8 @@ private:
             tr("settings.sync.scanline")
         };
 
-        if (ImGui::Combo("##sync_mode_combo", &syncMode, modeItems, IM_ARRAYSIZE(modeItems))) {
-            if (syncMode == 0) {
-                settings->matchRefreshRate = false;
-                settings->allowScanlineSync = false;
-            } else if (syncMode == 1) {
-                settings->matchRefreshRate = true;
-                settings->allowScanlineSync = false;
-            } else if (syncMode == 2) {
-                settings->matchRefreshRate = true;
-                settings->allowScanlineSync = true;
+        if (ImGui::Combo("##sync_mode_combo", &settings->syncMode, modeItems, IM_ARRAYSIZE(modeItems))) {
+            if (settings->syncMode == 2) {
                 settings->vsync = false;
                 if (renderer) {
                     SDL_SetRenderVSync(renderer, 0);
@@ -407,15 +392,15 @@ private:
             }
         }
 
-        if (syncMode == 2) {
+        if (settings->syncMode == 2) {
             ImGui::SliderInt(tr("settings.scanline.buffer"),
                              &settings->scanlineBufferMs, 0, 20);
         }
 
         if (session) {
-            if (syncMode == 1) {
+            if (settings->syncMode == 1) {
                 renderRefreshRateStatus(session->canMatchRefreshRate(baseSpeed));
-            } else if (syncMode == 2) {
+            } else if (settings->syncMode == 2) {
                 renderScanlineSyncStatus(session->canUseScanlineSync(baseSpeed));
             }
 

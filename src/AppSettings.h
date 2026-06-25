@@ -21,9 +21,8 @@ struct AppKeyBindings {
 };
 
 struct AppSettings {
-    bool allowScanlineSync = false;
     bool vsync = false;
-    bool matchRefreshRate = true;
+    int syncMode = 1;
     int scanlineBufferMs = 10;
     std::string language = "en";
     AudioSettings audioSettings;
@@ -77,9 +76,8 @@ private:
     }
 
     template <class F> void each(F f) {
-        f("allowScanlineSync", allowScanlineSync);
         f("vsync", vsync);
-        f("matchRefreshRate", matchRefreshRate);
+        f("syncMode", syncMode);
         f("scanlineBufferMs", scanlineBufferMs);
         f("language", language);
         f("audio.volume", audioSettings.volume);

@@ -52,7 +52,7 @@ public:
     virtual void runFrame(double baseSpeed) = 0;
 
     CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) const {
-        if (!settings.matchRefreshRate) {
+        if (settings.syncMode == 0) {
             return CanMatchRefreshRateResult::Disabled;
         }
 
@@ -75,7 +75,7 @@ public:
     }
 
     CanUseScanlineSyncResult canUseScanlineSync(double baseSpeed) const {
-        if (!settings.allowScanlineSync) {
+        if (settings.syncMode != 2) {
             return CanUseScanlineSyncResult::Disabled;
         }
 
