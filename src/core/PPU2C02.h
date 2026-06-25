@@ -150,7 +150,7 @@ public:
         std::memset(sprite_shifter_pattern_hi, 0,   sizeof(sprite_shifter_pattern_hi));
     }
 
-    const uint32_t* getFramebuffer() const { return buf.data(); }
+    uint32_t* getFramebuffer() { return buf.data(); }
 
     void clock() {
         const bool visible   = (scanline >= NES::SCANLINE_VISIBLE_FIRST && scanline <= NES::SCANLINE_VISIBLE_LAST);

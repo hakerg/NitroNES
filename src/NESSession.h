@@ -8,7 +8,6 @@
 #include "core/NESSystem.h"
 #include <chrono>
 #include <cmath>
-#include <stdexcept>
 
 class NESSession : public IFileSession, public INESSystemHost {
 public:
@@ -27,16 +26,13 @@ public:
     NESCoreBase &core() const override { return nes; }
 
     void runFrame(double baseSpeed) override {
-        if (canUseScanlineSync(baseSpeed))
+        if (canUseScanlineSync(baseSpeed) == CanUseScanlineSyncResult::Success) {
             runScanlineSync(baseSpeed);
-        else
+        } else {
             runTimerSync(baseSpeed);
+        }
 
-        nes.renderFrame();
-    }
-
-    void renderFrame(const uint32_t *frameBuffer) override {
-        window.presentNESFrame(frameBuffer, *this);
+        window.presentNESFrame(nes.getFramebuffer(), *this, baseSpeed);
     }
 
     uint8_t readController(int port) override {
@@ -49,11 +45,9 @@ private:
         double elapsed = std::chrono::duration<double>(now - timerPrev).count();
         timerPrev = now;
         timerLag += elapsed;
-        if (timerLag > MAX_LAG)
-            timerLag = MAX_LAG;
+        if (timerLag > MAX_LAG) timerLag = MAX_LAG;
 
         if (nes.paused) {
-            nes.renderFrame();
             return;
         }
 
@@ -66,27 +60,13 @@ private:
         }
     }
 
-    // TODO: naciśnięcie klawisza podczas trzymania shift+tab anuluje spowolnienie
-    // TODO: uspójnić scanline sync (speed 100%, wyłącz dla gsync)
     void runScanlineSync(double baseSpeed) {
         int monitorScanline = 0;
-        if (!window.getScanLine(monitorScanline)) {
-            runTimerSync(baseSpeed);
-            return;
-        }
+        window.getScanLine(monitorScanline);
 
         double monitorHz = window.getRefreshHz();
-        if (monitorHz <= 0.0) {
-            runTimerSync(baseSpeed);
-            return;
-        }
-
         int geoW = 0, geoH = 0;
         window.getMonitorGeometry(geoW, geoH);
-        if (geoW <= 0 || geoH <= 0) {
-            runTimerSync(baseSpeed);
-            return;
-        }
 
         double delta = (settings.scanlineBufferMs / 1000.0) * monitorHz * geoH;
         double predicted = monitorScanline + delta;
@@ -97,8 +77,7 @@ private:
                      (float)NES::OVERSCAN_TOP;
 
         int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
-        if (target < 0)
-            target += NES::TOTAL_SCANLINES;
+        if (target < 0) target += NES::TOTAL_SCANLINES;
 
         updateSpeed(baseSpeed);
         std::lock_guard lock(coreMutex);

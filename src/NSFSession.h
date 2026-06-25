@@ -4,7 +4,6 @@
 #include "IFileSession.h"
 #include "IWindow.h"
 #include "core/NSFPlayer.h"
-#include <stdexcept>
 
 class NSFSession : public IFileSession {
 public:
@@ -40,7 +39,7 @@ public:
 
     void runFrame(double baseSpeed) override {
         updateSpeed(baseSpeed);
-        window.presentBlank(*this);
+        window.presentBlank(*this, baseSpeed);
     }
 
 private:

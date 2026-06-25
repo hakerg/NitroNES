@@ -77,8 +77,12 @@ public:
             SDL_HideCursor();
     }
 
+    bool isFullscreen() const override {
+        return (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+    }
+
     void toggleFullscreen() override {
-        bool isFs = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+        bool isFs = isFullscreen();
         SDL_SetWindowFullscreen(window, !isFs);
     }
 
@@ -95,7 +99,7 @@ public:
 
     // --- Renderowanie ---
     void presentNESFrame(const uint32_t *framebuffer,
-                         IFileSession &session) override {
+                         IFileSession &session, double baseSpeed) override {
         SDL_UpdateTexture(texture, nullptr, framebuffer,
                           NES::SCREEN_WIDTH * sizeof(uint32_t));
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -113,21 +117,21 @@ public:
         SDL_FRect dstRect = {dstX, dstY, dstW, dstH};
         SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
 
-        uiLayer->render(renderer, &session);
+        uiLayer->render(renderer, &session, baseSpeed);
         SDL_RenderPresent(renderer);
     }
 
-    void presentBlank(IFileSession &session) override {
+    void presentBlank(IFileSession &session, double baseSpeed) override {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        uiLayer->render(renderer, &session);
+        uiLayer->render(renderer, &session, baseSpeed);
         SDL_RenderPresent(renderer);
     }
 
-    void presentBlank() override {
+    void presentBlank(double baseSpeed) override {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        uiLayer->render(renderer);
+        uiLayer->render(renderer, nullptr, baseSpeed);
         SDL_RenderPresent(renderer);
     }
 
@@ -173,6 +177,10 @@ public:
 
         w = bounds.w;
         h = bounds.h;
+    }
+
+    bool isVRR() const override {
+        return false; // TODO
     }
 
 private:

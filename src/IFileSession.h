@@ -10,6 +10,23 @@
 #include <mutex>
 #include <string>
 
+enum class CanMatchRefreshRateResult {
+    Success,
+    Disabled,
+    NoRendering,
+    SystemError,
+    RefreshRateOutsideTolerance
+};
+
+enum class CanUseScanlineSyncResult {
+    Success,
+    Disabled,
+    NoRendering,
+    NoFullscreen,
+    SystemError,
+    RefreshRateOutsideTolerance
+};
+
 class IFileSession {
 public:
     const std::string path;
@@ -34,50 +51,80 @@ public:
 
     virtual void runFrame(double baseSpeed) = 0;
 
-    // Zwraca true gdy scanline sync jest włączony i możliwy do użycia.
-    bool canUseScanlineSync(double baseSpeed) const {
-        int tmp = 0;
-        return baseSpeed == 1.0 && settings.allowScanlineSync &&
-               window.getScanLine(tmp);
+    CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) const {
+        if (!settings.matchRefreshRate) {
+            return CanMatchRefreshRateResult::Disabled;
+        }
+
+        if (!core().hasPPU()) {
+            return CanMatchRefreshRateResult::NoRendering;
+        }
+
+        double monitorHz = window.getRefreshHz();
+        if (monitorHz <= 0.0) {
+            return CanMatchRefreshRateResult::SystemError;
+        }
+
+        double ratio = monitorHz / (core().getBaseFramerate() * baseSpeed);
+        int n = static_cast<int>(std::round(ratio));
+        if (n < 1 || !isWithinDetuneTolerance(ratio / n)) {
+            return CanMatchRefreshRateResult::RefreshRateOutsideTolerance;
+        }
+
+        return CanMatchRefreshRateResult::Success;
     }
 
-    // Zwraca mnożnik dopasowania do monitora (np. 0.997), lub 0 gdy niemożliwe.
-    // n=1 przy scanline sync, n=round(ratio) przy timer sync.
-    double calcSpeedMultiplier(double baseSpeed) const {
-        if (!core().hasPPU())
-            return 0.0;
+    CanUseScanlineSyncResult canUseScanlineSync(double baseSpeed) const {
+        if (!settings.allowScanlineSync) {
+            return CanUseScanlineSyncResult::Disabled;
+        }
+
+        int geoW = 0, geoH = 0;
+        window.getMonitorGeometry(geoW, geoH);
+        if (geoW <= 0 || geoH <= 0) {
+            return CanUseScanlineSyncResult::SystemError;
+        }
+
+        CanMatchRefreshRateResult canMatchRefreshRateResult = canMatchRefreshRate(baseSpeed);
+        if (canMatchRefreshRateResult != CanMatchRefreshRateResult::Success) {
+            switch (canMatchRefreshRateResult) {
+                case CanMatchRefreshRateResult::Disabled: return CanUseScanlineSyncResult::Disabled;
+                case CanMatchRefreshRateResult::NoRendering: return CanUseScanlineSyncResult::NoRendering;
+                case CanMatchRefreshRateResult::SystemError: return CanUseScanlineSyncResult::SystemError;
+                case CanMatchRefreshRateResult::RefreshRateOutsideTolerance: return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
+            }
+        }
+
         double monitorHz = window.getRefreshHz();
-        if (monitorHz <= 0.0)
-            return 0.0;
+        double ratio = monitorHz / (core().getBaseFramerate() * baseSpeed);
+        if (!isWithinDetuneTolerance(ratio)) {
+            return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
+        }
 
-        double nesHz =
-            core().pal ? 50.0
-                       : NES::REFRESH_RATE_NTSC_ON; // TODO: proper pal support
-        double ratio = monitorHz / (nesHz * baseSpeed);
+        if (!window.isFullscreen()) {
+            return CanUseScanlineSyncResult::NoFullscreen;
+        }
 
-        int n = canUseScanlineSync(baseSpeed)
-                    ? 1
-                    : static_cast<int>(std::round(ratio));
-        if (n < 1)
-            return 0.0;
+        return CanUseScanlineSyncResult::Success;
+    }
 
-        constexpr double kCents = 10.0;
-        double upper = std::pow(2.0, kCents / 1200.0);
-        double lower = std::pow(2.0, -kCents / 1200.0);
-        double per = ratio / n;
-        return (per >= lower && per <= upper) ? per : 0.0;
+    double calcSpeedMultiplier(double baseSpeed) const {
+        double monitorHz = window.getRefreshHz();
+        double ratio = monitorHz / (core().getBaseFramerate() * baseSpeed);
+        return ratio / static_cast<int>(std::round(ratio));
     }
 
     double adjustedSpeed(double baseSpeed) const {
-        if (!settings.matchRefreshRate)
+        if (canMatchRefreshRate(baseSpeed) != CanMatchRefreshRateResult::Success) {
             return baseSpeed;
-        double m = calcSpeedMultiplier(baseSpeed);
-        return m > 0.0 ? baseSpeed * m : baseSpeed;
+        }
+
+        return baseSpeed * calcSpeedMultiplier(baseSpeed);
     }
 
     void updateSpeed(double baseSpeed) {
         core().speed = adjustedSpeed(baseSpeed);
-        settings.audioSettings.pitch = (float)(1.0 / core().speed);
+        settings.audioSettings.pitch = settings.adjustPitch ? float(1.0 / core().speed) : 1.0f;
     }
 
     static bool isNesRomFile(const std::string &path) {
@@ -97,4 +144,11 @@ protected:
     IWindow &window;
     AppSettings &settings;
     AppAudioStream &audio;
+
+    static bool isWithinDetuneTolerance(double ratio) {
+        constexpr double kCents = 10.0;
+        const double upper = std::pow(2.0, kCents / 1200.0);
+        const double lower = std::pow(2.0, -kCents / 1200.0);
+        return ratio >= lower && ratio <= upper;
+    }
 };

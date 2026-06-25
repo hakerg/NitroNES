@@ -68,7 +68,7 @@ public:
 
     bool isMenuOpen() const { return menuOpen; }
 
-    void render(SDL_Renderer *renderer, IFileSession *session = nullptr) {
+    void render(SDL_Renderer *renderer, IFileSession *session, double baseSpeed) {
         if (input)
             input->setInputBlocked(controlsOpen);
         if (!handler->isVisible())
@@ -149,7 +149,7 @@ public:
             ImGui::EndMainMenuBar();
         }
 
-        renderSyncWindow(renderer, session);
+        renderSyncWindow(renderer, session, baseSpeed);
         renderAudioWindow();
         renderControlsWindow();
 
@@ -282,6 +282,11 @@ private:
         ImGui::TextUnformatted(text);
     }
 
+    void alignedWarning(const char *text) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "%s", text);
+    }
+
     void renderBindingRow(int index) {
         Binding binding = bindingAt(index);
         ImGui::TableNextRow();
@@ -312,8 +317,7 @@ private:
     }
 
     void renderBindingsSection(const char *nameId, int begin, int count) {
-        if (!ImGui::CollapsingHeader(tr(nameId),
-                                     ImGuiTreeNodeFlags_DefaultOpen))
+        if (!ImGui::CollapsingHeader(tr(nameId)))
             return;
 
         bool isThisSectionBinding =
@@ -349,9 +353,11 @@ private:
                 renderBindingRow(begin + i);
             ImGui::EndTable();
         }
+
+        alignedText("");
     }
 
-    void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session) {
+    void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session, double baseSpeed) {
         if (!syncSettingsOpen || !settings)
             return;
 
@@ -365,34 +371,92 @@ private:
         if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
             SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
         }
+        ImGui::EndDisabled();
 
         alignedText("");
 
-        ImGui::Checkbox(tr("settings.match_hz"), &settings->matchRefreshRate);
-        ImGui::EndDisabled();
+        int syncMode = 0;
+        if (settings->allowScanlineSync) {
+            syncMode = 2;
+        } else if (settings->matchRefreshRate) {
+            syncMode = 1;
+        }
+
+        ImGui::TextUnformatted(tr("settings.sync_mode"));
+
+        const char* modeItems[] = {
+            tr("settings.sync.none"),
+            tr("settings.sync.timer"),
+            tr("settings.sync.scanline")
+        };
+
+        if (ImGui::Combo("##sync_mode_combo", &syncMode, modeItems, IM_ARRAYSIZE(modeItems))) {
+            if (syncMode == 0) {
+                settings->matchRefreshRate = false;
+                settings->allowScanlineSync = false;
+            } else if (syncMode == 1) {
+                settings->matchRefreshRate = true;
+                settings->allowScanlineSync = false;
+            } else if (syncMode == 2) {
+                settings->matchRefreshRate = true;
+                settings->allowScanlineSync = true;
+                settings->vsync = false;
+                if (renderer) {
+                    SDL_SetRenderVSync(renderer, 0);
+                }
+            }
+        }
+
+        if (syncMode == 2) {
+            ImGui::SliderInt(tr("settings.scanline.buffer"),
+                             &settings->scanlineBufferMs, 0, 20);
+        }
 
         if (session) {
+            if (syncMode == 1) {
+                renderRefreshRateStatus(session->canMatchRefreshRate(baseSpeed));
+            } else if (syncMode == 2) {
+                renderScanlineSyncStatus(session->canUseScanlineSync(baseSpeed));
+            }
+
+            alignedText("");
+
             double speed = session->core().speed;
             alignedText(
                 std::format("{}: {:.2f}%", tr("settings.current_speed"),
                             speed * 100.0).c_str());
         }
 
-        alignedText("");
-
-        if (ImGui::Checkbox(tr("settings.scanline.enabled"), &settings->allowScanlineSync)) {
-            if (settings->allowScanlineSync) {
-                settings->vsync = false;
-                settings->matchRefreshRate = true;
-            }
-        }
-
-        if (settings->allowScanlineSync) {
-            ImGui::SliderInt(tr("settings.scanline.buffer"),
-                             &settings->scanlineBufferMs, 0, 20);
-        }
-
         ImGui::End();
+    }
+
+    void renderRefreshRateStatus(CanMatchRefreshRateResult res) {
+        switch (res) {
+        case CanMatchRefreshRateResult::SystemError:
+            alignedWarning(tr("status.system_error"));
+            break;
+        case CanMatchRefreshRateResult::RefreshRateOutsideTolerance:
+            alignedWarning(tr("status.outside_tolerance"));
+            break;
+        default:
+            break;
+        }
+    }
+
+    void renderScanlineSyncStatus(CanUseScanlineSyncResult res) {
+        switch (res) {
+        case CanUseScanlineSyncResult::NoFullscreen:
+            alignedWarning(tr("status.no_fullscreen"));
+            break;
+        case CanUseScanlineSyncResult::SystemError:
+            alignedWarning(tr("status.system_error"));
+            break;
+        case CanUseScanlineSyncResult::RefreshRateOutsideTolerance:
+            alignedWarning(tr("status.outside_tolerance"));
+            break;
+        default:
+            break;
+        }
     }
 
     void renderAudioWindow() {
@@ -436,11 +500,8 @@ private:
             cancelBinding();
 
         renderBindingsSection("controls.pad1", 0, 10);
-        alignedText("");
         renderBindingsSection("controls.pad2", 10, 10);
-        alignedText("");
         renderBindingsSection("controls.emulation", 20, 5);
-        alignedText("");
         renderBindingsSection("controls.nsf", 25, 3);
 
         ImGui::End();

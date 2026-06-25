@@ -21,7 +21,6 @@ public:
     }
 
     void run() {
-
         while (running) {
             AppEvent ev;
             while (window.pollEvent(ev))
@@ -30,7 +29,7 @@ public:
             if (session) {
                 session->runFrame(calcSpeed());
             } else {
-                window.presentBlank();
+                window.presentBlank(calcSpeed());
             }
 
             if (guiActive && !window.isMenuOpen() && session &&
@@ -97,8 +96,6 @@ private:
             running = false;
             return;
         case AppEventType::WindowResized:
-            if (session)
-                session->core().renderFrame();
             return;
         case AppEventType::MouseMoved:
             lastMouseMoveTime = window.getTicks();
@@ -111,10 +108,6 @@ private:
             handleKey(ev.key);
             return;
         case AppEventType::KeyUp:
-            if (ev.key == AppKey::SpeedUp || ev.key == AppKey::SpeedDown) {
-                keyFast = false;
-                keySlow = false;
-            }
             return;
         case AppEventType::GamepadAxisRightTrigger:
             padFast = ev.axisDown;
@@ -150,14 +143,6 @@ private:
         case AppKey::FullScreen:
             window.toggleFullscreen();
             return;
-        case AppKey::SpeedUp:
-            keyFast = true;
-            keySlow = false;
-            return;
-        case AppKey::SpeedDown:
-            keySlow = true;
-            keyFast = false;
-            return;
         case AppKey::Reset:
             onReset();
             return;
@@ -169,12 +154,11 @@ private:
     }
 
     double calcSpeed() const {
-        if (keyFast || padFast)
+        if (settings.keys.speedUp.active() || padFast)
             return 4.0;
-        else if (keySlow || padSlow)
+        if (settings.keys.speedDown.active() || padSlow)
             return 0.5;
-        else
-            return 1.0;
+        return 1.0;
     }
 
     IWindow &window;
@@ -186,8 +170,6 @@ private:
 
     bool running = true;
     bool guiActive = true;
-    bool keyFast = false;
-    bool keySlow = false;
     bool padFast = false;
     bool padSlow = false;
     uint32_t speedPadId = 0;

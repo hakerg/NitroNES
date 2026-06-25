@@ -9,7 +9,6 @@
 class INESSystemHost {
 public:
     virtual ~INESSystemHost() = default;
-    virtual void renderFrame(const uint32_t* frameBuffer) = 0;
     virtual uint8_t readController(int port) = 0;
 };
 
@@ -38,8 +37,8 @@ public:
         ppu.reset();
     }
 
-    void renderFrame() override {
-        nesHost.renderFrame(ppu.getFramebuffer());
+    uint32_t* getFramebuffer() {
+        return ppu.getFramebuffer();
     }
 
     PPU2C02* getPPU() override { return &ppu; }

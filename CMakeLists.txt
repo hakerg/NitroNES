@@ -77,4 +77,3 @@ set_property(TARGET accuracy_coin PROPERTY CXX_STANDARD 23)
 set_property(TARGET accuracy_coin PROPERTY CXX_STANDARD_REQUIRED ON)
 target_include_directories(accuracy_coin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_options(accuracy_coin PRIVATE -static-libgcc -static-libstdc++ -static)
-

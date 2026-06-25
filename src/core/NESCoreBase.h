@@ -27,6 +27,15 @@ public:
         return pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
     }
 
+    double getBaseFramerate() const {
+        // TODO: właściwa obsługa PAL jeśli to konieczne
+        return pal ? 50.0 : NES::REFRESH_RATE_NTSC_ON;
+    }
+
+    double getTargetFramerate() const {
+        return getBaseFramerate() * speed;
+    }
+
     void tickFrame(double& outDT) {
         if (paused) { outDT = 0.1; return; }
         pendingDT  = 0.0;
@@ -41,8 +50,7 @@ public:
         while (condition()) clockOneCycle();
     }
 
-    virtual void reset()       {}
-    virtual void renderFrame() {}
+    virtual void reset() {}
 
     virtual PPU2C02* getPPU() { return nullptr; }
     bool hasPPU() { return getPPU() != nullptr; }
