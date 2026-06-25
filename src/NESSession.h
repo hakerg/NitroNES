@@ -15,10 +15,14 @@ public:
     NESSession(const std::string &path, IInputContext &input, IWindow &window,
                AppSettings &settings, IEmulatorHost &host,
                AppAudioStream &audio)
-        : IFileSession(path, audio, window, settings), nes(host, *this, path),
+        : IFileSession(path, audio, window, settings),
+          nes(host, *this, settings.audioSettings, path),
           input(input) {}
 
-    ~NESSession() override { nes.shutdown(); }
+    ~NESSession() override {
+        std::lock_guard lock(coreMutex);
+        audio.detachSession();
+    }
 
     NESCoreBase &core() const override { return nes; }
 
@@ -30,6 +34,7 @@ public:
 
         nes.renderFrame();
     }
+
     void renderFrame(const uint32_t *frameBuffer) override {
         window.presentNESFrame(frameBuffer, *this);
     }
@@ -61,6 +66,8 @@ private:
         }
     }
 
+    // TODO: naciśnięcie klawisza podczas trzymania shift+tab anuluje spowolnienie
+    // TODO: uspójnić scanline sync (speed 100%, wyłącz dla gsync)
     void runScanlineSync(double baseSpeed) {
         int monitorScanline = 0;
         if (!window.getScanLine(monitorScanline)) {

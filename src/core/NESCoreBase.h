@@ -17,8 +17,8 @@ public:
     double  speed  = 1.0;
     bool    paused = false;
 
-    explicit NESCoreBase(IEmulatorHost& host)
-        : a2a03(*this), host(host) {
+    explicit NESCoreBase(IEmulatorHost& host, AudioSettings& audioSettings)
+        : a2a03(*this, audioSettings), host(host) {
         cpuRam.fill(0x00);
     }
     virtual ~NESCoreBase() = default;
@@ -42,7 +42,6 @@ public:
     }
 
     virtual void reset()       {}
-    virtual void shutdown()    {}
     virtual void renderFrame() {}
 
     virtual PPU2C02* getPPU() { return nullptr; }

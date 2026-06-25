@@ -15,9 +15,9 @@ public:
 
 class NESSystem : public NESCoreBase {
 public:
-    explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost, const std::string& path)
-        : NESCoreBase(host), ppu(*this), nesHost(nesHost) {
-        cart = std::make_unique<Cartridge>(path);
+    explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost, AudioSettings& audioSettings, const std::string& path)
+        : NESCoreBase(host, audioSettings), ppu(*this), nesHost(nesHost) {
+        cart = std::make_unique<Cartridge>(path, audioSettings);
         if (!cart->isImageValid()) {
             cart.reset();
             throw std::runtime_error("[NES] Nie udalo sie zaladowac: " + path);

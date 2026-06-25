@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "../AudioSettings.h"
 
 enum class Mirroring {
     HORIZONTAL,
@@ -84,6 +85,8 @@ public:
     virtual float audioOutput() const { return 0.0f; }
 
     virtual bool hasBusConflicts() const { return false; }
+
+    virtual void setAudioSettings(AudioSettings& settings) {}
 
 protected:
     bool a12RisingEdge(uint16_t addr, uint64_t ppuCycle) {

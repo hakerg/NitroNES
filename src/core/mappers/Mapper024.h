@@ -143,6 +143,10 @@ public:
 
     float audioOutput() const override { return audio.output(); }
 
+    void setAudioSettings(AudioSettings& settings) override {
+        audio.setSettings(settings);
+    }
+
 protected:
     virtual bool swapA01() const = 0;
 

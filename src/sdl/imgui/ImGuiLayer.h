@@ -112,7 +112,7 @@ public:
                         ImGui::EndMenu();
                     }
                     ImGui::Separator();
-                    ImGui::Checkbox(tr("emulation.pause"), &core->paused);
+                    ImGui::MenuItem(tr("emulation.pause"), nullptr, &core->paused);
                     if (ImGui::MenuItem(tr("emulation.reset")))
                         handler->onReset();
 
@@ -133,7 +133,6 @@ public:
                 }
                 ImGui::Separator();
 
-                // Zamiast podmenu, otwieramy oddzielne okna
                 if (ImGui::MenuItem(tr("settings.sync")))
                     syncSettingsOpen = true;
 
@@ -150,7 +149,6 @@ public:
             ImGui::EndMainMenuBar();
         }
 
-        // Renderowanie oddzielnych okien
         renderSyncWindow(renderer, session);
         renderAudioWindow();
         renderControlsWindow();
@@ -279,13 +277,18 @@ private:
         }
     }
 
+    void alignedText(const char *text) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(text);
+    }
+
     void renderBindingRow(int index) {
         Binding binding = bindingAt(index);
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted(tr(binding.label));
+        alignedText(tr(binding.label));
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted(bindingName(binding).c_str());
+        alignedText(bindingName(binding).c_str());
         ImGui::TableNextColumn();
         bool isThisRowWaiting = waitingForKey && bindingIndex == index;
         std::string button = isThisRowWaiting ? tr("controls.cancel")
@@ -348,7 +351,6 @@ private:
         }
     }
 
-    // Nowe okno synchronizacji
     void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session) {
         if (!syncSettingsOpen || !settings)
             return;
@@ -364,35 +366,35 @@ private:
             SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
         }
 
+        alignedText("");
+
         ImGui::Checkbox(tr("settings.match_hz"), &settings->matchRefreshRate);
         ImGui::EndDisabled();
 
         if (session) {
             double speed = session->core().speed;
-            ImGui::TextUnformatted(
+            alignedText(
                 std::format("{}: {:.2f}%", tr("settings.current_speed"),
                             speed * 100.0).c_str());
         }
 
-        ImGui::Spacing();
+        alignedText("");
 
-        if (settings->scanlineBufferMs) {
-            if (ImGui::CollapsingHeader(tr("settings.scanline"), ImGuiTreeNodeFlags_DefaultOpen)) {
-                if (ImGui::Checkbox(tr("settings.scanline.enabled"), &settings->allowScanlineSync)) {
-                    settings->vsync = false;
-                    settings->matchRefreshRate = true;
-                }
-                ImGui::BeginDisabled(!settings->allowScanlineSync);
-                ImGui::SliderInt(tr("settings.scanline.buffer"),
-                                 &settings->scanlineBufferMs, 0, 20);
-                ImGui::EndDisabled();
+        if (ImGui::Checkbox(tr("settings.scanline.enabled"), &settings->allowScanlineSync)) {
+            if (settings->allowScanlineSync) {
+                settings->vsync = false;
+                settings->matchRefreshRate = true;
             }
+        }
+
+        if (settings->allowScanlineSync) {
+            ImGui::SliderInt(tr("settings.scanline.buffer"),
+                             &settings->scanlineBufferMs, 0, 20);
         }
 
         ImGui::End();
     }
 
-    // Nowe okno ustawień dźwięku
     void renderAudioWindow() {
         if (!audioSettingsOpen || !settings)
             return;
@@ -405,10 +407,12 @@ private:
 
         AudioSettings &audioSettings = settings->audioSettings;
         ImGui::SliderFloat(tr("settings.volume"), &audioSettings.volume, 0.0f, 2.5f, "%.1f");
+        ImGui::Checkbox(tr("settings.audio.reduce_clicks"), &audioSettings.reduceClicks);
+        ImGui::Checkbox(tr("settings.audio.adjust_pitch"), &settings->adjustPitch);
 
-        ImGui::Spacing();
+        alignedText("");
 
-        if (ImGui::CollapsingHeader(tr("settings.audio.filters"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader(tr("settings.audio.filters"))) {
             ImGui::Checkbox(tr("settings.audio.hp90"), &audioSettings.useFilter90);
             ImGui::Checkbox(tr("settings.audio.hp440"), &audioSettings.useFilter440);
             ImGui::Checkbox(tr("settings.audio.lp14k"), &audioSettings.useFilter14k);
@@ -432,8 +436,11 @@ private:
             cancelBinding();
 
         renderBindingsSection("controls.pad1", 0, 10);
+        alignedText("");
         renderBindingsSection("controls.pad2", 10, 10);
+        alignedText("");
         renderBindingsSection("controls.emulation", 20, 5);
+        alignedText("");
         renderBindingsSection("controls.nsf", 25, 3);
 
         ImGui::End();
@@ -445,7 +452,6 @@ private:
     IMenuHandler *handler = nullptr;
     IInputContext *input = nullptr;
 
-    // Zmienne stanu otwartych okien
     bool controlsOpen = false;
     bool syncSettingsOpen = false;
     bool audioSettingsOpen = false;

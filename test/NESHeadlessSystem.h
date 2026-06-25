@@ -12,6 +12,7 @@ public:
         : NESSystem(
             static_cast<IEmulatorHost&>(*this),
             static_cast<INESSystemHost&>(*this),
+            audioSettings,
             path) {}
 
     void pushAudioSample(float, double) override {}
@@ -77,6 +78,8 @@ protected:
     void onPpuStep(int subIdx) override {
         if (ppuStepHook) ppuStepHook(subIdx);
     }
+
+    AudioSettings audioSettings;
 
 private:
     uint8_t controller1 = 0x00;

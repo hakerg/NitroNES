@@ -10,9 +10,13 @@ class NSFSession : public IFileSession {
 public:
     NSFSession(const std::string &path, IWindow &window, IEmulatorHost &host,
                AppAudioStream &audio, AppSettings &settings)
-        : IFileSession(path, audio, window, settings), nsf(host, path) {}
+        : IFileSession(path, audio, window, settings),
+          nsf(host, settings.audioSettings, path) {}
 
-    ~NSFSession() override { nsf.shutdown(); }
+    ~NSFSession() override {
+        std::lock_guard lock(coreMutex);
+        audio.detachSession();
+    }
 
     NESCoreBase &core() const override { return nsf; }
 

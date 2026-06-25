@@ -1,5 +1,5 @@
 #pragma once
-
+#include "../AudioSettings.h"
 #include <cstdint>
 
 // ============================================================================
@@ -32,6 +32,10 @@
 class VRC6Audio {
 public:
     VRC6Audio() { reset(); }
+
+    void setSettings(AudioSettings& s) {
+        settings = &s;
+    }
 
     void reset() {
         pulse_[0] = Pulse{};
@@ -110,9 +114,10 @@ public:
 
 private:
     void tickChannels() {
-        pulse_[0].clock();
-        pulse_[1].clock();
-        saw_.clock();
+        float pitch = settings->pitch;
+        pulse_[0].clock(pitch);
+        pulse_[1].clock(pitch);
+        saw_.clock(pitch);
     }
 
     void writeSoundCtrl(uint8_t d) {
@@ -135,7 +140,7 @@ private:
         bool gate = false;  // 1 = tryb digitized
         uint16_t freq = 0;  // 12-bit
         bool enabled = false;
-        uint16_t timer = 0;
+        float timer = 0;
         uint8_t step = 0; // 0..15
 
         void writeCtrl(uint8_t d) {
@@ -153,15 +158,14 @@ private:
             }
             enabled = en;
         }
-        void clock() {
+        void clock(float pitch) {
             if (!enabled)
                 return;
-            if (timer == 0) {
-                timer = freq;
+            while (timer <= 0) {
+                timer += freq + 1;
                 step = (uint8_t)((step + 1) & 0x0F);
-            } else {
-                timer--;
             }
+            timer -= pitch;
         }
         uint8_t output() const {
             if (!enabled)
@@ -178,7 +182,7 @@ private:
         uint8_t accumRate = 0; // 6-bit
         uint16_t freq = 0;     // 12-bit
         bool enabled = false;
-        uint16_t timer = 0;
+        float timer = 0;
         uint8_t accum = 0; // 8-bit
         uint8_t step = 0;  // 0..13 (7 par)
 
@@ -194,11 +198,11 @@ private:
             }
             enabled = en;
         }
-        void clock() {
+        void clock(float pitch) {
             if (!enabled)
                 return;
-            if (timer == 0) {
-                timer = freq;
+            while (timer <= 0) {
+                timer += (freq + 1);
                 // Co drugi tick dodaje accumRate; po 14 tickach reset.
                 step++;
                 if ((step & 0x01) == 0)
@@ -207,8 +211,8 @@ private:
                     step = 0;
                     accum = 0;
                 }
-            } else
-                timer--;
+            }
+            timer -= pitch;
         }
         uint8_t output() const {
             if (!enabled)
@@ -222,4 +226,6 @@ private:
     bool soundHalt_ = false;
     uint8_t freqShift_ = 0; // 0 = 1:1, 1 = 16:1, 2 = 256:1
     uint32_t freqShiftCounter_ = 0;
+
+    AudioSettings* settings = nullptr;
 };

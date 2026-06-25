@@ -21,11 +21,12 @@ public:
     void attachSession(IFileSession &s) override {
         session = &s;
         SDL_SetAudioStreamGetCallback(sdlStream, audioCallback, this);
+        SDL_ResumeAudioDevice(deviceId);
     }
 
     void detachSession() override {
+        SDL_PauseAudioDevice(deviceId);
         SDL_SetAudioStreamGetCallback(sdlStream, nullptr, nullptr);
-        session = nullptr;
     }
 
 protected:
@@ -93,7 +94,6 @@ private:
         }
 
         init(nativeSpec.freq);
-        SDL_ResumeAudioDevice(deviceId);
         return true;
     }
 
@@ -120,7 +120,7 @@ private:
     }
 
     void flush(int samplesNeeded) {
-        if (!sdlStream)
+        if (!sdlStream || !session)
             return;
 
         while (outBuf.size() < samplesNeeded) {

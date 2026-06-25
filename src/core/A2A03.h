@@ -17,8 +17,8 @@ public:
 
 class A2A03 : public ICPUBus, public IDMA {
 public:
-    explicit A2A03(IA2A03& core)
-        : cpu(*this), dma(*this), core(core) {}
+    explicit A2A03(IA2A03& core, AudioSettings& audioSettings)
+        : cpu(*this), apu(audioSettings), dma(*this), core(core) {}
 
     void reset() {
         cpu.reset();

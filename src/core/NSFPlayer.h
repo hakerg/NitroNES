@@ -14,16 +14,17 @@ public:
     static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000;
     static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
 
-    explicit NSFPlayer(IEmulatorHost& host, const std::string& path) : NESCoreBase(host) {
+    explicit NSFPlayer(IEmulatorHost& host, AudioSettings& audioSettings, const std::string& path)
+        : NESCoreBase(host, audioSettings) {
         extRam.fill(0x00);
         prgRom.assign(32768, 0x00);
         NSFFile nsf;
         if (!NSFLoader::load(path, nsf))
             throw std::runtime_error("[NSF] Nie udalo sie zaladowac: " + path);
-        load(nsf);
+        load(nsf, audioSettings);
     }
 
-    bool load(const NSFFile& nsf) {
+    bool load(const NSFFile& nsf, AudioSettings& audioSettings) {
         nsfHeader = nsf.header;
         pal = nsfIsPAL() && !nsfIsDualMode();
         cpuClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
@@ -35,6 +36,7 @@ public:
         uint8_t chips = nsfHeader.extraChipFlags;
         if (chips & 0x01) {
             expChip = MapperRegistry::instance().create(24, 1, 1);
+            expChip->setAudioSettings(audioSettings);
         }
 
         if (isBankswitched()) {

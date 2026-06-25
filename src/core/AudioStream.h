@@ -1,18 +1,12 @@
 #pragma once
 #include "AudioFilter.h"
+#include "AudioSettings.h"
 #include "NESConst.h"
 #include <cmath>
 #include <cstring>
 #include <vector>
 
 class NESCoreBase;
-
-struct AudioSettings {
-    float volume = 2.0f;
-    bool useFilter90 = false;
-    bool useFilter440 = false;
-    bool useFilter14k = false;
-};
 
 class AudioStream {
 public:

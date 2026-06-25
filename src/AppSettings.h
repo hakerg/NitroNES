@@ -27,6 +27,7 @@ struct AppSettings {
     int scanlineBufferMs = 10;
     std::string language = "en";
     AudioSettings audioSettings;
+    bool adjustPitch = false;
     ControllerSettings controllers[2] = {ControllerSettings::player1(),
                                          ControllerSettings::player2()};
     AppKeyBindings keys;
@@ -85,6 +86,8 @@ private:
         f("audio.filter90", audioSettings.useFilter90);
         f("audio.filter440", audioSettings.useFilter440);
         f("audio.filter14k", audioSettings.useFilter14k);
+        f("audio.reduceClicks", audioSettings.reduceClicks);
+        f("audio.adjustPitch", adjustPitch);
         for (int p = 0; p < 2; p++) {
             auto &c = controllers[p];
             std::string pre = "pad" + std::to_string(p) + ".";

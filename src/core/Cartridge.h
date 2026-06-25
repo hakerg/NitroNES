@@ -12,7 +12,7 @@
 
 class Cartridge {
 public:
-    Cartridge(const std::string& sFileName) {
+    Cartridge(const std::string& sFileName, AudioSettings& audioSettings) {
         struct sHeader {
             char name[4];
             uint8_t prg_rom_chunks;
@@ -70,6 +70,7 @@ public:
                     return;
                 }
 
+                pMapper->setAudioSettings(audioSettings);
                 bImageValid = true;
             }
             ifs.close();

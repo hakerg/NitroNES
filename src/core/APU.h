@@ -1,4 +1,5 @@
 #pragma once
+#include "AudioSettings.h"
 #include <cstdint>
 
 static constexpr uint8_t LENGTH_TABLE[32] = {
@@ -50,7 +51,7 @@ struct PulseChannel {
     bool     enabled        = false;
 
     uint8_t  dutyPos        = 0;
-    uint16_t timerCounter   = 0;
+    float    timerCounter   = 0;
 
     bool     envStart       = false;
     uint8_t  envDivider     = 0;
@@ -59,6 +60,9 @@ struct PulseChannel {
     uint8_t  sweepDivider   = 0;
     bool     sweepReload    = false;
 
+    AudioSettings& settings;
+
+    PulseChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
         duty        = (data >> 6) & 0x03;
@@ -82,17 +86,16 @@ struct PulseChannel {
     void writeR3(uint8_t data) {
         timerPeriod = (timerPeriod & 0x00FF) | ((uint16_t)(data & 0x07) << 8);
         if (enabled) lengthCounter = LENGTH_TABLE[data >> 3];
-        dutyPos  = 0;
+        if (!settings.reduceClicks) dutyPos = 0;
         envStart = true;
     }
 
     void clockTimer() {
-        if (timerCounter == 0) {
-            timerCounter = timerPeriod;
+        while (timerCounter <= 0) {
+            timerCounter += timerPeriod + 1;
             dutyPos = (dutyPos + 1) & 0x07;
-        } else {
-            timerCounter--;
         }
+        timerCounter -= settings.pitch;
     }
 
     void clockEnvelope() {
@@ -161,9 +164,13 @@ struct TriangleChannel {
     bool     enabled           = false;
 
     uint8_t  seqPos            = 0;
-    uint16_t timerCounter      = 0;
+    float    timerCounter      = 0;
     uint8_t  linearCounter     = 0;
     bool     linearCounterReload = false;
+
+    AudioSettings& settings;
+
+    TriangleChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
         lengthHalt        = (data >> 7) & 0x01;
@@ -181,13 +188,12 @@ struct TriangleChannel {
     }
 
     void clockTimer() {
-        if (timerCounter == 0) {
-            timerCounter = timerPeriod;
+        while (timerCounter <= 0) {
+            timerCounter += timerPeriod + 1;
             if (timerPeriod >= 2 && lengthCounter > 0 && linearCounter > 0)
                 seqPos = (seqPos + 1) & 0x1F;
-        } else {
-            timerCounter--;
         }
+        timerCounter -= settings.pitch;
     }
 
     void clockLinearCounter() {
@@ -229,12 +235,16 @@ struct NoiseChannel {
     uint8_t  lengthCounter = 0;
     bool     enabled       = false;
 
-    uint16_t timerCounter = 0;
+    float    timerCounter = 0;
     uint16_t shiftReg     = 1;
 
     bool     envStart    = false;
     uint8_t  envDivider  = 0;
     uint8_t  envDecay    = 0;
+
+    AudioSettings& settings;
+
+    NoiseChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
         lengthHalt  = (data >> 5) & 0x01;
@@ -253,17 +263,16 @@ struct NoiseChannel {
     }
 
     void clockTimer(bool isPal) {
-        if (timerCounter == 0) {
+        while (timerCounter <= 0) {
             const uint16_t period = isPal ? NOISE_PERIOD_TABLE_PAL[periodIndex]
                                           : NOISE_PERIOD_TABLE_NTSC[periodIndex];
-            timerCounter = period;
+            timerCounter += period + 1;
             uint16_t feedback = (shiftReg & 0x0001) ^
                                 ((modeFlag ? (shiftReg >> 6) : (shiftReg >> 1)) & 0x0001);
             shiftReg >>= 1;
             shiftReg |= (feedback << 14);
-        } else {
-            timerCounter--;
         }
+        timerCounter -= settings.pitch;
     }
 
     void clockEnvelope() {
@@ -418,10 +427,11 @@ struct DMCChannel {
 
 class APU {
 public:
-    APU() {
+    APU(AudioSettings& settings) : pulse1(settings), pulse2(settings),
+        triangle(settings), noise(settings) {
         initMixerTables();
-        frameCounter  = 0;
-        frameMode     = 0;
+        frameCounter = 0;
+        frameMode = 0;
         frameIRQInhibit = false;
         frameIRQPending = false;
         setPAL(false);

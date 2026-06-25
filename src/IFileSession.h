@@ -23,7 +23,7 @@ public:
         audio.attachSession(*this);
     }
 
-    virtual ~IFileSession() { audio.detachSession(); }
+    virtual ~IFileSession() {}
 
     IFileSession(const IFileSession &) = delete;
     IFileSession &operator=(const IFileSession &) = delete;
@@ -77,6 +77,7 @@ public:
 
     void updateSpeed(double baseSpeed) {
         core().speed = adjustedSpeed(baseSpeed);
+        settings.audioSettings.pitch = (float)(1.0 / core().speed);
     }
 
     static bool isNesRomFile(const std::string &path) {
@@ -92,10 +93,8 @@ public:
         return m[0] == 'N' && m[1] == 'E' && m[2] == 'S' && m[3] == 0x1A;
     }
 
-private:
-    AppAudioStream &audio;
-
 protected:
     IWindow &window;
     AppSettings &settings;
+    AppAudioStream &audio;
 };
