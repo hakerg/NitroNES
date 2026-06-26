@@ -41,6 +41,7 @@ public:
             throw std::runtime_error(std::string("SDL_CreateTexture: ") +
                                      SDL_GetError());
         SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+        SDL_SetWindowFullscreen(window, false);
 
         // --- Inicjalizacja ImGui (przez osobną warstwę) ---
         uiLayer = std::make_unique<ImGuiLayer>(window, renderer);
@@ -177,10 +178,6 @@ public:
 
         w = bounds.w;
         h = bounds.h;
-    }
-
-    bool isVRR() const override {
-        return false; // TODO
     }
 
 private:

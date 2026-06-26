@@ -35,5 +35,4 @@ public:
     virtual bool getScanLine(int &outRaw) const = 0;
     virtual double getRefreshHz() const = 0;
     virtual void getMonitorGeometry(int &w, int &h) const = 0;
-    virtual bool isVRR() const = 0;
 };

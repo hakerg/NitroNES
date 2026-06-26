@@ -52,7 +52,7 @@ private:
         }
 
         updateSpeed(baseSpeed);
-        while (timerLag > 0.0) {
+        if (timerLag > 0.0) {
             double dt;
             std::lock_guard lock(coreMutex);
             nes.tickFrame(dt);

@@ -22,11 +22,11 @@ struct AppKeyBindings {
 
 struct AppSettings {
     bool vsync = false;
-    int syncMode = 1;
+    int syncMode = 0;
     int scanlineBufferMs = 10;
     std::string language = "en";
     AudioSettings audioSettings;
-    bool adjustPitch = false;
+    bool adjustPitch = true;
     ControllerSettings controllers[2] = {ControllerSettings::player1(),
                                          ControllerSettings::player2()};
     AppKeyBindings keys;

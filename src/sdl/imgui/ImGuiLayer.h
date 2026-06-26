@@ -282,11 +282,6 @@ private:
         ImGui::TextUnformatted(text);
     }
 
-    void alignedWarning(const char *text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "%s", text);
-    }
-
     void renderBindingRow(int index) {
         Binding binding = bindingAt(index);
         ImGui::TableNextRow();
@@ -377,33 +372,26 @@ private:
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
 
-        const char* modeItems[] = {
-            tr("settings.sync.none"),
-            tr("settings.sync.timer"),
-            tr("settings.sync.scanline")
-        };
+        ImGui::RadioButton(tr("settings.sync.none"), &settings->syncMode, 0);
+        addTooltipToLastItem(tr("settings.sync.none.tooltip"));
 
-        if (ImGui::Combo("##sync_mode_combo", &settings->syncMode, modeItems, IM_ARRAYSIZE(modeItems))) {
-            if (settings->syncMode == 2) {
-                settings->vsync = false;
-                if (renderer) {
-                    SDL_SetRenderVSync(renderer, 0);
-                }
+        ImGui::RadioButton(tr("settings.sync.refresh_rate"), &settings->syncMode, 1);
+        addTooltipToLastItem(tr("settings.sync.refresh_rate.tooltip"));
+
+        if (ImGui::RadioButton(tr("settings.sync.scanline"), &settings->syncMode, 2)) {
+            settings->vsync = false;
+            if (renderer) {
+                SDL_SetRenderVSync(renderer, 0);
             }
         }
+        addTooltipToLastItem(tr("settings.sync.scanline.tooltip"));
 
-        if (settings->syncMode == 2) {
-            ImGui::SliderInt(tr("settings.scanline.buffer"),
-                             &settings->scanlineBufferMs, 0, 20);
-        }
+        ImGui::BeginDisabled(settings->syncMode != 2);
+        ImGui::SliderInt(tr("settings.scanline.buffer"), &settings->scanlineBufferMs, 0, 20);
+        addTooltipToLastItem(tr("settings.scanline.buffer.tooltip"));
+        ImGui::EndDisabled();
 
         if (session) {
-            if (settings->syncMode == 1) {
-                renderRefreshRateStatus(session->canMatchRefreshRate(baseSpeed));
-            } else if (settings->syncMode == 2) {
-                renderScanlineSyncStatus(session->canUseScanlineSync(baseSpeed));
-            }
-
             alignedText("");
 
             double speed = session->core().speed;
@@ -413,35 +401,6 @@ private:
         }
 
         ImGui::End();
-    }
-
-    void renderRefreshRateStatus(CanMatchRefreshRateResult res) {
-        switch (res) {
-        case CanMatchRefreshRateResult::SystemError:
-            alignedWarning(tr("status.system_error"));
-            break;
-        case CanMatchRefreshRateResult::RefreshRateOutsideTolerance:
-            alignedWarning(tr("status.outside_tolerance"));
-            break;
-        default:
-            break;
-        }
-    }
-
-    void renderScanlineSyncStatus(CanUseScanlineSyncResult res) {
-        switch (res) {
-        case CanUseScanlineSyncResult::NoFullscreen:
-            alignedWarning(tr("status.no_fullscreen"));
-            break;
-        case CanUseScanlineSyncResult::SystemError:
-            alignedWarning(tr("status.system_error"));
-            break;
-        case CanUseScanlineSyncResult::RefreshRateOutsideTolerance:
-            alignedWarning(tr("status.outside_tolerance"));
-            break;
-        default:
-            break;
-        }
     }
 
     void renderAudioWindow() {
@@ -490,6 +449,15 @@ private:
         renderBindingsSection("controls.nsf", 25, 3);
 
         ImGui::End();
+    }
+
+    void addTooltipToLastItem(const char *text) {
+        if (!ImGui::IsItemHovered()) return;
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetIO().DisplaySize.x);
+        ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
     }
 
     static constexpr int totalBindings = 28;
