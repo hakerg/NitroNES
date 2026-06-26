@@ -2,11 +2,12 @@
 #include "../AppAudioStream.h"
 #include <SDL3/SDL.h>
 #include <iostream>
-#include <mutex>
 #include <vector>
 
 class SDLAudioStream : public AppAudioStream {
 public:
+    static const int BATCH_SIZE = 256;
+
     explicit SDLAudioStream(AudioSettings &settings)
         : AppAudioStream(settings) {
         if (!open())
@@ -18,21 +19,34 @@ public:
 
     SDL_AudioStream *getSDLStream() const { return sdlStream; }
 
-    void attachSession(IFileSession &s) override {
-        session = &s;
-        SDL_SetAudioStreamGetCallback(sdlStream, audioCallback, this);
-        SDL_ResumeAudioDevice(deviceId);
-    }
+    AudioBufferHealth getHealth() override {
+        SDL_AudioSpec dstSpec{};
+        SDL_GetAudioStreamFormat(sdlStream, nullptr, &dstSpec);
 
-    void detachSession() override {
-        SDL_PauseAudioDevice(deviceId);
-        SDL_SetAudioStreamGetCallback(sdlStream, nullptr, nullptr);
+        int queuedBytes = SDL_GetAudioStreamQueued(sdlStream);
+        float bytesPerMs = dstSpec.freq * dstSpec.channels * SDL_AUDIO_BYTESIZE(dstSpec.format) * 0.001f;
+        float queuedMs = queuedBytes / bytesPerMs;
+
+        const float MIN_SAFE_MS = 20.0f;
+        const float MAX_SAFE_MS = 40.0f;
+
+        if (queuedMs < MIN_SAFE_MS) {
+            return AudioBufferHealth::Underflow;
+        }
+        if (queuedMs > MAX_SAFE_MS) {
+            return AudioBufferHealth::Overflow;
+        }
+        return AudioBufferHealth::Healthy;
     }
 
 protected:
     void submitSample(float sample) override {
-        std::lock_guard lock(outMutex);
         outBuf.push_back(sample);
+        if (outBuf.size() >= BATCH_SIZE) {
+            SDL_PutAudioStreamData(sdlStream, outBuf.data(),
+                                   (int)(outBuf.size() * sizeof(float)));
+            outBuf.clear();
+        }
     }
 
 private:
@@ -109,46 +123,7 @@ private:
         }
     }
 
-    static void SDLCALL audioCallback(void *userdata, SDL_AudioStream *stream,
-                                      int additional_amount, int total_amount) {
-        auto *self = static_cast<SDLAudioStream *>(userdata);
-        if (!self)
-            return;
-
-        int samplesNeeded = additional_amount / (int)sizeof(float);
-        self->flush(samplesNeeded);
-    }
-
-    void flush(int samplesNeeded) {
-        if (!sdlStream || !session)
-            return;
-
-        while (outBuf.size() < samplesNeeded && !session->core().paused) {
-            if (!session->coreMutex.try_lock())
-                continue;
-            session->core().tickWhile(
-                [&] { return outBuf.size() < samplesNeeded; });
-            session->coreMutex.unlock();
-        }
-
-        if (samplesNeeded > 0) {
-            overflowCount = 0;
-        } else {
-            overflowCount++;
-        }
-
-        std::lock_guard lock(outMutex);
-        if (overflowCount < 2) {
-            SDL_PutAudioStreamData(sdlStream, outBuf.data(),
-                                   (int)(outBuf.size() * sizeof(float)));
-        }
-        outBuf.clear();
-    }
-
-    IFileSession *session = nullptr;
     SDL_AudioDeviceID deviceId = 0;
     SDL_AudioStream *sdlStream = nullptr;
     std::vector<float> outBuf;
-    std::mutex outMutex;
-    int overflowCount = 0;
 };

@@ -74,7 +74,7 @@ public:
         if (!handler->isVisible())
             return;
 
-        NESCoreBase *core = session ? &session->core() : nullptr;
+        NESCoreBase *core = session ? &session->getCore() : nullptr;
 
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -394,7 +394,7 @@ private:
         if (session) {
             alignedText("");
 
-            double speed = session->core().speed;
+            double speed = session->getCore().speed;
             alignedText(
                 std::format("{}: {:.2f}%", tr("settings.current_speed"),
                             speed * 100.0).c_str());

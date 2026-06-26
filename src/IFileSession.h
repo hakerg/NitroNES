@@ -3,12 +3,14 @@
 #include "AppEvent.h"
 #include "AppSettings.h"
 #include "IWindow.h"
+#include "core/NESCoordUtils.h"
 #include "core/NESCoreBase.h"
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <mutex>
 #include <string>
+#include <chrono>
+#include <thread>
 
 enum class CanMatchRefreshRateResult {
     Success,
@@ -31,13 +33,11 @@ class IFileSession {
 public:
     const std::string path;
     const std::string filename;
-    std::mutex coreMutex;
 
     explicit IFileSession(const std::string &path, AppAudioStream &audio,
                           IWindow &window, AppSettings &settings)
         : path(path), filename(std::filesystem::path(path).filename().string()),
           audio(audio), window(window), settings(settings) {
-        audio.attachSession(*this);
     }
 
     virtual ~IFileSession() {}
@@ -45,18 +45,37 @@ public:
     IFileSession(const IFileSession &) = delete;
     IFileSession &operator=(const IFileSession &) = delete;
 
-    virtual NESCoreBase &core() const = 0;
+    virtual NESCoreBase& getCore() const = 0;
 
     virtual void processKeyDown(AppKey key) {}
 
-    virtual void runFrame(double baseSpeed) = 0;
+    void clockCore(double baseSpeed) {
+        NESCoreBase& core = getCore();
+        double adjustedSpeed = getAdjustedSpeed(baseSpeed);
+        core.speed = adjustedSpeed;
+        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / adjustedSpeed);
 
-    CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed, bool checkSetting = true) const {
-        if (checkSetting && settings.syncMode == 0) {
+        if (core.paused || audio.getHealth() == AudioBufferHealth::Overflow) {
+            return;
+        }
+
+        if (audio.getHealth() == AudioBufferHealth::Underflow) {
+            core.tickFrame();
+        }
+
+        if (canUseScanlineSync(baseSpeed) == CanUseScanlineSyncResult::Success) {
+            syncScanline();
+        } else {
+            syncTimer(baseSpeed);
+        }
+    }
+
+    CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) const {
+        if (settings.syncMode == 0) {
             return CanMatchRefreshRateResult::Disabled;
         }
 
-        if (!core().hasPPU()) {
+        if (!getCore().hasPPU()) {
             return CanMatchRefreshRateResult::NoRendering;
         }
 
@@ -65,7 +84,7 @@ public:
             return CanMatchRefreshRateResult::SystemError;
         }
 
-        double ratio = monitorHz / (core().getBaseFramerate() * baseSpeed);
+        double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
         int n = static_cast<int>(std::round(ratio));
         if (n < 1 || !isWithinDetuneTolerance(ratio / n)) {
             return CanMatchRefreshRateResult::RefreshRateOutsideTolerance;
@@ -74,8 +93,8 @@ public:
         return CanMatchRefreshRateResult::Success;
     }
 
-    CanUseScanlineSyncResult canUseScanlineSync(double baseSpeed, bool checkSetting = true) const {
-        if (checkSetting && settings.syncMode != 2) {
+    CanUseScanlineSyncResult canUseScanlineSync(double baseSpeed) const {
+        if (settings.syncMode != 2) {
             return CanUseScanlineSyncResult::Disabled;
         }
 
@@ -96,7 +115,7 @@ public:
         }
 
         double monitorHz = window.getRefreshHz();
-        double ratio = monitorHz / (core().getBaseFramerate() * baseSpeed);
+        double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
         if (!isWithinDetuneTolerance(ratio)) {
             return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
         }
@@ -108,23 +127,9 @@ public:
         return CanUseScanlineSyncResult::Success;
     }
 
-    double calcSpeedMultiplier(double baseSpeed) const {
-        double monitorHz = window.getRefreshHz();
-        double ratio = monitorHz / (core().getBaseFramerate() * baseSpeed);
-        return ratio / static_cast<int>(std::round(ratio));
-    }
-
-    double adjustedSpeed(double baseSpeed) const {
-        if (canMatchRefreshRate(baseSpeed) != CanMatchRefreshRateResult::Success) {
-            return baseSpeed;
-        }
-
-        return baseSpeed * calcSpeedMultiplier(baseSpeed);
-    }
-
-    void updateSpeed(double baseSpeed) {
-        core().speed = adjustedSpeed(baseSpeed);
-        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core().speed);
+    uint32_t* getFramebuffer() {
+        NESCoreBase& core = getCore();
+        return core.hasPPU() ? core.getPPU()->getFramebuffer() : nullptr;
     }
 
     static bool isNesRomFile(const std::string &path) {
@@ -145,10 +150,81 @@ protected:
     AppSettings &settings;
     AppAudioStream &audio;
 
+private:
     static bool isWithinDetuneTolerance(double ratio) {
         constexpr double kCents = 10.0;
         const double upper = std::pow(2.0, kCents / 1200.0);
         const double lower = std::pow(2.0, -kCents / 1200.0);
         return ratio >= lower && ratio <= upper;
     }
+
+    void syncScanline() {
+        int monitorScanline = 0;
+        window.getScanLine(monitorScanline);
+
+        double monitorHz = window.getRefreshHz();
+        int geoW = 0, geoH = 0;
+        window.getMonitorGeometry(geoW, geoH);
+
+        double delta = (settings.scanlineBufferMs / 1000.0) * monitorHz * geoH;
+        double predicted = monitorScanline + delta;
+
+        float dstX, dstY, dstW, dstH;
+        NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH);
+        float nesY = ((float)predicted - dstY) / dstH * (float)NES::VISIBLE_H +
+                     (float)NES::OVERSCAN_TOP;
+
+        int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
+        if (target < 0) target += NES::TOTAL_SCANLINES;
+
+        NESCoreBase& core = getCore();
+        core.tickWhile([&] { return core.getCurrentScanline() != target; });
+    }
+
+    void syncTimer(double baseSpeed) {
+        using namespace std::chrono;
+        NESCoreBase& core = getCore();
+
+        double adjustedSpeed = getAdjustedSpeed(baseSpeed);
+        double targetFps = core.getBaseFramerate() * adjustedSpeed;
+
+        auto frameDuration = duration_cast<high_resolution_clock::duration>(
+            duration<double>(1.0 / targetFps)
+        );
+
+        auto now = high_resolution_clock::now();
+        auto targetTime = lastFrameTime + frameDuration;
+
+        if (now - lastFrameTime > milliseconds(20)) {
+            targetTime = now;
+        }
+
+        auto sleepMs = duration_cast<milliseconds>(targetTime - now).count() - 2;
+        if (sleepMs >= 0) {
+            window.delay(sleepMs);
+        }
+
+        while (high_resolution_clock::now() < targetTime) {
+            std::this_thread::yield();
+        }
+
+        lastFrameTime = targetTime;
+        core.tickFrame();
+    }
+
+    double getAdjustedSpeed(double baseSpeed) const {
+        if (canMatchRefreshRate(baseSpeed) != CanMatchRefreshRateResult::Success) {
+            return baseSpeed;
+        }
+
+        return baseSpeed * calcSpeedMultiplier(baseSpeed);
+    }
+
+    double calcSpeedMultiplier(double baseSpeed) const {
+        double monitorHz = window.getRefreshHz();
+        double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
+        return ratio / static_cast<int>(std::round(ratio));
+    }
+
+    std::chrono::high_resolution_clock::time_point lastFrameTime;
 };

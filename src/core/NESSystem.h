@@ -37,10 +37,6 @@ public:
         ppu.reset();
     }
 
-    uint32_t* getFramebuffer() {
-        return ppu.getFramebuffer();
-    }
-
     PPU2C02* getPPU() override { return &ppu; }
 
     bool pollNMI() override { return !ppu.pollNmiLow(); }

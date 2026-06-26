@@ -1,14 +1,16 @@
 #pragma once
 #include "core/AudioStream.h"
-#include <mutex>
 
-class IFileSession;
+enum class AudioBufferHealth {
+    Healthy,
+    Underflow,
+    Overflow
+};
 
 class AppAudioStream : public AudioStream {
 public:
     AppAudioStream(AudioSettings &settings) : AudioStream(settings) {}
     virtual ~AppAudioStream() = default;
 
-    virtual void attachSession(IFileSession &session) = 0;
-    virtual void detachSession() = 0;
+    virtual AudioBufferHealth getHealth() = 0;
 };

@@ -159,7 +159,7 @@ private:
 
         if (head == "frames" && parts.size() == 2) {
             uint32_t n = parseInt(parts[1]);
-            for (uint32_t i = 0; i < n; ++i) { double dt; nes.tickFrame(dt); }
+            for (uint32_t i = 0; i < n; ++i) nes.tickFrame();
             return true;
         }
         if (head == "cycles" && parts.size() == 2) {

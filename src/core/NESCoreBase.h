@@ -36,12 +36,10 @@ public:
         return getBaseFramerate() * speed;
     }
 
-    void tickFrame(double& outDT) {
-        if (paused) { outDT = 0.1; return; }
-        pendingDT  = 0.0;
+    void tickFrame() {
+        if (paused) return;
         frameReady = false;
         do { clockOneCycle(); } while (!frameReady);
-        outDT = pendingDT;
     }
 
     template <typename ConditionFunc>
@@ -85,7 +83,6 @@ protected:
 private:
     IEmulatorHost& host;
     bool   frameReady = false;
-    double pendingDT  = 0.0;
 
     void clockOneCycle() {
         onPreStep();
@@ -104,7 +101,6 @@ private:
         onPostStep();
 
         double dt = 1.0 / (getCPUClockRate() * speed);
-        pendingDT += dt;
         host.pushAudioSample(a2a03.getAPU().getOutputSample() + mapperAudio(), dt);
     }
 };

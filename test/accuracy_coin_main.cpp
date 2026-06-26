@@ -41,8 +41,7 @@ struct Decoded {
 char codeToChar(int n) { return n < 10 ? char('0' + n) : char('A' + (n - 10)); }
 
 void runFrames(NESHeadlessSystem& nes, int frames) {
-    double dt;
-    for (int f = 0; f < frames; ++f) nes.tickFrame(dt);
+    for (int f = 0; f < frames; ++f) nes.tickFrame();
 }
 
 Decoded decode(NESHeadlessSystem& nes) {

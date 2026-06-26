@@ -187,6 +187,8 @@ private:
             a2a03.getCPU().jumpTo(nsfHeader.playAddr);
 
             playTimer += playCycles;
+
+            onFrameComplete();
         }
     }
 
@@ -205,8 +207,8 @@ private:
     }
 
     double calcPlayCycles(bool palMode) const {
-        double   clk   = palMode ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
-        uint16_t speed = palMode ? nsfHeader.speedPAL   : nsfHeader.speedNTSC;
+        double clk = palMode ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
+        uint16_t speed = palMode ? nsfHeader.speedPAL : nsfHeader.speedNTSC;
         if (speed == 0) speed = palMode ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
         return clk * speed / 1000000.0;
     }

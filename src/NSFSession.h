@@ -13,15 +13,11 @@ public:
           nsf(host, settings.audioSettings, path) {}
 
     ~NSFSession() override {
-        std::lock_guard lock(coreMutex);
-        audio.detachSession();
     }
 
-    NESCoreBase &core() const override { return nsf; }
+    NESCoreBase& getCore() const override { return nsf; }
 
     void processKeyDown(AppKey key) override {
-        std::lock_guard lock(coreMutex);
-
         switch (key) {
         case AppKey::NsfTogglePause:
             nsf.paused = !nsf.paused;
@@ -35,11 +31,6 @@ public:
         default:
             break;
         }
-    }
-
-    void runFrame(double baseSpeed) override {
-        updateSpeed(baseSpeed);
-        window.presentBlank(*this, baseSpeed);
     }
 
 private:

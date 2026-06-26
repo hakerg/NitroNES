@@ -26,11 +26,11 @@ public:
             while (window.pollEvent(ev))
                 processEvent(ev);
 
+            double baseSpeed = calcSpeed();
             if (session) {
-                session->runFrame(calcSpeed());
-            } else {
-                window.presentBlank(calcSpeed());
+                session->clockCore(baseSpeed);
             }
+            window.presentNESFrame(session.get(), baseSpeed);
 
             if (guiActive && !window.isMenuOpen() && session &&
                 window.getTicks() - lastMouseMoveTime >= 1000) {
@@ -38,8 +38,7 @@ public:
                 guiActive = false;
             }
 
-            if (session)
-                window.delay(1);
+            window.delay(1);
         }
     }
 
@@ -72,8 +71,7 @@ public:
     void onReset() override {
         if (!session)
             return;
-        std::lock_guard lock(session->coreMutex);
-        session->core().reset();
+        session->getCore().reset();
     }
 
     void onQuit() override { running = false; }
@@ -138,7 +136,7 @@ private:
         switch (key) {
         case AppKey::Pause:
             if (session)
-                session->core().paused = !session->core().paused;
+                session->getCore().paused = !session->getCore().paused;
             return;
         case AppKey::FullScreen:
             window.toggleFullscreen();

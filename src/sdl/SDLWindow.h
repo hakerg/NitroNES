@@ -98,45 +98,32 @@ public:
         SDL_GetWindowSizeInPixels(window, &w, &h);
     }
 
-    // --- Renderowanie ---
-    void presentNESFrame(const uint32_t *framebuffer,
-                         IFileSession &session, double baseSpeed) override {
-        SDL_UpdateTexture(texture, nullptr, framebuffer,
-                          NES::SCREEN_WIDTH * sizeof(uint32_t));
+    void presentNESFrame(IFileSession* session, double baseSpeed) override {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        int w = 0, h = 0;
-        getPixelSize(w, h);
+        uint32_t* framebuffer = session ? session->getFramebuffer() : nullptr;
+        if (framebuffer) {
+            SDL_UpdateTexture(texture, nullptr, framebuffer,
+                NES::SCREEN_WIDTH * sizeof(uint32_t));
 
-        float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
-        NES::calcDestRect(w, h, dstX, dstY, dstW, dstH);
+            int w = 0, h = 0;
+            getPixelSize(w, h);
 
-        SDL_FRect srcRect = {0.0f, static_cast<float>(NES::OVERSCAN_TOP),
-                             static_cast<float>(NES::SCREEN_WIDTH),
-                             static_cast<float>(NES::VISIBLE_H)};
-        SDL_FRect dstRect = {dstX, dstY, dstW, dstH};
-        SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
+            float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
+            NES::calcDestRect(w, h, dstX, dstY, dstW, dstH);
 
-        uiLayer->render(renderer, &session, baseSpeed);
+            SDL_FRect srcRect = {0.0f, static_cast<float>(NES::OVERSCAN_TOP),
+                                 static_cast<float>(NES::SCREEN_WIDTH),
+                                 static_cast<float>(NES::VISIBLE_H)};
+            SDL_FRect dstRect = {dstX, dstY, dstW, dstH};
+            SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
+        }
+
+        uiLayer->render(renderer, session, baseSpeed);
         SDL_RenderPresent(renderer);
     }
 
-    void presentBlank(IFileSession &session, double baseSpeed) override {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-        uiLayer->render(renderer, &session, baseSpeed);
-        SDL_RenderPresent(renderer);
-    }
-
-    void presentBlank(double baseSpeed) override {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-        uiLayer->render(renderer, nullptr, baseSpeed);
-        SDL_RenderPresent(renderer);
-    }
-
-    // --- GUI (Menu) ---
     void initMenu(AppSettings &s, IMenuHandler &h,
                   IInputContext &input) override {
         this->input = &input;
@@ -147,7 +134,6 @@ public:
         return platformAPI.openFileDialog(window);
     }
 
-    // --- Sprzęt i Synchronizacja ---
     bool getScanLine(int &outRaw) const override {
         return platformAPI.getScanLine(window, outRaw);
     }
