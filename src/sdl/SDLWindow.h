@@ -214,6 +214,9 @@ private:
         case SDL_EVENT_MOUSE_MOTION:
             out = {AppEventType::MouseMoved};
             return true;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            out = {AppEventType::MouseButtonDown};
+            return true;
         case SDL_EVENT_KEY_DOWN:
             if (ev.key.repeat)
                 return false;

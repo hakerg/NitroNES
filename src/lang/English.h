@@ -46,7 +46,7 @@ public:
             {"controls.pad1", "Pad 1"},
             {"controls.pad2", "Pad 2"},
             {"controls.emulation", "Emulation"},
-            {"controls.nsf", "NSF"},
+            {"controls.nsf", "NSF player"},
             {"controls.up", "Up"},
             {"controls.down", "Down"},
             {"controls.left", "Left"},

@@ -82,7 +82,7 @@ protected:
 
 private:
     IEmulatorHost& host;
-    bool   frameReady = false;
+    bool frameReady = false;
 
     void clockOneCycle() {
         onPreStep();

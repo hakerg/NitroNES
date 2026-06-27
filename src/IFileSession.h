@@ -59,6 +59,7 @@ public:
             return;
         }
 
+        // do not change 'if' to 'while'
         if (audio.getHealth() == AudioBufferHealth::Underflow) {
             core.tickFrame();
         }
@@ -195,7 +196,7 @@ private:
         auto now = high_resolution_clock::now();
         auto targetTime = lastFrameTime + frameDuration;
 
-        if (now - lastFrameTime > milliseconds(20)) {
+        if (now - lastFrameTime > milliseconds(30)) {
             targetTime = now;
         }
 

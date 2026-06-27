@@ -10,7 +10,7 @@ enum class AppKey {
     Reset,
     NsfTogglePause,
     NsfNextSong,
-    NsfPrevSong,
+    NsfPrevSong
 };
 
 enum class AppEventType {
@@ -23,6 +23,7 @@ enum class AppEventType {
     GamepadAxisRightTrigger,
     GamepadAxisLeftTrigger,
     MouseMoved,
+    MouseButtonDown
 };
 
 struct AppEvent {

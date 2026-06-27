@@ -22,15 +22,46 @@ public:
         ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
         ImGui_ImplSDLRenderer3_Init(renderer);
 
+        ImVec4 black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+        ImVec4 grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
+        ImVec4 darkBlue = ImVec4(0.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
+        ImVec4 blue = ImVec4(24.0f/255.0f, 80.0f/255.0f, 199.0f/255.0f, 1.0f);
+        ImVec4 lightBlue = ImVec4(104.0f/255.0f, 166.0f/255.0f, 1.0f, 1.0f);
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        float scale = 2.0f;
+        float tileDim = 8.0f * scale;
+        auto tileSize = ImVec2(tileDim, tileDim);
+        auto emptySize = ImVec2(0.0f, 0.0f);
+
+        style.WindowBorderSize = 0.0f;
+        style.FrameBorderSize = 0.0f;
+        style.PopupBorderSize = 0.0f;
+        style.ChildBorderSize = 0.0f;
+        style.FramePadding = emptySize;
+        style.DisplaySafeAreaPadding = emptySize;
+        style.WindowPadding = tileSize;
+        style.ItemSpacing = tileSize;
+        style.ItemInnerSpacing = tileSize;
+
+        style.AntiAliasedLines = false;
+        style.AntiAliasedLinesUseTex = false;
+        style.AntiAliasedFill = false;
+
+        style.Colors[ImGuiCol_WindowBg] = grey;
+        style.Colors[ImGuiCol_ChildBg] = grey;
+        style.Colors[ImGuiCol_MenuBarBg] = grey;
+        style.Colors[ImGuiCol_PopupBg] = grey;
+
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
-        fontConfig.GlyphOffset.y = -2.0f;
-        fontConfig.ExtraSizeScale = 16.0f / 24.0f;
+        fontConfig.GlyphOffset.x = 1.0f;
 
         ImGuiIO &io = ImGui::GetIO();
-        io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 24.0f, &fontConfig);
+        io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 8.0f, &fontConfig);
         io.Fonts->Build();
         io.IniFilename = nullptr;
+        io.FontGlobalScale = scale;
     }
 
     ~ImGuiLayer() {
@@ -83,8 +114,7 @@ public:
         menuOpen = false;
 
         if (ImGui::BeginMainMenuBar()) {
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                                ImVec2(ImGui::GetStyle().FramePadding.x, 0));
+            ImGui::SetCursorPosX(0.0f);
 
             if (ImGui::BeginMenu(tr("file"))) {
                 menuOpen = true;
@@ -94,7 +124,6 @@ public:
                     handler->onReload();
                 if (session && ImGui::MenuItem(tr("file.close")))
                     handler->onClose();
-                ImGui::Separator();
                 if (ImGui::MenuItem(tr("file.quit")))
                     handler->onQuit();
                 ImGui::EndMenu();
@@ -111,7 +140,6 @@ public:
                             core->pal = true;
                         ImGui::EndMenu();
                     }
-                    ImGui::Separator();
                     ImGui::MenuItem(tr("emulation.pause"), nullptr, &core->paused);
                     if (ImGui::MenuItem(tr("emulation.reset")))
                         handler->onReset();
@@ -131,7 +159,6 @@ public:
                     }
                     ImGui::EndMenu();
                 }
-                ImGui::Separator();
 
                 if (ImGui::MenuItem(tr("settings.sync")))
                     syncSettingsOpen = true;
@@ -145,13 +172,15 @@ public:
                 ImGui::EndMenu();
             }
 
-            ImGui::PopStyleVar();
             ImGui::EndMainMenuBar();
         }
 
         renderSyncWindow(renderer, session, baseSpeed);
         renderAudioWindow();
         renderControlsWindow();
+
+        //menuOpen = true;
+        //ImGui::ShowStyleEditor();
 
         ImGui::Render();
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
@@ -277,18 +306,13 @@ private:
         }
     }
 
-    void alignedText(const char *text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-    }
-
     void renderBindingRow(int index) {
         Binding binding = bindingAt(index);
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        alignedText(tr(binding.label));
+        ImGui::TextUnformatted(tr(binding.label));
         ImGui::TableNextColumn();
-        alignedText(bindingName(binding).c_str());
+        ImGui::TextUnformatted(bindingName(binding).c_str());
         ImGui::TableNextColumn();
         bool isThisRowWaiting = waitingForKey && bindingIndex == index;
         std::string button = isThisRowWaiting ? tr("controls.cancel")
@@ -349,7 +373,7 @@ private:
             ImGui::EndTable();
         }
 
-        alignedText("");
+        ImGui::TextUnformatted("");
     }
 
     void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session, double baseSpeed) {
@@ -357,7 +381,7 @@ private:
             return;
 
         menuOpen = true;
-        if (!ImGui::Begin(tr("settings.sync"), &syncSettingsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (!ImGui::Begin(tr("settings.sync"), &syncSettingsOpen, WINDOW_FLAGS)) {
             ImGui::End();
             return;
         }
@@ -368,7 +392,7 @@ private:
         }
         ImGui::EndDisabled();
 
-        alignedText("");
+        ImGui::TextUnformatted("");
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
 
@@ -392,10 +416,10 @@ private:
         ImGui::EndDisabled();
 
         if (session) {
-            alignedText("");
+            ImGui::TextUnformatted("");
 
             double speed = session->getCore().speed;
-            alignedText(
+            ImGui::TextUnformatted(
                 std::format("{}: {:.2f}%", tr("settings.current_speed"),
                             speed * 100.0).c_str());
         }
@@ -408,7 +432,7 @@ private:
             return;
 
         menuOpen = true;
-        if (!ImGui::Begin(tr("settings.audio"), &audioSettingsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (!ImGui::Begin(tr("settings.audio"), &audioSettingsOpen, WINDOW_FLAGS)) {
             ImGui::End();
             return;
         }
@@ -418,7 +442,7 @@ private:
         ImGui::Checkbox(tr("settings.audio.reduce_clicks"), &audioSettings.reduceClicks);
         ImGui::Checkbox(tr("settings.audio.adjust_pitch"), &settings->adjustPitch);
 
-        alignedText("");
+        ImGui::TextUnformatted("");
 
         if (ImGui::CollapsingHeader(tr("settings.audio.filters"))) {
             ImGui::Checkbox(tr("settings.audio.hp90"), &audioSettings.useFilter90);
@@ -434,7 +458,7 @@ private:
             return;
         menuOpen = true;
         bool wasOpen = controlsOpen;
-        if (!ImGui::Begin(tr("controls.title"), &controlsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (!ImGui::Begin(tr("controls.title"), &controlsOpen, WINDOW_FLAGS)) {
             ImGui::End();
             if (wasOpen && !controlsOpen && waitingForKey)
                 cancelBinding();
@@ -461,6 +485,8 @@ private:
     }
 
     static constexpr int totalBindings = 28;
+    static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse;
+
     AppSettings *settings = nullptr;
     bool menuOpen = false;
     IMenuHandler *handler = nullptr;

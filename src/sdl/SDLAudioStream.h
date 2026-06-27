@@ -17,7 +17,7 @@ public:
 
     bool isOpen() const { return deviceId != 0 && sdlStream != nullptr; }
 
-    SDL_AudioStream *getSDLStream() const { return sdlStream; }
+    SDL_AudioStream* getSDLStream() const { return sdlStream; }
 
     AudioBufferHealth getHealth() override {
         SDL_AudioSpec dstSpec{};
@@ -124,6 +124,6 @@ private:
     }
 
     SDL_AudioDeviceID deviceId = 0;
-    SDL_AudioStream *sdlStream = nullptr;
+    SDL_AudioStream* sdlStream = nullptr;
     std::vector<float> outBuf;
 };

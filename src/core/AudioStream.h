@@ -25,7 +25,7 @@ public:
         blipRunningSum = 0.0f;
         buildKernel();
 
-        hpf01 = AudioFilter(FilterType::HighPass, 0.1f,
+        hpf01 = AudioFilter(FilterType::HighPass, 1.0f,
                             (float)sampleRate);
         hpf90 = AudioFilter(FilterType::HighPass, NES::AUDIO_HP1_CUTOFF,
                             (float)sampleRate);

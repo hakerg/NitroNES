@@ -96,6 +96,7 @@ private:
         case AppEventType::WindowResized:
             return;
         case AppEventType::MouseMoved:
+        case AppEventType::MouseButtonDown:
             lastMouseMoveTime = window.getTicks();
             if (!guiActive) {
                 window.showCursor(true);
