@@ -15,7 +15,6 @@
 enum class CanMatchRefreshRateResult {
     Success,
     Disabled,
-    NoRendering,
     SystemError,
     RefreshRateOutsideTolerance
 };
@@ -23,7 +22,6 @@ enum class CanMatchRefreshRateResult {
 enum class CanUseScanlineSyncResult {
     Success,
     Disabled,
-    NoRendering,
     NoFullscreen,
     SystemError,
     RefreshRateOutsideTolerance
@@ -76,10 +74,6 @@ public:
             return CanMatchRefreshRateResult::Disabled;
         }
 
-        if (!getCore().hasPPU()) {
-            return CanMatchRefreshRateResult::NoRendering;
-        }
-
         double monitorHz = window.getRefreshHz();
         if (monitorHz <= 0.0) {
             return CanMatchRefreshRateResult::SystemError;
@@ -109,7 +103,6 @@ public:
         if (canMatchRefreshRateResult != CanMatchRefreshRateResult::Success) {
             switch (canMatchRefreshRateResult) {
                 case CanMatchRefreshRateResult::Disabled: return CanUseScanlineSyncResult::Disabled;
-                case CanMatchRefreshRateResult::NoRendering: return CanUseScanlineSyncResult::NoRendering;
                 case CanMatchRefreshRateResult::SystemError: return CanUseScanlineSyncResult::SystemError;
                 case CanMatchRefreshRateResult::RefreshRateOutsideTolerance: return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
             }
@@ -128,10 +121,7 @@ public:
         return CanUseScanlineSyncResult::Success;
     }
 
-    uint32_t* getFramebuffer() {
-        NESCoreBase& core = getCore();
-        return core.hasPPU() ? core.getPPU()->getFramebuffer() : nullptr;
-    }
+    uint32_t* getFramebuffer() { return getCore().getFramebuffer(); }
 
     static bool isNesRomFile(const std::string &path) {
         std::ifstream ifs(path, std::ios::binary);
@@ -160,6 +150,8 @@ private:
     }
 
     void syncScanline() {
+        window.delay(1);
+
         int monitorScanline = 0;
         window.getScanLine(monitorScanline);
 
@@ -172,8 +164,7 @@ private:
 
         float dstX, dstY, dstW, dstH;
         NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH);
-        float nesY = ((float)predicted - dstY) / dstH * (float)NES::VISIBLE_H +
-                     (float)NES::OVERSCAN_TOP;
+        float nesY = ((float)predicted - dstY) / dstH * (float)NES::SCREEN_HEIGHT;
 
         int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
         if (target < 0) target += NES::TOTAL_SCANLINES;
@@ -200,17 +191,23 @@ private:
             targetTime = now;
         }
 
-        auto sleepMs = duration_cast<milliseconds>(targetTime - now).count() - 2;
+        sleepUntil(targetTime);
+
+        lastFrameTime = targetTime;
+        core.tickFrame();
+    }
+
+    void sleepUntil(std::chrono::high_resolution_clock::time_point timePoint) {
+        using namespace std::chrono;
+        auto now = high_resolution_clock::now();
+        auto sleepMs = duration_cast<milliseconds>(timePoint - now).count() - 1;
         if (sleepMs >= 0) {
             window.delay(sleepMs);
         }
 
-        while (high_resolution_clock::now() < targetTime) {
+        while (high_resolution_clock::now() < timePoint) {
             std::this_thread::yield();
         }
-
-        lastFrameTime = targetTime;
-        core.tickFrame();
     }
 
     double getAdjustedSpeed(double baseSpeed) const {

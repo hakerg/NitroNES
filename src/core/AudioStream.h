@@ -1,7 +1,6 @@
 #pragma once
 #include "AudioFilter.h"
 #include "AudioSettings.h"
-#include "NESConst.h"
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -27,11 +26,11 @@ public:
 
         hpf01 = AudioFilter(FilterType::HighPass, 1.0f,
                             (float)sampleRate);
-        hpf90 = AudioFilter(FilterType::HighPass, NES::AUDIO_HP1_CUTOFF,
+        hpf90 = AudioFilter(FilterType::HighPass, 90.0f,
                             (float)sampleRate);
-        hpf440 = AudioFilter(FilterType::HighPass, NES::AUDIO_HP2_CUTOFF,
+        hpf440 = AudioFilter(FilterType::HighPass, 440.0f,
                              (float)sampleRate);
-        lpf14k = AudioFilter(FilterType::LowPass, NES::AUDIO_LP_CUTOFF,
+        lpf14k = AudioFilter(FilterType::LowPass, 14000.0f,
                              (float)sampleRate);
 
         blipAccum.resize(KERNEL_SIZE + 1, 0.0f);

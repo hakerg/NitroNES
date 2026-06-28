@@ -4,15 +4,9 @@
 #include "Cartridge.h"
 #include "NESConst.h"
 
-class IFrameConsumer {
-public:
-    virtual ~IFrameConsumer() = default;
-    virtual void onFrameComplete() = 0;
-};
-
 class PPU2C02 {
 public:
-    explicit PPU2C02(IFrameConsumer& frameConsumer) : frameConsumer(frameConsumer) {
+    explicit PPU2C02() {
         buf.fill(0xFF000000);
         std::memset(OAM, 0, sizeof(OAM));
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
@@ -23,6 +17,8 @@ public:
     Cartridge* cart = nullptr;
 
     bool nmiLineLow() const { return ctrl.enable_nmi && nmiVbl; }
+
+    int getCompletedFramesCount() { return completedFramesCount; }
 
     void cpuWrite(uint16_t addr, uint8_t data) {
         refreshOpenBus(0xFF, data);
@@ -137,7 +133,7 @@ public:
         vram_addr.reg = tram_addr.reg = 0;
         oamAddr = 0;
         frame_odd = odd_frame_skip = false;
-        totalPpuCycle = 0; // TODO: can we get rid of it?
+        totalPpuCycle = 0;
         sprite_count = 0;
         bSpriteZeroHitPossible = false;
         sprite_overflow_cycle  = -1;
@@ -288,10 +284,11 @@ private:
     int16_t  cycle                = 0;
     bool     frame_odd            = false;
     bool     suppressVblThisFrame = false;
-    uint64_t totalPpuCycle        = 0;
+    uint64_t totalPpuCycle        = 0; // TODO: can we get rid of it?
     bool     odd_frame_skip       = false;
     bool     nmiCycleLatch        = false;
     bool     nmiVbl               = false;
+    int      completedFramesCount = 0;
 
     uint8_t  ppuOpenBus = 0x00;
 
@@ -315,8 +312,6 @@ private:
 
     std::array<uint8_t, 32>          palScreen;
     std::array<uint32_t, 256 * 240>  buf;
-
-    IFrameConsumer& frameConsumer;
 
     static uint16_t paletteIndex(uint16_t addr) {
         addr &= 0x001F;
@@ -680,7 +675,7 @@ private:
             frame_odd = !frame_odd;
         } else if (cycle >= NES::PPU_CYCLES_PER_SCANLINE) {
             cycle = 0;
-            if (scanline == NES::SCANLINE_VISIBLE_LAST) frameConsumer.onFrameComplete();
+            if (scanline == NES::SCANLINE_VISIBLE_LAST) completedFramesCount++;
             scanline++;
             if (scanline >= NES::TOTAL_SCANLINES) {
                 scanline  = NES::SCANLINE_VISIBLE_FIRST;

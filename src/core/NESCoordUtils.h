@@ -6,7 +6,7 @@ namespace NES {
 inline void calcDestRect(int winW, int winH, float &dstX, float &dstY,
                          float &dstW, float &dstH) {
     const float targetAspect =
-        (float)(SCREEN_WIDTH * PAR_NUM) / (float)(VISIBLE_H * PAR_DEN);
+        (float)(SCREEN_WIDTH * PAR_NUM) / (float)(SCREEN_HEIGHT * PAR_DEN);
     dstW = (float)winW;
     dstH = dstW / targetAspect;
     if (dstH > (float)winH) {

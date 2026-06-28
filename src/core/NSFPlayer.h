@@ -26,11 +26,8 @@ public:
 
     bool load(const NSFFile& nsf, AudioSettings& audioSettings) {
         nsfHeader = nsf.header;
-        pal = nsfIsPAL() && !nsfIsDualMode();
-        cpuClock = pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
-        playCycles = calcPlayCycles(pal);
-
-        a2a03.getAPU().setPAL(pal);
+        cpuClock = NES::CPU_CLOCK_NTSC;
+        playCycles = calcPlayCycles();
 
         expChip.reset();
         uint8_t chips = nsfHeader.extraChipFlags;
@@ -84,7 +81,7 @@ public:
 
         a2a03.getCPU().reset();
         a2a03.getCPU().A = songNum - 1;
-        a2a03.getCPU().X = pal ? 1 : 0;
+        a2a03.getCPU().X = false ? 1 : 0; // TODO: 1 for PAL?
         a2a03.getCPU().P = CPU6502::FLAG_I | CPU6502::FLAG_U;
         a2a03.getCPU().S = 0xFD;
 
@@ -114,9 +111,10 @@ public:
     uint8_t getTotalSongs()   const { return nsfHeader.totalSongs; }
 
     void reset() override { initSong(currentSong); }
-
     bool pollNMI()     override { return true; }
     bool irqAsserted() override { return false; }
+    uint32_t* getFramebuffer() override { return nullptr; }
+    int getCompletedFramesCount() override { return completedFramesCount; }
 
 protected:
     void onPreStep() override {
@@ -188,7 +186,7 @@ private:
 
             playTimer += playCycles;
 
-            onFrameComplete();
+            completedFramesCount++;
         }
     }
 
@@ -206,10 +204,10 @@ private:
         return std::string(nsfHeader.songName, len);
     }
 
-    double calcPlayCycles(bool palMode) const {
-        double clk = palMode ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
-        uint16_t speed = palMode ? nsfHeader.speedPAL : nsfHeader.speedNTSC;
-        if (speed == 0) speed = palMode ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
+    double calcPlayCycles() const {
+        double clk = NES::CPU_CLOCK_NTSC;
+        uint16_t speed = nsfHeader.speedNTSC;
+        if (speed == 0) speed = NES::NSF_SPEED_NTSC;
         return clk * speed / 1000000.0;
     }
 
@@ -237,6 +235,7 @@ private:
     double    playTimer     = 0.0;
     bool      callDone    = true;
     uint8_t   currentSong = 1;
+    int       completedFramesCount = 0;
 
     std::array<uint8_t, 8192>  extRam;
     std::vector<uint8_t>       prgRom;

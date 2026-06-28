@@ -22,8 +22,8 @@ struct AppKeyBindings {
 
 struct AppSettings {
     bool vsync = false;
-    int syncMode = 0;
-    int scanlineBufferMs = 10;
+    int syncMode = 2;
+    int scanlineBufferMs = 8;
     std::string language = "en";
     AudioSettings audioSettings;
     bool adjustPitch = true;

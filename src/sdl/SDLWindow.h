@@ -20,7 +20,7 @@ public:
                                      SDL_GetError());
 
         int winW = (NES::SCREEN_WIDTH * NES::PAR_NUM * 3) / NES::PAR_DEN;
-        int winH = NES::VISIBLE_H * 3;
+        int winH = NES::SCREEN_HEIGHT * 3;
 
         window =
             SDL_CreateWindow("NES Emulator", winW, winH, SDL_WINDOW_RESIZABLE);
@@ -113,9 +113,9 @@ public:
             float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
             NES::calcDestRect(w, h, dstX, dstY, dstW, dstH);
 
-            SDL_FRect srcRect = {0.0f, static_cast<float>(NES::OVERSCAN_TOP),
+            SDL_FRect srcRect = {0.0f, 0.0f,
                                  static_cast<float>(NES::SCREEN_WIDTH),
-                                 static_cast<float>(NES::VISIBLE_H)};
+                                 static_cast<float>(NES::SCREEN_HEIGHT)};
             SDL_FRect dstRect = {dstX, dstY, dstW, dstH};
             SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
         }

@@ -262,10 +262,9 @@ struct NoiseChannel {
         envStart = true;
     }
 
-    void clockTimer(bool isPal) {
+    void clockTimer() {
         while (timerCounter <= 0) {
-            const uint16_t period = isPal ? NOISE_PERIOD_TABLE_PAL[periodIndex]
-                                          : NOISE_PERIOD_TABLE_NTSC[periodIndex];
+            const uint16_t period = NOISE_PERIOD_TABLE_NTSC[periodIndex];
             timerCounter += period + 1;
             uint16_t feedback = (shiftReg & 0x0001) ^
                                 ((modeFlag ? (shiftReg >> 6) : (shiftReg >> 1)) & 0x0001);
@@ -387,10 +386,9 @@ struct DMCChannel {
         }
     }
 
-    void clockTimer(bool isPal) {
+    void clockTimer() {
         if (timerCounter == 0) {
-            timerCounter = isPal ? DMC_PERIOD_TABLE_PAL[rateIndex]
-                                 : DMC_PERIOD_TABLE_NTSC[rateIndex];
+            timerCounter = DMC_PERIOD_TABLE_NTSC[rateIndex];
 
             if (!silenceFlag) {
                 if (shiftReg & 0x01) {
@@ -434,7 +432,6 @@ public:
         frameMode = 0;
         frameIRQInhibit = false;
         frameIRQPending = false;
-        setPAL(false);
     }
 
     void reset() {
@@ -450,11 +447,6 @@ public:
         delay4017 = -1;
     }
 
-    void setPAL(bool enable) {
-        palMode = enable;
-    }
-
-    bool isPAL() const { return palMode; }
     bool irqAsserted() const { return frameIRQLine || dmc.irqPending; }
 
     PulseChannel<true>  pulse1;
@@ -578,8 +570,8 @@ private:
     void clockChannelTimers() {
         pulse1.clockTimer();
         pulse2.clockTimer();
-        noise.clockTimer(palMode);
-        dmc.clockTimer(palMode);
+        noise.clockTimer();
+        dmc.clockTimer();
     }
 
     void serviceFrameCounterWrite() {
@@ -596,11 +588,12 @@ private:
     }
 
     void clockFrameSequencer() {
-        const uint32_t step1 = palMode ? 8313  : 7457;
-        const uint32_t step2 = palMode ? 16627 : 14913;
-        const uint32_t step3 = palMode ? 24939 : 22371;
-        const uint32_t step4 = palMode ? 33253 : 29829;
-        const uint32_t step5 = palMode ? 41565 : 37281;
+        // TODO: PAL/DENDY
+        const uint32_t step1 = false ? 8313  : 7457;
+        const uint32_t step2 = false ? 16627 : 14913;
+        const uint32_t step3 = false ? 24939 : 22371;
+        const uint32_t step4 = false ? 33253 : 29829;
+        const uint32_t step5 = false ? 41565 : 37281;
 
         if (frameMode == 0) {
             if (frameCounter == step1) { clockQuarterFrame(); }
@@ -633,8 +626,6 @@ private:
     uint32_t frameCounter   = 0;
     uint8_t  frameMode      = 0;
     bool     frameIRQInhibit = false;
-
-    bool     palMode        = false;
 
     int delay4017 = -1;
     uint8_t val4017 = 0;

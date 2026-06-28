@@ -8,5 +8,5 @@ public:
     virtual void onClose() = 0;
     virtual void onReset() = 0;
     virtual void onQuit() = 0;
-    virtual bool isVisible() = 0;
+    virtual bool isMenuVisible() = 0;
 };

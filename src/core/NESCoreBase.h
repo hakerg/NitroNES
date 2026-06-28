@@ -4,18 +4,22 @@
 #include "A2A03.h"
 #include "PPU2C02.h"
 
+// TODO: czy można te interfejsy usunąć?
 class IEmulatorHost {
 public:
     virtual ~IEmulatorHost() = default;
-    virtual void pushAudioSample(float sample, double dt) = 0;
-    virtual void onFrameReady() = 0;
+    virtual void pushAudioSample(float sample, double dt) {}
+    virtual void onFrameReady() {}
 };
 
-class NESCoreBase : public IFrameConsumer, public IA2A03 {
+// TODO: only NTSC is properly supported
+enum class NESStandard { NTSC, PAL, DENDY };
+
+class NESCoreBase : public IA2A03 {
 public:
-    bool    pal    = false;
-    double  speed  = 1.0;
-    bool    paused = false;
+    NESStandard system = NESStandard::NTSC;
+    double speed = 1.0;
+    bool paused = false;
 
     explicit NESCoreBase(IEmulatorHost& host, AudioSettings& audioSettings)
         : a2a03(*this, audioSettings), host(host) {
@@ -24,12 +28,11 @@ public:
     virtual ~NESCoreBase() = default;
 
     double getCPUClockRate() const {
-        return pal ? NES::CPU_CLOCK_PAL : NES::CPU_CLOCK_NTSC;
+        return NES::CPU_CLOCK_NTSC;
     }
 
     double getBaseFramerate() const {
-        // TODO: właściwa obsługa PAL jeśli to konieczne
-        return pal ? 50.0 : NES::REFRESH_RATE_NTSC_ON;
+        return NES::REFRESH_RATE_NTSC_ON; // dla włączonego renderingu w PPU
     }
 
     double getTargetFramerate() const {
@@ -38,8 +41,8 @@ public:
 
     void tickFrame() {
         if (paused) return;
-        frameReady = false;
-        do { clockOneCycle(); } while (!frameReady);
+        int frames = getCompletedFramesCount();
+        do { clockOneCycle(); } while (getCompletedFramesCount() == frames);
     }
 
     template <typename ConditionFunc>
@@ -49,17 +52,12 @@ public:
     }
 
     virtual void reset() {}
+    virtual int getCompletedFramesCount() = 0;
+    virtual uint32_t* getFramebuffer() = 0;
 
-    virtual PPU2C02* getPPU() { return nullptr; }
-    bool hasPPU() { return getPPU() != nullptr; }
     int getCurrentScanline() {
         PPU2C02* p = getPPU();
         return p ? p->getScanline() : -1;
-    }
-
-    void onFrameComplete() override {
-        frameReady = true;
-        host.onFrameReady();
     }
 
     uint8_t a2a03ReadData(uint16_t addr) override { return memRead(addr); }
@@ -82,9 +80,12 @@ protected:
 
 private:
     IEmulatorHost& host;
-    bool frameReady = false;
+
+    virtual PPU2C02* getPPU() { return nullptr; }
 
     void clockOneCycle() {
+        int frames = getCompletedFramesCount();
+
         onPreStep();
 
         PPU2C02* ppu = getPPU();
@@ -102,5 +103,9 @@ private:
 
         double dt = 1.0 / (getCPUClockRate() * speed);
         host.pushAudioSample(a2a03.getAPU().getOutputSample() + mapperAudio(), dt);
+
+        if (getCompletedFramesCount() != frames) {
+            host.onFrameReady();
+        }
     }
 };

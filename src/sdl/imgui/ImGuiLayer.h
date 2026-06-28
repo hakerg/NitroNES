@@ -24,34 +24,70 @@ public:
 
         ImVec4 black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
         ImVec4 grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
-        ImVec4 darkBlue = ImVec4(0.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
+        ImVec4 lightGrey = ImVec4(106.0f/255.0f, 109.0f/255.0f, 106.0f/255.0f, 1.0f);
+
+        ImVec4 darkTeal = ImVec4(0.0f, 46.0f/255.0f, 85.0f/255.0f, 1.0f);
+        ImVec4 teal = ImVec4(0.0f, 110.0f/255.0f, 138.0f/255.0f, 1.0f);
+        ImVec4 lightTeal = ImVec4(71.0f/255.0f, 193.0f/255.0f, 197.0f/255.0f, 1.0f);
+
+        ImVec4 darkBlue = ImVec4(0.0f/255.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
         ImVec4 blue = ImVec4(24.0f/255.0f, 80.0f/255.0f, 199.0f/255.0f, 1.0f);
         ImVec4 lightBlue = ImVec4(104.0f/255.0f, 166.0f/255.0f, 1.0f, 1.0f);
+
+        ImVec4 transparent = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 
         ImGuiStyle& style = ImGui::GetStyle();
         float scale = 2.0f;
         float tileDim = 8.0f * scale;
         auto tileSize = ImVec2(tileDim, tileDim);
-        auto emptySize = ImVec2(0.0f, 0.0f);
+        auto tileSizeHalf = ImVec2(tileDim * 0.5f, tileDim * 0.5f);
+        auto zeroSize = ImVec2(0.0f, 0.0f);
 
+        style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
         style.WindowBorderSize = 0.0f;
         style.FrameBorderSize = 0.0f;
         style.PopupBorderSize = 0.0f;
         style.ChildBorderSize = 0.0f;
-        style.FramePadding = emptySize;
-        style.DisplaySafeAreaPadding = emptySize;
+        style.FramePadding = zeroSize;
+        style.DisplaySafeAreaPadding = zeroSize;
         style.WindowPadding = tileSize;
         style.ItemSpacing = tileSize;
         style.ItemInnerSpacing = tileSize;
+        style.CellPadding = tileSizeHalf;
 
         style.AntiAliasedLines = false;
         style.AntiAliasedLinesUseTex = false;
         style.AntiAliasedFill = false;
 
+        style.Colors[ImGuiCol_Border] = black;
+
         style.Colors[ImGuiCol_WindowBg] = grey;
         style.Colors[ImGuiCol_ChildBg] = grey;
         style.Colors[ImGuiCol_MenuBarBg] = grey;
         style.Colors[ImGuiCol_PopupBg] = grey;
+        style.Colors[ImGuiCol_TitleBgActive] = grey;
+
+        style.Colors[ImGuiCol_TextDisabled] = lightGrey;
+
+        style.Colors[ImGuiCol_FrameBg] = darkBlue;
+        style.Colors[ImGuiCol_FrameBgHovered] = lightBlue;
+        style.Colors[ImGuiCol_FrameBgActive] = blue;
+
+        style.Colors[ImGuiCol_Button] = darkBlue;
+        style.Colors[ImGuiCol_ButtonHovered] = lightBlue;
+        style.Colors[ImGuiCol_ButtonActive] = blue;
+
+        style.Colors[ImGuiCol_Header] = darkBlue;
+        style.Colors[ImGuiCol_HeaderHovered] = lightBlue;
+        style.Colors[ImGuiCol_HeaderActive] = blue;
+
+        style.Colors[ImGuiCol_SliderGrab] = blue;
+        style.Colors[ImGuiCol_SliderGrabActive] = lightBlue;
+
+        style.Colors[ImGuiCol_CheckboxSelectedBg] = blue;
+        style.Colors[ImGuiCol_CheckMark] = lightBlue;
+
+        style.Colors[ImGuiCol_TableHeaderBg] = transparent;
 
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
@@ -102,8 +138,6 @@ public:
     void render(SDL_Renderer *renderer, IFileSession *session, double baseSpeed) {
         if (input)
             input->setInputBlocked(controlsOpen);
-        if (!handler->isVisible())
-            return;
 
         NESCoreBase *core = session ? &session->getCore() : nullptr;
 
@@ -113,7 +147,7 @@ public:
 
         menuOpen = false;
 
-        if (ImGui::BeginMainMenuBar()) {
+        if (handler->isMenuVisible() && ImGui::BeginMainMenuBar()) {
             ImGui::SetCursorPosX(0.0f);
 
             if (ImGui::BeginMenu(tr("file"))) {
@@ -132,14 +166,15 @@ public:
             if (settings && core) {
                 if (ImGui::BeginMenu(tr("emulation"))) {
                     menuOpen = true;
-                    if (ImGui::BeginMenu(tr("emulation.system"))) {
+                    // TODO: NES, PAL, DENDY
+                    /*if (ImGui::BeginMenu(tr("emulation.system"))) {
                         int sub = core->pal ? 1 : 0;
                         if (ImGui::RadioButton("NTSC", &sub, 0))
                             core->pal = false;
                         if (ImGui::RadioButton("PAL", &sub, 1))
                             core->pal = true;
                         ImGui::EndMenu();
-                    }
+                    }*/
                     ImGui::MenuItem(tr("emulation.pause"), nullptr, &core->paused);
                     if (ImGui::MenuItem(tr("emulation.reset")))
                         handler->onReset();
@@ -179,7 +214,6 @@ public:
         renderAudioWindow();
         renderControlsWindow();
 
-        //menuOpen = true;
         //ImGui::ShowStyleEditor();
 
         ImGui::Render();
@@ -362,8 +396,7 @@ private:
         }
         ImGui::EndDisabled();
 
-        if (ImGui::BeginTable(
-                nameId, 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        if (ImGui::BeginTable(nameId, 3, ImGuiTableFlags_None)) {
             ImGui::TableSetupColumn(tr("controls.action"));
             ImGui::TableSetupColumn(tr("controls.key"));
             ImGui::TableSetupColumn("");
@@ -485,7 +518,7 @@ private:
     }
 
     static constexpr int totalBindings = 28;
-    static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse;
+    static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
 
     AppSettings *settings = nullptr;
     bool menuOpen = false;

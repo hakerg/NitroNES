@@ -15,10 +15,6 @@ public:
             audioSettings,
             path) {}
 
-    void pushAudioSample(float, double) override {}
-    void onFrameReady() override { ++frameCounter; }
-    void renderFrame(const uint32_t* fb) override { lastFrame = fb; }
-
     uint8_t readController(int port) override {
         return port == 0 ? controller1 : controller2;
     }
@@ -44,7 +40,7 @@ public:
         for (int i = 0; i < 256; ++i) dst[i] = oam[i];
     }
 
-    const uint32_t* framebuffer() const { return lastFrame; }
+    uint32_t* framebuffer() { return ppu.getFramebuffer(); }
 
     uint8_t peekCPU(uint16_t addr) {
         if (addr < 0x2000) return cpuRam[addr & 0x07FF];
@@ -53,7 +49,7 @@ public:
     }
     uint8_t   peekRAM(uint16_t addr) { return cpuRam[addr & 0x07FF]; }
     uint16_t  cpuPC() { return a2a03.getCPU().PC; }
-    uint64_t  frameNo() const { return frameCounter; }
+    uint64_t  frameNo() { return ppu.getCompletedFramesCount(); }
     uint64_t  cycleNo() const { return cpuCycle; }
 
     A2A03&   getA2A03()  { return a2a03; }
@@ -84,8 +80,6 @@ protected:
 private:
     uint8_t controller1 = 0x00;
     uint8_t controller2 = 0x00;
-    const uint32_t* lastFrame = nullptr;
     uint64_t cpuCycle    = 0;
-    uint64_t frameCounter = 0;
 };
 

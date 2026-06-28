@@ -37,8 +37,6 @@ public:
                 window.showCursor(false);
                 guiActive = false;
             }
-
-            window.delay(1);
         }
     }
 
@@ -76,7 +74,7 @@ public:
 
     void onQuit() override { running = false; }
 
-    bool isVisible() override { return guiActive; }
+    bool isMenuVisible() override { return guiActive; }
 
 private:
     std::unique_ptr<IFileSession> makeSession(const std::string &path) {
