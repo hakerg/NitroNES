@@ -24,11 +24,6 @@ public:
 
         ImVec4 black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
         ImVec4 grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
-        ImVec4 lightGrey = ImVec4(106.0f/255.0f, 109.0f/255.0f, 106.0f/255.0f, 1.0f);
-
-        ImVec4 darkTeal = ImVec4(0.0f, 46.0f/255.0f, 85.0f/255.0f, 1.0f);
-        ImVec4 teal = ImVec4(0.0f, 110.0f/255.0f, 138.0f/255.0f, 1.0f);
-        ImVec4 lightTeal = ImVec4(71.0f/255.0f, 193.0f/255.0f, 197.0f/255.0f, 1.0f);
 
         ImVec4 darkBlue = ImVec4(0.0f/255.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
         ImVec4 blue = ImVec4(24.0f/255.0f, 80.0f/255.0f, 199.0f/255.0f, 1.0f);
@@ -40,7 +35,6 @@ public:
         float scale = 2.0f;
         float tileDim = 8.0f * scale;
         auto tileSize = ImVec2(tileDim, tileDim);
-        auto tileSizeHalf = ImVec2(tileDim * 0.5f, tileDim * 0.5f);
         auto zeroSize = ImVec2(0.0f, 0.0f);
 
         style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
@@ -51,9 +45,10 @@ public:
         style.FramePadding = zeroSize;
         style.DisplaySafeAreaPadding = zeroSize;
         style.WindowPadding = tileSize;
-        style.ItemSpacing = tileSize;
+        style.ItemSpacing = ImVec2(tileDim, 0.0f);
         style.ItemInnerSpacing = tileSize;
-        style.CellPadding = tileSizeHalf;
+        style.CellPadding = ImVec2(tileDim, 0.0f);
+        style.DisabledAlpha = 0.0f;
 
         style.AntiAliasedLines = false;
         style.AntiAliasedLinesUseTex = false;
@@ -65,9 +60,9 @@ public:
         style.Colors[ImGuiCol_ChildBg] = grey;
         style.Colors[ImGuiCol_MenuBarBg] = grey;
         style.Colors[ImGuiCol_PopupBg] = grey;
-        style.Colors[ImGuiCol_TitleBgActive] = grey;
 
-        style.Colors[ImGuiCol_TextDisabled] = lightGrey;
+        style.Colors[ImGuiCol_TitleBg] = black;
+        style.Colors[ImGuiCol_TitleBgActive] = darkBlue;
 
         style.Colors[ImGuiCol_FrameBg] = darkBlue;
         style.Colors[ImGuiCol_FrameBgHovered] = lightBlue;
@@ -91,10 +86,11 @@ public:
 
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
-        fontConfig.GlyphOffset.x = 1.0f;
+        fontConfig.GlyphOffset = ImVec2(0.5f, -4.0f);
+        fontConfig.ExtraSizeScale = 0.5f;
 
         ImGuiIO &io = ImGui::GetIO();
-        io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 8.0f, &fontConfig);
+        io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 16.0f, &fontConfig);
         io.Fonts->Build();
         io.IniFilename = nullptr;
         io.FontGlobalScale = scale;
@@ -135,7 +131,7 @@ public:
 
     bool isMenuOpen() const { return menuOpen; }
 
-    void render(SDL_Renderer *renderer, IFileSession *session, double baseSpeed) {
+    void render(SDL_Renderer *renderer, IFileSession *session) {
         if (input)
             input->setInputBlocked(controlsOpen);
 
@@ -210,7 +206,7 @@ public:
             ImGui::EndMainMenuBar();
         }
 
-        renderSyncWindow(renderer, session, baseSpeed);
+        renderSyncWindow(renderer, session);
         renderAudioWindow();
         renderControlsWindow();
 
@@ -340,6 +336,19 @@ private:
         }
     }
 
+    void spacing() {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImGui::GetStyle().WindowPadding);
+        ImGui::Spacing();
+        ImGui::PopStyleVar();
+    }
+
+    bool button(const char* text) {
+        ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, ImGui::GetStyle().WindowPadding.x);
+        bool res = ImGui::Button(text);
+        ImGui::PopStyleVar();
+        return res;
+    }
+
     void renderBindingRow(int index) {
         Binding binding = bindingAt(index);
         ImGui::TableNextRow();
@@ -349,11 +358,11 @@ private:
         ImGui::TextUnformatted(bindingName(binding).c_str());
         ImGui::TableNextColumn();
         bool isThisRowWaiting = waitingForKey && bindingIndex == index;
-        std::string button = isThisRowWaiting ? tr("controls.cancel")
+        std::string buttonText = isThisRowWaiting ? tr("controls.cancel")
                                               : tr("controls.set");
-        button += "##bind" + std::to_string(index);
+        buttonText += "##bind" + std::to_string(index);
         ImGui::BeginDisabled(waitingForKey && !isThisRowWaiting);
-        if (ImGui::Button(button.c_str())) {
+        if (button(buttonText.c_str())) {
             if (isThisRowWaiting)
                 cancelBinding();
             else
@@ -364,14 +373,18 @@ private:
         std::string clearBtn =
             std::string(tr("controls.clear")) + "##clear" + std::to_string(index);
         ImGui::BeginDisabled(waitingForKey);
-        if (ImGui::Button(clearBtn.c_str()))
+        if (button(clearBtn.c_str()))
             clearBinding(binding);
         ImGui::EndDisabled();
     }
 
     void renderBindingsSection(const char *nameId, int begin, int count) {
-        if (!ImGui::CollapsingHeader(tr(nameId)))
+        if (!ImGui::CollapsingHeader(tr(nameId))) {
+            spacing();
             return;
+        }
+
+        spacing();
 
         bool isThisSectionBinding =
             waitingForKey && bindAll && bindSectionBegin == begin;
@@ -379,7 +392,7 @@ private:
                                                     : tr("controls.bind_all");
         btnLabel += "##bindall" + std::string(nameId);
         ImGui::BeginDisabled(waitingForKey && !isThisSectionBinding);
-        if (ImGui::Button(btnLabel.c_str())) {
+        if (button(btnLabel.c_str())) {
             if (isThisSectionBinding)
                 cancelBinding();
             else
@@ -390,11 +403,13 @@ private:
         std::string clearAllBtn =
             std::string(tr("controls.clear_all")) + "##clearall" + nameId;
         ImGui::BeginDisabled(waitingForKey);
-        if (ImGui::Button(clearAllBtn.c_str())) {
+        if (button(clearAllBtn.c_str())) {
             for (int i = 0; i < count; i++)
                 clearBinding(bindingAt(begin + i));
         }
         ImGui::EndDisabled();
+
+        spacing();
 
         if (ImGui::BeginTable(nameId, 3, ImGuiTableFlags_None)) {
             ImGui::TableSetupColumn(tr("controls.action"));
@@ -406,10 +421,10 @@ private:
             ImGui::EndTable();
         }
 
-        ImGui::TextUnformatted("");
+        spacing();
     }
 
-    void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session, double baseSpeed) {
+    void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session) {
         if (!syncSettingsOpen || !settings)
             return;
 
@@ -425,7 +440,7 @@ private:
         }
         ImGui::EndDisabled();
 
-        ImGui::TextUnformatted("");
+        spacing();
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
 
@@ -444,13 +459,11 @@ private:
         addTooltipToLastItem(tr("settings.sync.scanline.tooltip"));
 
         ImGui::BeginDisabled(settings->syncMode != 2);
-        ImGui::SliderInt(tr("settings.scanline.buffer"), &settings->scanlineBufferMs, 0, 20);
+        ImGui::SliderInt(tr("settings.scanline.buffer"), &settings->scanlineBufferMs, 1, 20);
         addTooltipToLastItem(tr("settings.scanline.buffer.tooltip"));
         ImGui::EndDisabled();
 
         if (session) {
-            ImGui::TextUnformatted("");
-
             double speed = session->getCore().speed;
             ImGui::TextUnformatted(
                 std::format("{}: {:.2f}%", tr("settings.current_speed"),
@@ -472,12 +485,17 @@ private:
 
         AudioSettings &audioSettings = settings->audioSettings;
         ImGui::SliderFloat(tr("settings.volume"), &audioSettings.volume, 0.0f, 2.5f, "%.1f");
+
+        spacing();
+
         ImGui::Checkbox(tr("settings.audio.reduce_clicks"), &audioSettings.reduceClicks);
         ImGui::Checkbox(tr("settings.audio.adjust_pitch"), &settings->adjustPitch);
 
-        ImGui::TextUnformatted("");
+        spacing();
 
         if (ImGui::CollapsingHeader(tr("settings.audio.filters"))) {
+            spacing();
+
             ImGui::Checkbox(tr("settings.audio.hp90"), &audioSettings.useFilter90);
             ImGui::Checkbox(tr("settings.audio.hp440"), &audioSettings.useFilter440);
             ImGui::Checkbox(tr("settings.audio.lp14k"), &audioSettings.useFilter14k);

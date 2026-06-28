@@ -98,7 +98,7 @@ public:
         SDL_GetWindowSizeInPixels(window, &w, &h);
     }
 
-    void presentNESFrame(IFileSession* session, double baseSpeed) override {
+    void presentNESFrame(IFileSession* session) override {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
@@ -120,7 +120,7 @@ public:
             SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
         }
 
-        uiLayer->render(renderer, session, baseSpeed);
+        uiLayer->render(renderer, session);
         SDL_RenderPresent(renderer);
     }
 

@@ -30,7 +30,7 @@ public:
             if (session) {
                 session->clockCore(baseSpeed);
             }
-            window.presentNESFrame(session.get(), baseSpeed);
+            window.presentNESFrame(session.get());
 
             if (guiActive && !window.isMenuOpen() && session &&
                 window.getTicks() - lastMouseMoveTime >= 1000) {

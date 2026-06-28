@@ -22,7 +22,7 @@ public:
     virtual void delay(uint32_t ms) = 0;
     virtual void getPixelSize(int &w, int &h) const = 0;
 
-    virtual void presentNESFrame(IFileSession* session, double baseSpeed) = 0;
+    virtual void presentNESFrame(IFileSession* session) = 0;
 
     virtual void initMenu(AppSettings &settings, IMenuHandler &handler,
                           IInputContext &input) = 0;
