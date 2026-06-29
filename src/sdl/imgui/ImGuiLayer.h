@@ -48,7 +48,6 @@ public:
         style.ItemSpacing = ImVec2(tileDim, 0.0f);
         style.ItemInnerSpacing = tileSize;
         style.CellPadding = ImVec2(tileDim, 0.0f);
-        style.DisabledAlpha = 0.0f;
 
         style.AntiAliasedLines = false;
         style.AntiAliasedLinesUseTex = false;
@@ -361,21 +360,19 @@ private:
         std::string buttonText = isThisRowWaiting ? tr("controls.cancel")
                                               : tr("controls.set");
         buttonText += "##bind" + std::to_string(index);
-        ImGui::BeginDisabled(waitingForKey && !isThisRowWaiting);
-        if (button(buttonText.c_str())) {
-            if (isThisRowWaiting)
-                cancelBinding();
-            else
-                beginSingleBind(index);
+        if (!waitingForKey || isThisRowWaiting) {
+            if (button(buttonText.c_str())) {
+                if (isThisRowWaiting)
+                    cancelBinding();
+                else
+                    beginSingleBind(index);
+            }
         }
-        ImGui::EndDisabled();
         ImGui::SameLine();
         std::string clearBtn =
             std::string(tr("controls.clear")) + "##clear" + std::to_string(index);
-        ImGui::BeginDisabled(waitingForKey);
-        if (button(clearBtn.c_str()))
+        if (!waitingForKey && button(clearBtn.c_str()))
             clearBinding(binding);
-        ImGui::EndDisabled();
     }
 
     void renderBindingsSection(const char *nameId, int begin, int count) {
@@ -391,23 +388,21 @@ private:
         std::string btnLabel = isThisSectionBinding ? tr("controls.cancel")
                                                     : tr("controls.bind_all");
         btnLabel += "##bindall" + std::string(nameId);
-        ImGui::BeginDisabled(waitingForKey && !isThisSectionBinding);
-        if (button(btnLabel.c_str())) {
-            if (isThisSectionBinding)
-                cancelBinding();
-            else
-                beginSectionBind(begin, count);
+        if (!waitingForKey || isThisSectionBinding) {
+            if (button(btnLabel.c_str())) {
+                if (isThisSectionBinding)
+                    cancelBinding();
+                else
+                    beginSectionBind(begin, count);
+            }
         }
-        ImGui::EndDisabled();
         ImGui::SameLine();
         std::string clearAllBtn =
             std::string(tr("controls.clear_all")) + "##clearall" + nameId;
-        ImGui::BeginDisabled(waitingForKey);
-        if (button(clearAllBtn.c_str())) {
+        if (!waitingForKey && button(clearAllBtn.c_str())) {
             for (int i = 0; i < count; i++)
                 clearBinding(bindingAt(begin + i));
         }
-        ImGui::EndDisabled();
 
         spacing();
 
@@ -434,13 +429,13 @@ private:
             return;
         }
 
-        ImGui::BeginDisabled(settings->syncMode == 2);
-        if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
-            SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
-        }
-        ImGui::EndDisabled();
+        if (settings->syncMode != 2) {
+            if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
+                SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
+            }
 
-        spacing();
+            spacing();
+        }
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
 
@@ -458,10 +453,10 @@ private:
         }
         addTooltipToLastItem(tr("settings.sync.scanline.tooltip"));
 
-        ImGui::BeginDisabled(settings->syncMode != 2);
-        ImGui::SliderInt(tr("settings.scanline.buffer"), &settings->scanlineBufferMs, 1, 20);
-        addTooltipToLastItem(tr("settings.scanline.buffer.tooltip"));
-        ImGui::EndDisabled();
+        if (settings->syncMode == 2) {
+            ImGui::SliderInt(tr("settings.scanline.buffer"), &settings->scanlineBufferMs, 1, 20);
+            addTooltipToLastItem(tr("settings.scanline.buffer.tooltip"));
+        }
 
         if (session) {
             double speed = session->getCore().speed;

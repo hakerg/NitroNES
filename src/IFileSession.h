@@ -170,6 +170,16 @@ private:
         if (target < 0) target += NES::TOTAL_SCANLINES;
 
         NESCoreBase& core = getCore();
+        int current = core.getCurrentScanline();
+
+        int distForward = (target - current + NES::TOTAL_SCANLINES) % NES::TOTAL_SCANLINES;
+        int distBackward = (current - target + NES::TOTAL_SCANLINES) % NES::TOTAL_SCANLINES;
+
+        // pobieranie scanline monitora może zawierać szum, trzeba się zabezpieczyć przed generowaniem nadmiarowych klatek
+        if (distBackward < distForward) {
+            return;
+        }
+
         core.tickWhile([&] { return core.getCurrentScanline() != target; });
     }
 
