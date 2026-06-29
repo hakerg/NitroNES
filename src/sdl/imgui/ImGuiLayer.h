@@ -1,4 +1,7 @@
 #pragma once
+
+#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+
 #include "../../AppSettings.h"
 #include "../../IFileSession.h"
 #include "../../IInputContext.h"
@@ -37,6 +40,7 @@ public:
         auto tileSize = ImVec2(tileDim, tileDim);
         auto zeroSize = ImVec2(0.0f, 0.0f);
 
+        style.FontScaleMain = scale;
         style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
         style.WindowBorderSize = 0.0f;
         style.FrameBorderSize = 0.0f;
@@ -90,9 +94,8 @@ public:
 
         ImGuiIO &io = ImGui::GetIO();
         io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 16.0f, &fontConfig);
-        io.Fonts->Build();
         io.IniFilename = nullptr;
-        io.FontGlobalScale = scale;
+        io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
     }
 
     ~ImGuiLayer() {

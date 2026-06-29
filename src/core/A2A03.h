@@ -13,12 +13,15 @@ public:
     // tracking (used for the DMA value during a DMC register conflict).
     virtual uint8_t a2a03ReadDataExternal(uint16_t addr)         = 0;
     virtual void    a2a03WriteData(uint16_t addr, uint8_t data)  = 0;
+    virtual void    latchControllers()                           {}
 };
 
 class A2A03 : public ICPUBus, public IDMA {
 public:
     explicit A2A03(IA2A03& core, AudioSettings& audioSettings)
         : cpu(*this), apu(audioSettings), dma(*this), core(core) {}
+
+    bool isControllerStrobeActive() const { return controllerStrobe; }
 
     void reset() {
         cpu.reset();
@@ -27,8 +30,8 @@ public:
 
         busData = 0;
         isAPUPutCycle = false;
-        putCycleProcessed = false;
         internalBus = 0;
+        controllerStrobe = false;
     }
 
     void clockPhi1() {
@@ -43,7 +46,11 @@ public:
         }
         dma.clockPhi2();
         cpu.clockPhi2();
-        putCycleProcessed = isAPUPutCycle;
+
+        if (controllerStrobe && !isAPUPutCycle) {
+            core.latchControllers();
+        }
+
         isAPUPutCycle = !isAPUPutCycle;
     }
 
@@ -51,7 +58,6 @@ public:
     APU& getAPU() { return apu; }
     DMA& getDMA() { return dma; }
     uint8_t getBusData() { return busData; }
-    bool lastWasPutCycle() const { return putCycleProcessed; }
 
     uint8_t cpuReadData() override {
         if (dma.overridesAddr()) return busData;
@@ -142,7 +148,12 @@ public:
         busData = data;
         internalBus = data;
         uint16_t addr = getAddr();
+
         core.a2a03WriteData(addr, data);
+
+        if (addr == 0x4016) {
+            controllerStrobe = (data & 0x01) != 0;
+        }
 
         if (addr == 0x4014) {
             dma.write4014(data);
@@ -159,6 +170,6 @@ private:
 
     uint8_t busData = 0;
     bool isAPUPutCycle = false;
-    bool putCycleProcessed = false;
     uint8_t internalBus = 0;
+    bool controllerStrobe = false;
 };

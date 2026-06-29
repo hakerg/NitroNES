@@ -43,6 +43,11 @@ public:
     uint32_t* getFramebuffer() override { return ppu.getFramebuffer(); }
 
 protected:
+    void latchControllers() override {
+        controllerShift  = nesHost.readController(0);
+        controllerShift2 = nesHost.readController(1);
+    }
+
     uint8_t memRead(uint16_t addr) override {
         uint8_t data = a2a03.getBusData();
 
@@ -55,17 +60,23 @@ protected:
             data = ppu.cpuRead(addr);
         } else if (addr == 0x4016) {
             const bool newRun = (prevAddr != 0x4016);
-            if (newRun || controllerStrobe)
+            const bool strobe = a2a03.isControllerStrobeActive();
+
+            if (newRun || strobe)
                 controllerLatch = (controllerShift & 0x80) ? 1 : 0;
-            if (newRun && !controllerStrobe)
+            if (newRun && !strobe)
                 controllerShift = (controllerShift << 1) | 0x01;
+
             data = (data & 0xE0) | controllerLatch;
         } else if (addr == 0x4017) {
             const bool newRun = (prevAddr != 0x4017);
-            if (newRun || controllerStrobe)
+            const bool strobe = a2a03.isControllerStrobeActive();
+
+            if (newRun || strobe)
                 controllerLatch2 = (controllerShift2 & 0x80) ? 1 : 0;
-            if (newRun && !controllerStrobe)
+            if (newRun && !strobe)
                 controllerShift2 = (controllerShift2 << 1) | 0x01;
+
             data = (data & 0xE0) | controllerLatch2;
         } else if (addr >= 0x4020) {
             data = cart ? cart->cpuRead(addr, data) : data;
@@ -84,22 +95,11 @@ protected:
     void memWrite(uint16_t addr, uint8_t data) override {
         if (addr < 0x2000)  { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000)  { ppu.cpuWrite(addr, data); return; }
-        if (addr == 0x4016) { controllerStrobe = (data & 0x01) != 0; return; }
         if (cart && addr >= 0x4020) cart->cpuWrite(addr, data);
     }
 
     void  clockMapper() override { if (cart) cart->clock(); }
     float mapperAudio() const override { return cart ? cart->audioOutput() : 0.0f; }
-
-    void onPreStep() override {
-    }
-
-    void onPostStep() override {
-        if (controllerStrobe && !a2a03.lastWasPutCycle()) {
-            controllerShift  = nesHost.readController(0);
-            controllerShift2 = nesHost.readController(1);
-        }
-    }
 
     PPU2C02 ppu;
     std::unique_ptr<Cartridge> cart;
@@ -109,7 +109,6 @@ protected:
     uint8_t controllerLatch  = 0x00;
     uint8_t controllerLatch2 = 0x00;
     uint16_t lastBusReadAddr = 0xFFFF;
-    bool    controllerStrobe = false;
 
 private:
     INESSystemHost& nesHost;

@@ -1,7 +1,7 @@
 #pragma once
 
 struct AudioSettings {
-    float volume = 2.0f;
+    float volume = 1.5f;
     bool useFilter90 = false;
     bool useFilter440 = false;
     bool useFilter14k = false;
