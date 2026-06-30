@@ -184,18 +184,10 @@ private:
         int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
         if (target < 0) target += NES::TOTAL_SCANLINES;
 
-        NESCoreBase& core = getCore();
-        int current = core.getCurrentScanline();
-
-        int distForward = (target - current + NES::TOTAL_SCANLINES) % NES::TOTAL_SCANLINES;
-        int distBackward = (current - target + NES::TOTAL_SCANLINES) % NES::TOTAL_SCANLINES;
-
         lastFrameTime = high_resolution_clock::now();
 
-        // pobieranie scanline monitora może zawierać szum, trzeba się zabezpieczyć przed generowaniem nadmiarowych klatek
-        if (distBackward > distForward) {
-            core.tickWhile([&] { return core.getCurrentScanline() != target; });
-        }
+        NESCoreBase& core = getCore();
+        core.tickWhile([&] { return core.getCurrentScanline() != target; });
 
         if (doExtraFrame) {
             core.tickWhile([&] { return core.getCurrentScanline() == target; });

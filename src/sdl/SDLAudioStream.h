@@ -28,7 +28,7 @@ public:
         if (queuedMs < 5.0f) {
             return AudioBufferHealth::Underflow;
         }
-        if (queuedMs > 50.0f) {
+        if (queuedMs > 30.0f) {
             return AudioBufferHealth::Overflow;
         }
         return AudioBufferHealth::Healthy;
