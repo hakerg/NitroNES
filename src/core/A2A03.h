@@ -115,7 +115,7 @@ public:
         const bool regActive = (coreAddr >= 0x4000 && coreAddr <= 0x401F);
         const uint16_t reg = 0x4000 | (dmaAddr & 0x001F);
 
-        if (regActive && (reg == 0x4016 || reg == 0x4017) && dma.actionIsDMCGet()) {
+        if (regActive && (reg == 0x4016 || reg == 0x4017)) {
             // The controller is decoded at the combined address ($4016/$4017), so it
             // is a read of that port. Read it at the decoded address (which keeps it
             // consecutive with the surrounding CPU reads of the same port), then
@@ -134,7 +134,7 @@ public:
             // The 2A03 reads $4015 internally: this updates only the internal data
             // bus, while the external bus still carries the (ignored) DMA value.
             internalBus = apu.readData(0x4015, internalBus);
-            return busData;
+            return internalBus;
         }
 
         internalBus = busData;
