@@ -1,7 +1,4 @@
 #pragma once
-
-#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
-
 #include "../../AppSettings.h"
 #include "../../IFileSession.h"
 #include "../../IInputContext.h"
@@ -39,6 +36,7 @@ public:
         float tileDim = 8.0f * scale;
         auto tileSize = ImVec2(tileDim, tileDim);
         auto zeroSize = ImVec2(0.0f, 0.0f);
+        auto paddingX = ImVec2(tileDim, 0.0f);
 
         style.FontScaleMain = scale;
         style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
@@ -49,9 +47,11 @@ public:
         style.FramePadding = zeroSize;
         style.DisplaySafeAreaPadding = zeroSize;
         style.WindowPadding = tileSize;
-        style.ItemSpacing = ImVec2(tileDim, 0.0f);
+        style.ItemSpacing = paddingX;
         style.ItemInnerSpacing = tileSize;
-        style.CellPadding = ImVec2(tileDim, 0.0f);
+        style.CellPadding = paddingX;
+
+        style.FrameRounding = tileDim;
 
         style.AntiAliasedLines = false;
         style.AntiAliasedLinesUseTex = false;
@@ -145,6 +145,8 @@ public:
 
         menuOpen = false;
 
+        ImGui::PushStyleVarY(ImGuiStyleVar_WindowPadding, 0);
+
         if (handler->isMenuVisible() && ImGui::BeginMainMenuBar()) {
             ImGui::SetCursorPosX(0.0f);
 
@@ -208,6 +210,8 @@ public:
             ImGui::EndMainMenuBar();
         }
 
+        ImGui::PopStyleVar();
+
         renderSyncWindow(renderer, session);
         renderAudioWindow();
         renderControlsWindow();
@@ -265,9 +269,10 @@ private:
         case 2: return {"controls.speedup", nullptr, AppKey::SpeedUp};
         case 3: return {"controls.speeddown", nullptr, AppKey::SpeedDown};
         case 4: return {"controls.reset", nullptr, AppKey::Reset};
-        case 5: return {"controls.nsf.pause", nullptr, AppKey::NsfTogglePause};
-        case 6: return {"controls.nsf.next", nullptr, AppKey::NsfNextSong};
-        case 7: return {"controls.nsf.prev", nullptr, AppKey::NsfPrevSong};
+        case 5: return {"controls.open", nullptr, AppKey::Open};
+        case 6: return {"controls.nsf.pause", nullptr, AppKey::NsfTogglePause};
+        case 7: return {"controls.nsf.next", nullptr, AppKey::NsfNextSong};
+        case 8: return {"controls.nsf.prev", nullptr, AppKey::NsfPrevSong};
         default: return {"", nullptr, AppKey::Unknown};
         }
     }
@@ -339,13 +344,13 @@ private:
     }
 
     void spacing() {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImGui::GetStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImGui::GetStyle().ItemInnerSpacing);
         ImGui::Spacing();
         ImGui::PopStyleVar();
     }
 
     bool button(const char* text) {
-        ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, ImGui::GetStyle().WindowPadding.x);
+        ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, ImGui::GetStyle().ItemInnerSpacing.x);
         bool res = ImGui::Button(text);
         ImGui::PopStyleVar();
         return res;
@@ -518,8 +523,8 @@ private:
 
         renderBindingsSection("controls.pad1", 0, 10);
         renderBindingsSection("controls.pad2", 10, 10);
-        renderBindingsSection("controls.emulation", 20, 5);
-        renderBindingsSection("controls.nsf", 25, 3);
+        renderBindingsSection("controls.emulation", 20, 6);
+        renderBindingsSection("controls.nsf", 26, 3);
 
         ImGui::End();
     }
@@ -533,7 +538,6 @@ private:
         ImGui::EndTooltip();
     }
 
-    static constexpr int totalBindings = 28;
     static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
 
     AppSettings *settings = nullptr;

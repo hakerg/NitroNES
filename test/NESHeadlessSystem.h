@@ -1,23 +1,14 @@
 #pragma once
-#include <functional>
 #include "../src/core/NESSystem.h"
 
 class NESHeadlessSystem
-    : public IEmulatorHost
-    , public INESSystemHost
-    , public NESSystem
+    : public NESSystem
 {
 public:
     explicit NESHeadlessSystem(const std::string& path)
         : NESSystem(
-            static_cast<IEmulatorHost&>(*this),
-            static_cast<INESSystemHost&>(*this),
             audioSettings,
             path) {}
-
-    uint8_t readController(int port) override {
-        return port == 0 ? controller1 : controller2;
-    }
 
     void setController1(uint8_t buttons) { controller1 = buttons; }
     void setController2(uint8_t buttons) { controller2 = buttons; }
@@ -25,8 +16,8 @@ public:
     uint8_t getController2() const { return controller2; }
 
     void tickCycles(uint64_t n) {
-        uint64_t target = cpuCycle + n;
-        tickWhile([&]{ return cpuCycle < target; });
+        const uint64_t target = cycleNo() + n;
+        tickWhile([&]{ return cycleNo() < target; });
     }
 
     void dumpNametable(uint8_t dst[960], int nt = 0) {
@@ -44,42 +35,22 @@ public:
 
     uint8_t peekCPU(uint16_t addr) {
         if (addr < 0x2000) return cpuRam[addr & 0x07FF];
-        if (cart && addr >= 0x4020) return cart->cpuRead(addr, 0x00);
+        if (addr >= 0x4020) return cart.cpuRead(addr, 0x00);
         return 0xFF;
     }
-    uint8_t   peekRAM(uint16_t addr) { return cpuRam[addr & 0x07FF]; }
-    uint16_t  cpuPC() { return a2a03.getCPU().PC; }
-    uint64_t  frameNo() { return ppu.getCompletedFramesCount(); }
-    uint64_t  cycleNo() const { return cpuCycle; }
-
-    A2A03&   getA2A03()  { return a2a03; }
-    PPU2C02& getPPURef() { return ppu;   }
-
-    std::function<void()> preStepHook;
-    std::function<void()> postStepHook;
-    std::function<void(int)> ppuStepHook;
+    uint64_t  frameNo() { return (uint64_t)ppu.getCompletedFramesCount(); }
+    uint64_t  cycleNo() { return a2a03.getCPU().getCycle(); }
 
 protected:
-    void onPreStep() override {
-        NESSystem::onPreStep();
-        ++cpuCycle;
-        if (preStepHook) preStepHook();
+    uint8_t readController(int port) override {
+        return port == 0 ? controller1 : controller2;
     }
 
-    void onPostStep() override {
-        NESSystem::onPostStep();
-        if (postStepHook) postStepHook();
-    }
-
-    void onPpuStep(int subIdx) override {
-        if (ppuStepHook) ppuStepHook(subIdx);
-    }
+    void pushAudioSample(float sample, double dt) override {}
 
     AudioSettings audioSettings;
 
 private:
     uint8_t controller1 = 0x00;
     uint8_t controller2 = 0x00;
-    uint64_t cpuCycle    = 0;
 };
-

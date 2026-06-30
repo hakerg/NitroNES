@@ -2,12 +2,13 @@
 
 Emulator NES robiony pod kątem zgodności z fizycznym sprzętem. Cel: zaliczenie wszystkich testów AccuracyCoin.
 
-## Zasady
+## Zasady pisania kodu
 
-- Zachowanie kodu powinno odzwierciedlać zachowanie sprzętu — obsługa glitchy i edge-case'ów powinna wynikać naturalnie z implementacji, nie ze specjalnych przypadków.
+- Architektura kodu musi być zgodna z architekturą sprzętu (komponent = klasa).
 - Unikaj dodawania zmiennych do klas, chyba że to konieczne — im więcej stanu, tym większe ryzyko rozjazdów.
 - Dbaj o spójność i czytelność kodu. Jeśli nazewnictwo wprowadza zamieszanie, popraw je.
 - Nie dodawaj komentarzy — dobry kod sam się komentuje.
+- Im mniej kodu i im prostszy, tym lepszy.
 - Do budowania używaj ninja.
 
 ## Ważne katalogi
@@ -23,7 +24,7 @@ Gdy test accuracy_coin nie przechodzi:
 1. Przeczytaj opis błędu i kod źródłowy testu w `nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.asm`
 2. Napisz minimalny plik .asm odtwarzający konkretne scenario (szablon: `test/nes_template.asm`)
 3. Uruchom `nes_test` z odpowiednimi komendami, włącz trace cpu/ppu/dma — zapis trafi do `trace.log`
-4. Przeanalizuj trace - każda linia to jeden cykl CPU, widać co robi DMA, PPU, CPU; symbole z `.fns` pojawiają się automatycznie
+4. Przeanalizuj trace, symbole z `.fns` pojawiają się automatycznie
 5. Porównaj z oczekiwanym zachowaniem ze specyfikacji w `nes_specs/`
 6. Możesz też odpalać inne ROM-y testowe przez `nes_test`, aby pozyskać więcej informacji
 
@@ -69,8 +70,9 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
 
 Przyciski: A, B, SELECT, START, UP, DOWN, LEFT, RIGHT
 
-Trace zapisuje do `trace.log` jedną linię na clock — albo CPU (po phi2), albo
-PPU (po każdym z 3 sub-tików). Linie PPU i CPU nigdy nie są mieszane.
+Trace zapisuje do `trace.log` jedną linię na clock. Każdy komponent (CPU,
+PPU, DMA) sam generuje swój wiersz w trakcie clockowania — TestRunner tylko
+dodaje prefix `F=… CYC=…` i otwiera plik.
 
   - `ppu` (3 linie na cykl CPU): `F=… CYC=… PPU[SL=…,CY=…] PHASE V=… T=… fX=…
     W=… CTRL=… MASK=… STAT=… OAMA=… SPR=… NMI=… [ODD]`
@@ -78,18 +80,21 @@ PPU (po każdym z 3 sub-tików). Linie PPU i CPU nigdy nie są mieszane.
         `NT-DUMMY` / `POST` / `VBLANK`
       * V/T = loopy `vram_addr`/`tram_addr`, fX = fine X, W = write latch
       * SPR = sprite count po evaluacji, ODD = marker klatki nieparzystej
-  - `cpu` (1 linia na cykl CPU): `F=… CYC=… PC=… A=… X=… Y=… S=… P=<flagi>
-    R/W $XXXX=DD[(nazwa)]  MNEMONIC step  ; symbol_PC`
+  - `cpu` (2 linie na cykl CPU):
+      * `F=… CYC=… PHI1 PC=… A=… X=… Y=… S=… P=<flagi> R/W $XXXX[=DD][(nazwa)]
+        MNEMONIC step ; symbol_PC` — stan rejestrów + decyzja na ten cykl
+        (adres, kierunek, nazwa micro-stepu). Pojawia się gdy faza 1 się wykona.
+      * `F=… CYC=… PHI2 fetched=XX` / `PHI2 wrote=XX` — dane faktycznie
+        pobrane/zapisane na magistrali w fazie 2.
       * P: wielkie litery = bit ustawiony, małe = wyczyszczony
-      * Anotacja `$XXXX=DD(nazwa)` dla rejestrów I/O i symboli z `.fns`/`.lbl`
-      * MNEMONIC i nazwa micro-stepu (np. `STA am_abs_2`, `jsr3_pushPCH`)
-      * R/W odzwierciedla rzeczywistą akcję magistrali — gdy DMA przejmuje,
-        pokazywany jest jego kierunek
-  - `dma` (dopisywane na końcu linii CPU): `DMA:<OAMphase>/<DMCphase> <action>
-    @<addr>`
+      * Anotacja `(nazwa)` dla rejestrów I/O i symboli z `.fns`/`.lbl`
+  - `dma` (dopisywane na końcu linii PPU bezpośrednio po phi1, gdzie DMA
+    podejmuje decyzję): `DMA:<OAMphase>/<DMCphase> <action> @<addr>` —
+    generowane przez sam DMA w `clockPhi2`, doklejane do ostatniej linii.
 
-Łącznie z włączonym ppu+cpu+dma: 4 linie na cykl CPU (3 PPU + 1 CPU+DMA),
-wszystkie z tym samym `CYC=N`. PPU CY rośnie monotonicznie o 1 między liniami.
+Łącznie z włączonym ppu+cpu+dma: 5 linii na cykl CPU (3 PPU + PHI1 + PHI2),
+wszystkie z tym samym `CYC=N`. Kolejność odzwierciedla faktyczne taktowanie:
+PPU sub0, PPU sub1, CPU PHI1, PPU sub2 (z DMA suffix), CPU PHI2.
 
 Przykłady:
   nes_test mytest.asm frames:60 screen mem:0x00:16
@@ -113,7 +118,7 @@ Menu AccuracyCoin:
   (kolejność = numer strony, kolejność `table ...` w suicie = numer wiersza)
 
 Między każdym wciśnięciem a puszczeniem przycisku musi upłynąć ok. **20 klatek**,
-żeby gra zdążyła odczytać input (jedno wciśnięcie = pad1+X, frames:20,
+żeby gra zdążyła przejść między ekranami (jedno wciśnięcie = pad1+X, frames:20,
 pad1-X, frames:20).
 
 Symbole `.fns` (generowane automatycznie przy buildzie `.asm`) ujawniają nazwę

@@ -66,6 +66,7 @@ public:
         case AppKey::SpeedUp: return settings.keys.speedUp;
         case AppKey::SpeedDown: return settings.keys.speedDown;
         case AppKey::Reset: return settings.keys.reset;
+        case AppKey::Open: return settings.keys.open;
         case AppKey::NsfTogglePause: return settings.keys.nsfTogglePause;
         case AppKey::NsfNextSong: return settings.keys.nsfNextSong;
         case AppKey::NsfPrevSong: return settings.keys.nsfPrevSong;
@@ -80,6 +81,7 @@ public:
         case AppKey::SpeedUp: settings.keys.speedUp = chord; return;
         case AppKey::SpeedDown: settings.keys.speedDown = chord; return;
         case AppKey::Reset: settings.keys.reset = chord; return;
+        case AppKey::Open: settings.keys.open = chord; return;
         case AppKey::NsfTogglePause:
             settings.keys.nsfTogglePause = chord;
             return;

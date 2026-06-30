@@ -3,25 +3,117 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <fstream>
+#include <cstring>
+#include <iostream>
+#include <filesystem>
 #include "NESConst.h"
 #include "NESCoreBase.h"
-#include "NSFLoader.h"
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
+
+#pragma pack(push, 1)
+struct NSFHeader {
+    char     magic[5] = {};         // "NESM\x1A"
+    uint8_t  version = 0;          // Wersja (0x01)
+    uint8_t  totalSongs = 0;       // Liczba utworów (1-based)
+    uint8_t  startingSong = 0;     // Utwór startowy (1-based)
+    uint16_t loadAddr = 0;         // Adres załadowania danych (0x8000-0xFFFF)
+    uint16_t initAddr = 0;         // Adres rutyny INIT
+    uint16_t playAddr = 0;         // Adres rutyny PLAY
+    char     songName[32] = {};     // Tytuł (null-terminated)
+    char     artist[32] = {};       // Artysta (null-terminated)
+    char     copyright[32] = {};    // Prawa autorskie (null-terminated)
+    uint16_t speedNTSC = 0;        // Szybkość odtwarzania NTSC (1/1000000 s)
+    uint8_t  bankValues[8] = {};    // Wartości bankswitch (0 = brak bankswitch)
+    uint16_t speedPAL = 0;         // Szybkość odtwarzania PAL (1/1000000 s)
+    uint8_t  palNtscBits = 0;      // bit0: PAL, bit1: dual
+    uint8_t  extraChipFlags = 0;   // Dodatkowe układy dźwiękowe
+    uint8_t  reserved[4] = {};      // Zarezerwowane (0x00)
+
+    bool isBankswitched() const {
+        return std::any_of(std::begin(bankValues), std::end(bankValues), [](uint8_t bv) { return bv != 0; });
+    }
+};
+#pragma pack(pop)
+
+static_assert(sizeof(NSFHeader) == 0x80, "NSFHeader musi mieć 128 bajtów");
+
+struct NSFFile {
+    NSFHeader header;
+    std::vector<uint8_t> data;  // Dane muzyczne (od offsetu 0x80)
+
+    std::string name()      const { return safeStr(header.songName, 32); }
+    std::string artist()    const { return safeStr(header.artist,   32); }
+    std::string copyright() const { return safeStr(header.copyright,32); }
+
+    bool isBankswitched() const { return header.isBankswitched(); }
+
+    bool isPAL()     const { return  (header.palNtscBits & 0x01); }
+    bool isDualMode()const { return  (header.palNtscBits & 0x02); }
+
+    double playRateHz(bool pal = false) const {
+        uint16_t speed = pal ? header.speedPAL : header.speedNTSC;
+        if (speed == 0) speed = pal ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
+        return 1000000.0 / speed;
+    }
+
+    double playCyclesPerCall(bool pal = false) const {
+        double   cpuClock = pal ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
+        uint16_t speed    = pal ? header.speedPAL     : header.speedNTSC;
+        if (speed == 0) speed = pal ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
+        return cpuClock * speed / 1000000.0;
+    }
+
+private:
+    static std::string safeStr(const char* buf, int maxLen) {
+        int len = 0;
+        while (len < maxLen && buf[len] != '\0') len++;
+        return std::string(buf, len);
+    }
+};
 
 class NSFPlayer : public NESCoreBase {
 public:
     static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000;
     static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
 
-    explicit NSFPlayer(IEmulatorHost& host, AudioSettings& audioSettings, const std::string& path)
-        : NESCoreBase(host, audioSettings) {
+    explicit NSFPlayer(AudioSettings& audioSettings, const std::string& path)
+        : NESCoreBase(audioSettings) {
         extRam.fill(0x00);
         prgRom.assign(32768, 0x00);
         NSFFile nsf;
-        if (!NSFLoader::load(path, nsf))
+        if (!loadFromFile(path, nsf))
             throw std::runtime_error("[NSF] Nie udalo sie zaladowac: " + path);
         load(nsf, audioSettings);
+    }
+
+    static bool loadFromFile(const std::string& path, NSFFile& out) {
+        std::ifstream f(std::filesystem::path(path), std::ios::binary);
+        if (!f.is_open()) {
+            std::cerr << "[NSF] Nie można otworzyć pliku: " << path << "\n";
+            return false;
+        }
+
+        f.read(reinterpret_cast<char*>(&out.header), sizeof(NSFHeader));
+        if (f.gcount() < (std::streamsize)sizeof(NSFHeader)) {
+            std::cerr << "[NSF] Plik za krótki (niepełny nagłówek)\n";
+            return false;
+        }
+
+        if (std::strncmp(out.header.magic, "NESM\x1A", 5) != 0) {
+            std::cerr << "[NSF] Nieprawidłowa sygnatura. Oczekiwano: 4E 45 53 4D 1A, odczytano: ";
+            for (char i : out.header.magic)
+                std::cerr << std::hex << std::uppercase
+                          << ((unsigned)(unsigned char)i) << " ";
+            std::cerr << std::dec << "\n";
+            std::cerr << "[NSF] Ścieżka: " << path << "\n";
+            return false;
+        }
+
+        out.data.assign(std::istreambuf_iterator<char>(f),
+                        std::istreambuf_iterator<char>());
+        return true;
     }
 
     bool load(const NSFFile& nsf, AudioSettings& audioSettings) {
@@ -36,7 +128,7 @@ public:
             expChip->setAudioSettings(audioSettings);
         }
 
-        if (isBankswitched()) {
+        if (nsfHeader.isBankswitched()) {
             loadBankswitched(nsf.data);
         } else {
             uint16_t base   = nsfHeader.loadAddr;
@@ -72,7 +164,7 @@ public:
         a2a03.getAPU().writeData(0x4015, 0x0F, false);
         a2a03.getAPU().writeData(0x4017, 0x40, false);
 
-        if (isBankswitched()) {
+        if (nsfHeader.isBankswitched()) {
             for (int i = 0; i < 8; i++)
                 banks[i] = nsfHeader.bankValues[i];
         }
@@ -110,6 +202,10 @@ public:
     uint8_t getCurrentSong()  const { return currentSong; }
     uint8_t getTotalSongs()   const { return nsfHeader.totalSongs; }
 
+    double getBaseFramerate() const override {
+        return NES::CPU_CLOCK_NTSC / playCycles;
+    }
+
     void reset() override { initSong(currentSong); }
     bool pollNMI()     override { return true; }
     bool irqAsserted() override { return false; }
@@ -117,16 +213,19 @@ public:
     int getCompletedFramesCount() override { return completedFramesCount; }
 
 protected:
-    void onPreStep() override {
+    void clockOneCycle() override {
         trampolineMaintenance();
         playTimer -= 1.0;
-        if (!callDone && isAtTrampoline()) {
-            callDone = true;
-        }
-    }
+        if (!callDone && isAtTrampoline()) callDone = true;
 
-    void  clockMapper() override { if (expChip) expChip->clock(); }
-    float mapperAudio() const override { return expChip ? expChip->audioOutput() : 0.0f; }
+        if (expChip) expChip->clock();
+        a2a03.clockPhi1();
+        a2a03.clockPhi2();
+
+        const float mapperOut = expChip ? expChip->audioOutput() : 0.0f;
+        pushAudioSample(a2a03.getAPU().getOutputSample() + mapperOut,
+                        1.0 / (getCPUClockRate() * speed));
+    }
 
     uint8_t memRead(uint16_t addr) override {
         uint8_t data = a2a03.getBusData();
@@ -143,7 +242,7 @@ protected:
             data = extRam[addr - 0x6000];
         }
         else if (addr >= 0x8000) {
-            if (isBankswitched()) {
+            if (nsfHeader.isBankswitched()) {
                 uint8_t  bankIdx = (addr - 0x8000) / 4096;
                 uint16_t offset  = (addr - 0x8000) % 4096;
                 uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
@@ -190,11 +289,6 @@ private:
         }
     }
 
-    bool isBankswitched() const {
-        for (int i = 0; i < 8; i++)
-            if (nsfHeader.bankValues[i] != 0) return true;
-        return false;
-    }
 
     bool nsfIsPAL()      const { return (nsfHeader.palNtscBits & 0x01) != 0; }
     bool nsfIsDualMode() const { return (nsfHeader.palNtscBits & 0x02) != 0; }

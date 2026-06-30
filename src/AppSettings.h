@@ -15,6 +15,7 @@ struct AppKeyBindings {
     KeyChord speedUp{SDL_SCANCODE_TAB};
     KeyChord speedDown{SDL_SCANCODE_TAB, KeyChord::MOD_SHIFT};
     KeyChord reset{};
+    KeyChord open{SDL_SCANCODE_O, KeyChord::MOD_CTRL};
     KeyChord nsfTogglePause{SDL_SCANCODE_SPACE};
     KeyChord nsfNextSong{SDL_SCANCODE_RIGHT};
     KeyChord nsfPrevSong{SDL_SCANCODE_LEFT};
@@ -105,6 +106,7 @@ private:
         f("key.speedUp", keys.speedUp);
         f("key.speedDown", keys.speedDown);
         f("key.reset", keys.reset);
+        f("key.open", keys.open);
         f("key.nsfTogglePause", keys.nsfTogglePause);
         f("key.nsfNextSong", keys.nsfNextSong);
         f("key.nsfPrevSong", keys.nsfPrevSong);

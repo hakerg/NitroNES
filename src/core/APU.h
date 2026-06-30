@@ -135,7 +135,7 @@ struct PulseChannel {
     }
 
     uint16_t sweepTarget() const {
-        int16_t delta = (int16_t)(timerPeriod >> sweepShift);
+        auto delta = (int16_t)(timerPeriod >> sweepShift);
         if (sweepNegate)
             delta = IsPulse1 ? -(delta + 1) : -delta;
         int32_t target = (int32_t)timerPeriod + delta;
@@ -517,7 +517,9 @@ public:
                 if (frameIRQInhibit) frameIRQPending = false;
                 delay4017 = isAPUPutCycle ? 2 : 3;
                 break;
-        }
+            default:
+                break;
+            }
     }
 
     uint8_t readData(uint16_t addr, uint8_t openBus) {

@@ -12,6 +12,8 @@
 #include <chrono>
 #include <thread>
 
+using namespace std::chrono;
+
 enum class CanMatchRefreshRateResult {
     Success,
     Disabled,
@@ -22,6 +24,7 @@ enum class CanMatchRefreshRateResult {
 enum class CanUseScanlineSyncResult {
     Success,
     Disabled,
+    FileWithNoVideo,
     NoFullscreen,
     SystemError,
     RefreshRateOutsideTolerance
@@ -38,38 +41,43 @@ public:
           audio(audio), window(window), settings(settings) {
     }
 
-    virtual ~IFileSession() {}
+    virtual ~IFileSession() = default;
 
     IFileSession(const IFileSession &) = delete;
     IFileSession &operator=(const IFileSession &) = delete;
 
-    virtual NESCoreBase& getCore() const = 0;
-
+    virtual NESCoreBase& getCore() = 0;
     virtual void processKeyDown(AppKey key) {}
 
     void clockCore(double baseSpeed) {
         NESCoreBase& core = getCore();
-        double adjustedSpeed = getAdjustedSpeed(baseSpeed);
-        core.speed = adjustedSpeed;
-        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / adjustedSpeed);
+        core.speed = getSyncedSpeed(baseSpeed);
+        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core.speed);
 
-        if (core.paused || audio.getHealth() == AudioBufferHealth::Overflow) {
+        AudioBufferHealth health = audio.getHealth();
+        if (core.paused || health == AudioBufferHealth::Overflow) {
+            waitUntilNextFrameTime(baseSpeed);
             return;
         }
 
-        // do not change 'if' to 'while'
-        if (audio.getHealth() == AudioBufferHealth::Underflow) {
-            core.tickFrame();
-        }
-
         if (canUseScanlineSync(baseSpeed) == CanUseScanlineSyncResult::Success) {
-            syncScanline();
+            if (health == AudioBufferHealth::Underflow) {
+                syncScanline(true);
+            } else {
+                window.delay(1);
+                syncScanline(false);
+            }
         } else {
-            syncTimer(baseSpeed);
+            // do not change that 'if' to 'while' - will hang if speed too high
+            if (health == AudioBufferHealth::Underflow) {
+                core.tickFrame();
+            }
+            waitUntilNextFrameTime(baseSpeed);
+            core.tickFrame();
         }
     }
 
-    CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) const {
+    CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) {
         if (settings.syncMode == 0) {
             return CanMatchRefreshRateResult::Disabled;
         }
@@ -88,9 +96,13 @@ public:
         return CanMatchRefreshRateResult::Success;
     }
 
-    CanUseScanlineSyncResult canUseScanlineSync(double baseSpeed) const {
+    CanUseScanlineSyncResult canUseScanlineSync(double baseSpeed) {
         if (settings.syncMode != 2) {
             return CanUseScanlineSyncResult::Disabled;
+        }
+
+        if (getCore().getCurrentScanline() < 0) {
+            return CanUseScanlineSyncResult::FileWithNoVideo;
         }
 
         int geoW = 0, geoH = 0;
@@ -100,12 +112,11 @@ public:
         }
 
         CanMatchRefreshRateResult canMatchRefreshRateResult = canMatchRefreshRate(baseSpeed);
-        if (canMatchRefreshRateResult != CanMatchRefreshRateResult::Success) {
-            switch (canMatchRefreshRateResult) {
-                case CanMatchRefreshRateResult::Disabled: return CanUseScanlineSyncResult::Disabled;
-                case CanMatchRefreshRateResult::SystemError: return CanUseScanlineSyncResult::SystemError;
-                case CanMatchRefreshRateResult::RefreshRateOutsideTolerance: return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
-            }
+        switch (canMatchRefreshRateResult) {
+            case CanMatchRefreshRateResult::Disabled: return CanUseScanlineSyncResult::Disabled;
+            case CanMatchRefreshRateResult::SystemError: return CanUseScanlineSyncResult::SystemError;
+            case CanMatchRefreshRateResult::RefreshRateOutsideTolerance: return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
+            default: break;
         }
 
         double monitorHz = window.getRefreshHz();
@@ -149,9 +160,13 @@ private:
         return ratio >= lower && ratio <= upper;
     }
 
-    void syncScanline() {
-        window.delay(1);
+    void waitUntilNextFrameTime(double baseSpeed) {
+        nanoseconds frameDuration = getFrameDuration(baseSpeed);
+        lastFrameTime += frameDuration;
+        sleepUntil(lastFrameTime);
+    }
 
+    void syncScanline(bool doExtraFrame) {
         int monitorScanline = 0;
         window.getScanLine(monitorScanline);
 
@@ -175,40 +190,28 @@ private:
         int distForward = (target - current + NES::TOTAL_SCANLINES) % NES::TOTAL_SCANLINES;
         int distBackward = (current - target + NES::TOTAL_SCANLINES) % NES::TOTAL_SCANLINES;
 
+        lastFrameTime = high_resolution_clock::now();
+
         // pobieranie scanline monitora może zawierać szum, trzeba się zabezpieczyć przed generowaniem nadmiarowych klatek
-        if (distBackward < distForward) {
-            return;
+        if (distBackward > distForward) {
+            core.tickWhile([&] { return core.getCurrentScanline() != target; });
         }
 
-        core.tickWhile([&] { return core.getCurrentScanline() != target; });
-    }
-
-    void syncTimer(double baseSpeed) {
-        using namespace std::chrono;
-        NESCoreBase& core = getCore();
-
-        double adjustedSpeed = getAdjustedSpeed(baseSpeed);
-        double targetFps = core.getBaseFramerate() * adjustedSpeed;
-
-        auto frameDuration = duration_cast<high_resolution_clock::duration>(
-            duration<double>(1.0 / targetFps)
-        );
-
-        auto now = high_resolution_clock::now();
-        auto targetTime = lastFrameTime + frameDuration;
-
-        if (now - lastFrameTime > milliseconds(30)) {
-            targetTime = now;
+        if (doExtraFrame) {
+            core.tickWhile([&] { return core.getCurrentScanline() == target; });
+            core.tickWhile([&] { return core.getCurrentScanline() != target; });
         }
-
-        sleepUntil(targetTime);
-
-        lastFrameTime = targetTime;
-        core.tickFrame();
     }
 
-    void sleepUntil(std::chrono::high_resolution_clock::time_point timePoint) {
-        using namespace std::chrono;
+    nanoseconds getFrameDuration(double baseSpeed) {
+        double speed = getSyncedSpeed(baseSpeed);
+        double targetFps = getCore().getBaseFramerate() * speed;
+
+        return duration_cast<high_resolution_clock::duration>(
+            duration<double>(1.0 / targetFps));
+    }
+
+    void sleepUntil(high_resolution_clock::time_point timePoint) {
         auto now = high_resolution_clock::now();
         auto sleepMs = duration_cast<milliseconds>(timePoint - now).count() - 1;
         if (sleepMs >= 0) {
@@ -220,19 +223,19 @@ private:
         }
     }
 
-    double getAdjustedSpeed(double baseSpeed) const {
+    double getSyncedSpeed(double baseSpeed) {
         if (canMatchRefreshRate(baseSpeed) != CanMatchRefreshRateResult::Success) {
             return baseSpeed;
         }
 
-        return baseSpeed * calcSpeedMultiplier(baseSpeed);
+        return baseSpeed * calcSpeedMultiplierForMonitor(baseSpeed);
     }
 
-    double calcSpeedMultiplier(double baseSpeed) const {
+    double calcSpeedMultiplierForMonitor(double baseSpeed) {
         double monitorHz = window.getRefreshHz();
         double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
         return ratio / static_cast<int>(std::round(ratio));
     }
 
-    std::chrono::high_resolution_clock::time_point lastFrameTime;
+    high_resolution_clock::time_point lastFrameTime = high_resolution_clock::now();
 };

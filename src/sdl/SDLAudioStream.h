@@ -1,39 +1,34 @@
 #pragma once
 #include "../AppAudioStream.h"
+#include "../AppSettings.h"
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <vector>
 
 class SDLAudioStream : public AppAudioStream {
 public:
-    static const int BATCH_SIZE = 256;
+    static constexpr int BATCH_SIZE = 64;
 
-    explicit SDLAudioStream(AudioSettings &settings)
-        : AppAudioStream(settings) {
+    explicit SDLAudioStream(AppSettings &settings)
+        : AppAudioStream(settings.audioSettings), settings(settings) {
         if (!open())
             std::cerr << "[Audio] Ostrzezenie: brak audio\n";
     }
-    ~SDLAudioStream() { close(); }
+    ~SDLAudioStream() override { close(); }
 
     bool isOpen() const { return deviceId != 0 && sdlStream != nullptr; }
 
     SDL_AudioStream* getSDLStream() const { return sdlStream; }
 
     AudioBufferHealth getHealth() override {
-        SDL_AudioSpec dstSpec{};
-        SDL_GetAudioStreamFormat(sdlStream, nullptr, &dstSpec);
-
         int queuedBytes = SDL_GetAudioStreamQueued(sdlStream);
-        float bytesPerMs = dstSpec.freq * dstSpec.channels * SDL_AUDIO_BYTESIZE(dstSpec.format) * 0.001f;
+        float bytesPerMs = nativeSpec.freq * nativeSpec.channels * SDL_AUDIO_BYTESIZE(nativeSpec.format) * 0.001f;
         float queuedMs = queuedBytes / bytesPerMs;
 
-        const float MIN_SAFE_MS = 20.0f;
-        const float MAX_SAFE_MS = 40.0f;
-
-        if (queuedMs < MIN_SAFE_MS) {
+        if (queuedMs < 5.0f) {
             return AudioBufferHealth::Underflow;
         }
-        if (queuedMs > MAX_SAFE_MS) {
+        if (queuedMs > 50.0f) {
             return AudioBufferHealth::Overflow;
         }
         return AudioBufferHealth::Healthy;
@@ -57,14 +52,12 @@ private:
             return false;
         }
 
-        SDL_AudioSpec nativeSpec{};
         if (!SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                       &nativeSpec, nullptr)) {
             nativeSpec.freq = 48000;
         }
 
-        deviceId =
-            SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+        deviceId = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
         if (deviceId == 0) {
             std::cerr << "[Audio] Blad otwarcia urzadzenia audio: "
                       << SDL_GetError() << "\n";
@@ -126,4 +119,6 @@ private:
     SDL_AudioDeviceID deviceId = 0;
     SDL_AudioStream* sdlStream = nullptr;
     std::vector<float> outBuf;
+    SDL_AudioSpec nativeSpec{};
+    AppSettings& settings;
 };

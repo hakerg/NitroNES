@@ -8,6 +8,7 @@ enum class AppKey {
     SpeedUp,
     SpeedDown,
     Reset,
+    Open,
     NsfTogglePause,
     NsfNextSong,
     NsfPrevSong

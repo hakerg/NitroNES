@@ -1,27 +1,15 @@
 ﻿#pragma once
 #include <array>
-#include <memory>
-#include <stdexcept>
 #include "NESCoreBase.h"
 #include "Cartridge.h"
 #include "PPU2C02.h"
 
-class INESSystemHost {
-public:
-    virtual ~INESSystemHost() = default;
-    virtual uint8_t readController(int port) = 0;
-};
-
 class NESSystem : public NESCoreBase {
 public:
-    explicit NESSystem(IEmulatorHost& host, INESSystemHost& nesHost, AudioSettings& audioSettings, const std::string& path)
-        : NESCoreBase(host, audioSettings), nesHost(nesHost) {
-        cart = std::make_unique<Cartridge>(path, audioSettings);
-        if (!cart->isImageValid()) {
-            cart.reset();
-            throw std::runtime_error("[NES] Nie udalo sie zaladowac: " + path);
-        }
-        ppu.cart = cart.get();
+    explicit NESSystem(AudioSettings& audioSettings, const std::string& path)
+        : NESCoreBase(audioSettings)
+        , cart(path, audioSettings)
+        , ppu(cart) {
         cpuRam.fill(0x00);
         a2a03.getCPU().A = 0; a2a03.getCPU().X = 0; a2a03.getCPU().Y = 0;
         a2a03.getCPU().S = 0x00;
@@ -30,22 +18,43 @@ public:
     }
 
     void reset() override {
-        if (cart) cart->reset();
+        cart.reset();
         a2a03.reset();
         ppu.reset();
     }
 
-    PPU2C02* getPPU() override { return &ppu; }
-
     bool pollNMI() override { return !ppu.pollNmiLow(); }
-    bool irqAsserted() override { return cart && cart->irqState(); }
+    bool irqAsserted() override { return cart.irqState(); }
     int getCompletedFramesCount() override { return ppu.getCompletedFramesCount(); }
     uint32_t* getFramebuffer() override { return ppu.getFramebuffer(); }
 
-protected:
+    void setTracer(Tracer* t) override {
+        NESCoreBase::setTracer(t);
+        ppu.setTracer(t);
+    }
+
     void latchControllers() override {
-        controllerShift  = nesHost.readController(0);
-        controllerShift2 = nesHost.readController(1);
+        controllerShift  = readController(0);
+        controllerShift2 = readController(1);
+    }
+
+    double getBaseFramerate() const override { return NES::REFRESH_RATE_NTSC_ON; }
+
+protected:
+    virtual uint8_t readController(int port) = 0;
+
+    PPU2C02* getPPU() override { return &ppu; }
+
+    void clockOneCycle() override {
+        ppu.clock();
+        ppu.clock();
+        cart.clock();
+        a2a03.clockPhi1();
+        ppu.clock();
+        a2a03.clockPhi2();
+
+        pushAudioSample(a2a03.getAPU().getOutputSample() + cart.audioOutput(),
+                        1.0 / (getCPUClockRate() * speed));
     }
 
     uint8_t memRead(uint16_t addr) override {
@@ -79,7 +88,7 @@ protected:
 
             data = (data & 0xE0) | controllerLatch2;
         } else if (addr >= 0x4020) {
-            data = cart ? cart->cpuRead(addr, data) : data;
+            data = cart.cpuRead(addr, data);
         }
 
         return data;
@@ -95,21 +104,15 @@ protected:
     void memWrite(uint16_t addr, uint8_t data) override {
         if (addr < 0x2000)  { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000)  { ppu.cpuWrite(addr, data); return; }
-        if (cart && addr >= 0x4020) cart->cpuWrite(addr, data);
+        if (addr >= 0x4020) cart.cpuWrite(addr, data);
     }
 
-    void  clockMapper() override { if (cart) cart->clock(); }
-    float mapperAudio() const override { return cart ? cart->audioOutput() : 0.0f; }
-
-    PPU2C02 ppu;
-    std::unique_ptr<Cartridge> cart;
+    Cartridge cart;
+    PPU2C02   ppu;
 
     uint8_t controllerShift  = 0x00;
     uint8_t controllerShift2 = 0x00;
     uint8_t controllerLatch  = 0x00;
     uint8_t controllerLatch2 = 0x00;
     uint16_t lastBusReadAddr = 0xFFFF;
-
-private:
-    INESSystemHost& nesHost;
 };

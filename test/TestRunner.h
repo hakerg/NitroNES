@@ -1,10 +1,10 @@
 #pragma once
 #include "NESHeadlessSystem.h"
+#include "../src/core/Tracer.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -13,17 +13,17 @@
 #include <string>
 #include <vector>
 
-class TestRunner {
+class TestRunner : public Tracer {
 public:
     explicit TestRunner(const std::string& romPath)
         : nes(romPath) {
-        nes.preStepHook  = [this]{ snapshotCpu(); };
-        nes.postStepHook = [this]{ traceTick(); };
-        nes.ppuStepHook  = [this](int){ tracePpuSub(); };
+        nes.setTracer(this);
     }
 
-    ~TestRunner() {
+    ~TestRunner() override {
+        flushPending();
         closeTrace();
+        nes.setTracer(nullptr);
     }
 
     void loadSymbols(const std::string& path) {
@@ -43,7 +43,7 @@ public:
                 if (name.empty()) continue;
                 if (name.rfind("LOCAL_MACRO_SYMBOL", 0) == 0) continue;
                 if (name.rfind("__", 0) == 0) continue;
-                uint32_t addr = (uint32_t)std::strtoul(hex.c_str(), nullptr, 16);
+                auto addr = (uint32_t)std::strtoul(hex.c_str(), nullptr, 16);
                 if (addr <= 0xFFFF) symbolByAddr[(uint16_t)addr] = name;
                 continue;
             }
@@ -53,7 +53,7 @@ public:
             std::string val  = line.substr(eq + 1);
             trim(name); trim(val);
             if (name.empty() || val.empty() || val[0] != '$') continue;
-            uint32_t addr = (uint32_t)std::strtoul(val.c_str() + 1, nullptr, 16);
+            auto addr = (uint32_t)std::strtoul(val.c_str() + 1, nullptr, 16);
             symbolByAddr[(uint16_t)addr] = name;
         }
     }
@@ -69,20 +69,46 @@ public:
         return true;
     }
 
+    // Tracer ----------------------------------------------------------------
+    void writeCpu(const char* body) override {
+        flushPending();
+        beginLine(body);
+    }
+    void writePpu(const char* body) override {
+        flushPending();
+        beginLine(body);
+    }
+    void appendDma(const char* body) override {
+        if (pending.empty()) return;
+        pending += "  ";
+        pending += body;
+    }
+
+    std::string symbolExact(uint16_t addr) const override {
+        if (const char* io = nesIoRegName(addr)) return io;
+        auto it = symbolByAddr.find(addr);
+        return it == symbolByAddr.end() ? std::string{} : it->second;
+    }
+
+    std::string symbolNear(uint16_t pc) const override {
+        if (symbolByAddr.empty()) return {};
+        auto it = symbolByAddr.upper_bound(pc);
+        if (it == symbolByAddr.begin()) return {};
+        --it;
+        uint16_t off = pc - it->first;
+        if (off > 0x40) return {};
+        if (off == 0) return it->second;
+        char buf[16]; std::snprintf(buf, sizeof(buf), "+%u", (unsigned)off);
+        return it->second + buf;
+    }
+
 private:
     NESHeadlessSystem nes;
     std::map<uint16_t, std::string> symbolByAddr;
 
-    struct CpuSnap {
-        uint16_t PC;
-        uint8_t  A, X, Y, S, P;
-    };
-    CpuSnap preStep{};
-
-    // tracer
-    bool traceCpu = false, tracePpu = false, traceDma = false;
     std::FILE* traceFp = nullptr;
     std::string tracePath = "trace.log";
+    std::string pending;
 
     // helpers ----------------------------------------------------------------
     static void trim(std::string& s) {
@@ -129,11 +155,11 @@ private:
         return (uint32_t)std::strtoul(s.c_str(), nullptr, 10);
     }
 
-    static std::vector<std::string> splitArgs(const std::string& cmd, char sep) {
+    static std::vector<std::string> splitArgs(const std::string& cmd) {
         std::vector<std::string> out;
         std::string cur;
         for (char c : cmd) {
-            if (c == sep) { out.push_back(cur); cur.clear(); }
+            if (c == ':') { out.push_back(cur); cur.clear(); }
             else cur.push_back(c);
         }
         out.push_back(cur);
@@ -154,7 +180,7 @@ private:
             return padCmd(port, op, cmd.substr(5));
         }
 
-        auto parts = splitArgs(cmd, ':');
+        auto parts = splitArgs(cmd);
         const std::string& head = parts[0];
 
         if (head == "frames" && parts.size() == 2) {
@@ -177,11 +203,11 @@ private:
         }
         if (head == "trace" && parts.size() == 3) {
             bool on = (parts[2] == "on" || parts[2] == "1");
-            if      (parts[1] == "cpu") traceCpu = on;
-            else if (parts[1] == "ppu") tracePpu = on;
-            else if (parts[1] == "dma") traceDma = on;
+            if      (parts[1] == "cpu") cpu = on;
+            else if (parts[1] == "ppu") ppu = on;
+            else if (parts[1] == "dma") dma = on;
             else return false;
-            if (traceAny() && !traceFp) openTrace();
+            if (any() && !traceFp) openTrace();
             return true;
         }
         return false;
@@ -230,14 +256,7 @@ private:
         }
     }
 
-    // tracer -----------------------------------------------------------------
-    bool traceAny() const { return traceCpu || tracePpu || traceDma; }
-
-    void snapshotCpu() {
-        auto& cpu = nes.getA2A03().getCPU();
-        preStep = { cpu.PC, cpu.A, cpu.X, cpu.Y, cpu.S, cpu.P };
-    }
-
+    // tracer plumbing --------------------------------------------------------
     void openTrace() {
         traceFp = std::fopen(tracePath.c_str(), "w");
         if (!traceFp) {
@@ -251,172 +270,25 @@ private:
         if (traceFp) { std::fclose(traceFp); traceFp = nullptr; }
     }
 
-    void tracePpuSub() {
-        if (!tracePpu) return;
+    void beginLine(const char* body) {
         if (!traceFp) openTrace();
         if (!traceFp) return;
-        auto& ppu = nes.getPPURef();
-        std::fprintf(traceFp,
-            "F=%llu CYC=%llu PPU[SL=%3d,CY=%3d] %-10s V=%04X T=%04X fX=%u W=%u "
-            "CTRL=%02X MASK=%02X STAT=%02X OAMA=%02X SPR=%u NMI=%u%s\n",
-            (unsigned long long)nes.frameNo(),
-            (unsigned long long)nes.cycleNo(),
-            (int)ppu.getScanline(), (int)ppu.getCycle(),
-            ppuPhase(ppu.getScanline(), ppu.getCycle()),
-            (unsigned)ppu.getVramAddr(),  (unsigned)ppu.getTramAddr(),
-            (unsigned)ppu.getFineX(),     (unsigned)ppu.getWriteLatch(),
-            (unsigned)ppu.getCtrl(),      (unsigned)ppu.getMask(),
-            (unsigned)ppu.getStatus(),    (unsigned)ppu.getOamAddr(),
-            (unsigned)ppu.getSpriteCount(),
-            ppu.nmiLineLow() ? 1u : 0u,
-            ppu.getFrameOdd() ? " ODD" : "");
+        char prefix[64];
+        std::snprintf(prefix, sizeof(prefix), "F=%llu CYC=%llu ",
+                      (unsigned long long)nes.frameNo(),
+                      (unsigned long long)nes.cycleNo());
+        pending.assign(prefix);
+        pending += body;
     }
 
-    static const char* ppuPhase(int sl, int cy) {
-        if (sl == 261)                       return "PRE";
-        if (sl >= 0 && sl <= 239) {
-            if (cy == 0)                     return "IDLE";
-            if (cy <= 256)                   return "BG-FETCH";
-            if (cy <= 320)                   return "SPR-FETCH";
-            if (cy <= 336)                   return "BG-PREFTCH";
-            return "NT-DUMMY";
-        }
-        if (sl == 240)                       return "POST";
-        if (sl >= 241 && sl <= 260)          return "VBLANK";
-        return "?";
-    }
-
-    void traceTick() {
-        if (!traceCpu && !traceDma) return;
-        if (!traceFp) openTrace();
-        if (!traceFp) return;
-
-        auto& cpu = nes.getA2A03().getCPU();
-        auto& dma = nes.getA2A03().getDMA();
-        std::fprintf(traceFp, "F=%llu CYC=%llu",
-                     (unsigned long long)nes.frameNo(),
-                     (unsigned long long)nes.cycleNo());
-
-        if (traceCpu) {
-            const uint16_t addr = nes.getA2A03().getAddr();
-            const uint8_t  data = nes.getA2A03().getBusData();
-            const bool dmaOver = dma.overridesAddr();
-            char rw = '?';
-            if (dmaOver) {
-                rw = (dma.actionId() == 2 /*OAMPut*/) ? 'W' : 'R';
-            } else {
-                rw = cpu.isRead() ? 'R' : 'W';
-            }
-            const char* addrName = ioRegName(addr);
-            std::string addrSym  = addrName ? addrName : symbolExact(addr);
-            char addrField[32];
-            if (!addrSym.empty())
-                std::snprintf(addrField, sizeof(addrField), "$%04X=%02X(%s)",
-                              addr, data, addrSym.c_str());
-            else
-                std::snprintf(addrField, sizeof(addrField), "$%04X=%02X", addr, data);
-
-            std::fprintf(traceFp,
-                " PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%s %c %-26s %-4s %-18s",
-                preStep.PC, preStep.A, preStep.X, preStep.Y, preStep.S,
-                flagStr(preStep.P).c_str(),
-                rw, addrField,
-                cpu.currentOpName(),
-                cpu.currentStepName());
-            const std::string sym = symbolNear(preStep.PC);
-            if (!sym.empty()) std::fprintf(traceFp, " ; %s", sym.c_str());
-        }
-
-        if (traceDma) {
-            static const char* dmcPh[] = { "Idle", "Halt", "Dummy", "Read" };
-            static const char* oamPh[] = { "Idle", "Halt", "Xfer" };
-            static const char* acts[]  = { "None", "OAMGet", "OAMPut", "DMCGet" };
-            std::fprintf(traceFp, "  DMA:%s/%s %s @%04X",
-                         oamPh[dma.oamPhaseId() & 3],
-                         dmcPh[dma.dmcPhaseId() & 3],
-                         acts[dma.actionId()    & 3],
-                         (unsigned)dma.getAddr());
-        }
-        std::fprintf(traceFp, "\n");
-    }
-
-    static std::string flagStr(uint8_t p) {
-        const char* names = "NV-BDIZC";
-        std::string out(8, '-');
-        for (int i = 0; i < 8; ++i) {
-            bool set = (p >> (7 - i)) & 1;
-            out[i] = set ? names[i] : (char)std::tolower((unsigned char)names[i]);
-        }
-        out[2] = (p & 0x20) ? 'U' : 'u'; // bit 5 always considered 'U'
-        return out;
+    void flushPending() {
+        if (pending.empty() || !traceFp) { pending.clear(); return; }
+        std::fputs(pending.c_str(), traceFp);
+        std::fputc('\n', traceFp);
+        pending.clear();
     }
 
     static std::string hex4(uint16_t v) {
         char b[8]; std::snprintf(b, sizeof(b), "%04X", v); return b;
     }
-
-    std::string symbolNear(uint16_t pc) const {
-        if (symbolByAddr.empty()) return {};
-        auto it = symbolByAddr.upper_bound(pc);
-        if (it == symbolByAddr.begin()) return {};
-        --it;
-        uint16_t off = pc - it->first;
-        if (off > 0x40) return {};
-        if (off == 0) return it->second;
-        char buf[16]; std::snprintf(buf, sizeof(buf), "+%u", (unsigned)off);
-        return it->second + buf;
-    }
-
-    std::string symbolExact(uint16_t addr) const {
-        auto it = symbolByAddr.find(addr);
-        return it == symbolByAddr.end() ? std::string{} : it->second;
-    }
-
-    static const char* ioRegName(uint16_t addr) {
-        switch (addr) {
-            case 0x2000: return "PPUCTRL";
-            case 0x2001: return "PPUMASK";
-            case 0x2002: return "PPUSTATUS";
-            case 0x2003: return "OAMADDR";
-            case 0x2004: return "OAMDATA";
-            case 0x2005: return "PPUSCROLL";
-            case 0x2006: return "PPUADDR";
-            case 0x2007: return "PPUDATA";
-            case 0x4000: return "SQ1_VOL";
-            case 0x4001: return "SQ1_SWEEP";
-            case 0x4002: return "SQ1_LO";
-            case 0x4003: return "SQ1_HI";
-            case 0x4004: return "SQ2_VOL";
-            case 0x4005: return "SQ2_SWEEP";
-            case 0x4006: return "SQ2_LO";
-            case 0x4007: return "SQ2_HI";
-            case 0x4008: return "TRI_LINEAR";
-            case 0x400A: return "TRI_LO";
-            case 0x400B: return "TRI_HI";
-            case 0x400C: return "NOISE_VOL";
-            case 0x400E: return "NOISE_LO";
-            case 0x400F: return "NOISE_HI";
-            case 0x4010: return "DMC_FREQ";
-            case 0x4011: return "DMC_RAW";
-            case 0x4012: return "DMC_START";
-            case 0x4013: return "DMC_LEN";
-            case 0x4014: return "OAMDMA";
-            case 0x4015: return "APU_STATUS";
-            case 0x4016: return "JOY1";
-            case 0x4017: return "JOY2/FRAME";
-            default:     return nullptr;
-        }
-    }
 };
-
-
-
-
-
-
-
-
-
-
-
-

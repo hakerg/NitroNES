@@ -5,34 +5,35 @@
 #include "IWindow.h"
 #include "core/NSFPlayer.h"
 
-class NSFSession : public IFileSession {
+class NSFSession : public IFileSession, public NSFPlayer {
 public:
-    NSFSession(const std::string &path, IWindow &window, IEmulatorHost &host,
+    NSFSession(const std::string &path, IWindow &window,
                AppAudioStream &audio, AppSettings &settings)
         : IFileSession(path, audio, window, settings),
-          nsf(host, settings.audioSettings, path) {}
+          NSFPlayer(settings.audioSettings, path) {}
 
-    ~NSFSession() override {
-    }
+    ~NSFSession() override = default;
 
-    NESCoreBase& getCore() const override { return nsf; }
+    NESCoreBase& getCore() override { return *this; }
 
     void processKeyDown(AppKey key) override {
         switch (key) {
         case AppKey::NsfTogglePause:
-            nsf.paused = !nsf.paused;
+            paused = !paused;
             break;
         case AppKey::NsfNextSong:
-            nsf.nextSong();
+            nextSong();
             break;
         case AppKey::NsfPrevSong:
-            nsf.prevSong();
+            prevSong();
             break;
         default:
             break;
         }
     }
 
-private:
-    mutable NSFPlayer nsf;
+protected:
+    void pushAudioSample(float sample, double dt) override {
+        audio.addNESSample(sample, dt);
+    }
 };

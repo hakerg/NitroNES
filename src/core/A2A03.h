@@ -59,6 +59,8 @@ public:
     DMA& getDMA() { return dma; }
     uint8_t getBusData() { return busData; }
 
+    void setTracer(Tracer* t) { cpu.setTracer(t); dma.setTracer(t); }
+
     uint8_t cpuReadData() override {
         if (dma.overridesAddr()) return busData;
         return readData();

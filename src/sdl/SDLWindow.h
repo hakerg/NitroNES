@@ -172,8 +172,8 @@ private:
             return AppKey::Unknown;
         constexpr AppKey keys[] = {
             AppKey::Pause,       AppKey::FullScreen,  AppKey::SpeedUp,
-            AppKey::SpeedDown,   AppKey::Reset,       AppKey::NsfTogglePause,
-            AppKey::NsfNextSong, AppKey::NsfPrevSong,
+            AppKey::SpeedDown,   AppKey::Reset,        AppKey::Open,
+            AppKey::NsfTogglePause, AppKey::NsfNextSong, AppKey::NsfPrevSong,
         };
         for (AppKey key : keys) {
             if (input->appKeyBinding(key).matches(sc, mods))
@@ -187,8 +187,8 @@ private:
             return AppKey::Unknown;
         constexpr AppKey keys[] = {
             AppKey::Pause,       AppKey::FullScreen,  AppKey::SpeedUp,
-            AppKey::SpeedDown,   AppKey::Reset,       AppKey::NsfTogglePause,
-            AppKey::NsfNextSong, AppKey::NsfPrevSong,
+            AppKey::SpeedDown,   AppKey::Reset,        AppKey::Open,
+            AppKey::NsfTogglePause, AppKey::NsfNextSong, AppKey::NsfPrevSong,
         };
         uint8_t modBit = KeyChord::modBitForScancode(sc);
         for (AppKey key : keys) {

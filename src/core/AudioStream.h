@@ -47,7 +47,7 @@ public:
             int ipos = (int)timeAccum;
             double frac = timeAccum - ipos;
 
-            int phase = (int)(frac * PHASES + 0.5);
+            int phase = (int)std::round(frac * PHASES);
             if (phase > PHASES)
                 phase = PHASES;
 

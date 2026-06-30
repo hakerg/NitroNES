@@ -1,12 +1,14 @@
 #pragma once
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include "Cartridge.h"
 #include "NESConst.h"
+#include "Tracer.h"
 
 class PPU2C02 {
 public:
-    explicit PPU2C02() {
+    explicit PPU2C02(Cartridge& cart) : cart(cart) {
         buf.fill(0xFF000000);
         std::memset(OAM, 0, sizeof(OAM));
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
@@ -14,7 +16,7 @@ public:
         nameTable[1].fill(0x00);
     }
 
-    Cartridge* cart = nullptr;
+    Cartridge& cart;
 
     bool nmiLineLow() const { return ctrl.enable_nmi && nmiVbl; }
 
@@ -70,6 +72,8 @@ public:
             incrementVramAddr();
             clockMapperA12();
             break;
+        default:
+            break;
         }
     }
 
@@ -95,10 +99,10 @@ public:
             return mask.greyscale ? (v & 0x30) : v;
         }
         uint8_t ppuReadBuf = 0;
-        if (cart && cart->ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
+        if (cart.ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
         if (addr >= 0x2000 && addr <= 0x3EFF) {
             addr &= 0x0FFF;
-            Mirroring m = cart ? cart->getMirroring() : Mirroring::HORIZONTAL;
+            Mirroring m = cart.getMirroring();
             if (m == Mirroring::VERTICAL)     return nameTable[(addr & 0x0400) >> 10][addr & 0x03FF];
             if (m == Mirroring::HORIZONTAL)   return nameTable[(addr & 0x0800) >> 11][addr & 0x03FF];
             if (m == Mirroring::ONESCREEN_LO) return nameTable[0][addr & 0x03FF];
@@ -110,10 +114,10 @@ public:
     void ppuWrite(uint16_t addr, uint8_t data) {
         addr &= 0x3FFF;
         if (addr >= 0x3F00) { palScreen[paletteIndex(addr)] = data; return; }
-        if (cart && cart->ppuWrite(addr, data)) return;
+        if (cart.ppuWrite(addr, data)) return;
         if (addr >= 0x2000 && addr <= 0x3EFF) {
             addr &= 0x0FFF;
-            Mirroring m = cart ? cart->getMirroring() : Mirroring::HORIZONTAL;
+            Mirroring m = cart.getMirroring();
             if (m == Mirroring::VERTICAL)     { nameTable[(addr & 0x0400) >> 10][addr & 0x03FF] = data; return; }
             if (m == Mirroring::HORIZONTAL)   { nameTable[(addr & 0x0800) >> 11][addr & 0x03FF] = data; return; }
             if (m == Mirroring::ONESCREEN_LO) { nameTable[0][addr & 0x03FF] = data; return; }
@@ -200,6 +204,7 @@ public:
         if (nmiLineLow()) nmiCycleLatch = true;
 
         advanceCycle();
+        emitTrace();
     }
 
     bool pollNmiLow() {
@@ -211,17 +216,11 @@ public:
     int16_t getScanline() const { return scanline; }
     int16_t getCycle()    const { return cycle; }
 
-    uint16_t getVramAddr()   const { return vram_addr.reg; }
-    uint16_t getTramAddr()   const { return tram_addr.reg; }
-    uint8_t  getFineX()      const { return fine_x; }
-    uint8_t  getWriteLatch() const { return address_latch; }
-    uint8_t  getCtrl()       const { return ctrl.reg; }
-    uint8_t  getMask()       const { return mask.reg; }
-    uint8_t  getStatus()     const { return status.reg; }
-    bool     getFrameOdd()   const { return frame_odd; }
-    uint8_t  getSpriteCount() const { return sprite_count; }
+    void setTracer(Tracer* t) { tracer = t; }
 
 private:
+    Tracer* tracer = nullptr;
+
     std::array<std::array<uint8_t, 1024>, 2> nameTable{};
 
     union PPUCTRL {
@@ -416,6 +415,8 @@ private:
         case 7:
             IncrementScrollX();
             break;
+        default:
+            break;
         }
     }
 
@@ -525,7 +526,7 @@ private:
         const int spriteH = ctrl.sprite_size ? 16 : 8;
         uint8_t addr = oamAddr;
         for (int n = 0; n < 64; ++n, addr += 4) {
-            int16_t diff = (int16_t)scanline - (int16_t)OAM[addr];
+            int16_t diff = scanline - (int16_t)OAM[addr];
             if (diff < 0 || diff >= spriteH) continue;
             if (sprite_count < 8) {
                 if (n == 0) bSpriteZeroHitPossible = true;
@@ -602,7 +603,7 @@ private:
         const uint8_t p1  = (bg_shifter_pattern_hi & mux) ? 1 : 0;
         const uint8_t a0  = (bg_shifter_attrib_lo  & mux) ? 1 : 0;
         const uint8_t a1  = (bg_shifter_attrib_hi  & mux) ? 1 : 0;
-        const uint8_t col = (uint8_t)((p1 << 1) | p0);
+        const auto col = (uint8_t)((p1 << 1) | p0);
         return { col, (uint8_t)((a1 << 1) | a0), col != 0 };
     }
 
@@ -615,7 +616,7 @@ private:
             if (spriteScanline[i * 4 + 3] != 0) continue;
             const uint8_t lo  = (sprite_shifter_pattern_lo[i] & 0x80) ? 1 : 0;
             const uint8_t hi  = (sprite_shifter_pattern_hi[i] & 0x80) ? 1 : 0;
-            const uint8_t col = (uint8_t)((hi << 1) | lo);
+            const auto col = (uint8_t)((hi << 1) | lo);
             if (col == 0) continue;
             const uint8_t attr = spriteScanline[i * 4 + 2];
             fgPriorityOut = (attr & 0x20) == 0;
@@ -657,7 +658,7 @@ private:
         else
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         if (mask.greyscale) idx &= 0x30;
-        const uint8_t emph = (uint8_t)((mask.enhance_blue << 2) | (mask.enhance_green << 1) | mask.enhance_red);
+        const auto emph = (uint8_t)((mask.enhance_blue << 2) | (mask.enhance_green << 1) | mask.enhance_red);
         buf[y * NES::SCREEN_WIDTH + x] = emphasisLUT()[emph][idx & 0x3F];
     }
 
@@ -742,11 +743,41 @@ private:
 
     uint8_t busRead(uint16_t addr) {
         addr &= 0x3FFF;
-        if (cart) cart->clockA12(addr, totalPpuCycle);
+        cart.clockA12(addr, totalPpuCycle);
         return ppuRead(addr);
     }
 
     void clockMapperA12() {
-        if (cart) cart->clockA12(vram_addr.reg & 0x3FFF, totalPpuCycle);
+        cart.clockA12(vram_addr.reg & 0x3FFF, totalPpuCycle);
+    }
+
+    const char* phaseName() const {
+        if (scanline == 261)              return "PRE";
+        if (scanline >= 0 && scanline <= 239) {
+            if (cycle == 0)               return "IDLE";
+            if (cycle <= 256)             return "BG-FETCH";
+            if (cycle <= 320)             return "SPR-FETCH";
+            if (cycle <= 336)             return "BG-PREFTCH";
+            return "NT-DUMMY";
+        }
+        if (scanline == 240)              return "POST";
+        if (scanline >= 241 && scanline <= 260) return "VBLANK";
+        return "?";
+    }
+
+    void emitTrace() {
+        if (!tracer || !tracer->ppu) return;
+        char str[256];
+        std::snprintf(str, sizeof(str),
+            "PPU[SL=%3d,CY=%3d] %-10s V=%04X T=%04X fX=%u W=%u "
+            "CTRL=%02X MASK=%02X STAT=%02X OAMA=%02X SPR=%u NMI=%u%s",
+            (int)scanline, (int)cycle, phaseName(),
+            (unsigned)vram_addr.reg, (unsigned)tram_addr.reg,
+            (unsigned)fine_x, (unsigned)address_latch,
+            (unsigned)ctrl.reg, (unsigned)mask.reg, (unsigned)status.reg,
+            (unsigned)oamAddr, (unsigned)sprite_count,
+            nmiLineLow() ? 1u : 0u,
+            frame_odd ? " ODD" : "");
+        tracer->writePpu(str);
     }
 };

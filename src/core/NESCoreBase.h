@@ -3,14 +3,7 @@
 #include "NESConst.h"
 #include "A2A03.h"
 #include "PPU2C02.h"
-
-// TODO: czy można te interfejsy usunąć?
-class IEmulatorHost {
-public:
-    virtual ~IEmulatorHost() = default;
-    virtual void pushAudioSample(float sample, double dt) {}
-    virtual void onFrameReady() {}
-};
+#include "Tracer.h"
 
 // TODO: only NTSC is properly supported
 enum class NESStandard { NTSC, PAL, DENDY };
@@ -21,23 +14,15 @@ public:
     double speed = 1.0;
     bool paused = false;
 
-    explicit NESCoreBase(IEmulatorHost& host, AudioSettings& audioSettings)
-        : a2a03(*this, audioSettings), host(host) {
+    explicit NESCoreBase(AudioSettings& audioSettings)
+        : a2a03(*this, audioSettings) {
         cpuRam.fill(0x00);
     }
-    virtual ~NESCoreBase() = default;
+    ~NESCoreBase() override = default;
 
-    double getCPUClockRate() const {
-        return NES::CPU_CLOCK_NTSC;
-    }
-
-    double getBaseFramerate() const {
-        return NES::REFRESH_RATE_NTSC_ON; // dla włączonego renderingu w PPU
-    }
-
-    double getTargetFramerate() const {
-        return getBaseFramerate() * speed;
-    }
+    double getCPUClockRate()    const { return NES::CPU_CLOCK_NTSC; }
+    virtual double getBaseFramerate() const = 0;
+    double getTargetFramerate() const { return getBaseFramerate() * speed; }
 
     void tickFrame() {
         if (paused) return;
@@ -52,8 +37,9 @@ public:
     }
 
     virtual void reset() {}
-    virtual int getCompletedFramesCount() = 0;
+    virtual int  getCompletedFramesCount() = 0;
     virtual uint32_t* getFramebuffer() = 0;
+    virtual void setTracer(Tracer* t) { a2a03.setTracer(t); }
 
     int getCurrentScanline() {
         PPU2C02* p = getPPU();
@@ -68,44 +54,12 @@ protected:
     virtual uint8_t memRead(uint16_t addr) = 0;
     virtual uint8_t memReadExternal(uint16_t addr) { return memRead(addr); }
     virtual void    memWrite(uint16_t addr, uint8_t data) = 0;
-    virtual void    clockMapper() {}
-    virtual float   mapperAudio() const { return 0.0f; }
 
-    virtual void onPreStep() {}
-    virtual void onPostStep() {}
-    virtual void onPpuStep(int subIdx) { (void)subIdx; }
+    virtual void    clockOneCycle() = 0;
+    virtual PPU2C02* getPPU() { return nullptr; }
+
+    virtual void pushAudioSample(float sample, double dt) = 0;
 
     A2A03 a2a03;
     std::array<uint8_t, 2048> cpuRam;
-
-private:
-    IEmulatorHost& host;
-
-    virtual PPU2C02* getPPU() { return nullptr; }
-
-    void clockOneCycle() {
-        int frames = getCompletedFramesCount();
-
-        onPreStep();
-
-        PPU2C02* ppu = getPPU();
-        if (ppu) { ppu->clock(); onPpuStep(0); }
-        if (ppu) { ppu->clock(); onPpuStep(1); }
-
-        clockMapper();
-        a2a03.clockPhi1();
-
-        if (ppu) { ppu->clock(); onPpuStep(2); }
-
-        a2a03.clockPhi2();
-
-        onPostStep();
-
-        double dt = 1.0 / (getCPUClockRate() * speed);
-        host.pushAudioSample(a2a03.getAPU().getOutputSample() + mapperAudio(), dt);
-
-        if (getCompletedFramesCount() != frames) {
-            host.onFrameReady();
-        }
-    }
 };

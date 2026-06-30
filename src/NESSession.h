@@ -3,28 +3,29 @@
 #include "IFileSession.h"
 #include "IInputContext.h"
 #include "IWindow.h"
-#include "core/NESConst.h"
 #include "core/NESSystem.h"
 
-class NESSession : public IFileSession, public INESSystemHost {
+class NESSession : public IFileSession, public NESSystem {
 public:
     NESSession(const std::string &path, IInputContext &input, IWindow &window,
-               AppSettings &settings, IEmulatorHost &host,
-               AppAudioStream &audio)
+               AppSettings &settings, AppAudioStream &audio)
         : IFileSession(path, audio, window, settings),
-          nes(host, *this, settings.audioSettings, path),
+          NESSystem(settings.audioSettings, path),
           input(input) {}
 
-    ~NESSession() override {
-    }
+    ~NESSession() override = default;
 
-    NESCoreBase& getCore() const override { return nes; }
+    NESCoreBase& getCore() override { return *this; }
 
+protected:
     uint8_t readController(int port) override {
         return input.readController(port);
     }
 
+    void pushAudioSample(float sample, double dt) override {
+        audio.addNESSample(sample, dt);
+    }
+
 private:
-    mutable NESSystem nes;
     IInputContext &input;
 };

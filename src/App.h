@@ -9,9 +9,10 @@
 #include "NESSession.h"
 #include "NSFSession.h"
 #include <memory>
+#include <iostream>
 #include <string>
 
-class App : public IEmulatorHost, public IMenuHandler {
+class App : public IMenuHandler {
 public:
     App(const std::string &romPath, IWindow &window, IInputContext &input,
         AppAudioStream &audio, AppSettings &settings)
@@ -28,9 +29,14 @@ public:
 
             double baseSpeed = calcSpeed();
             if (session) {
+                int before = session->getCore().getCompletedFramesCount();
                 session->clockCore(baseSpeed);
+                if (session->getCore().getCompletedFramesCount() != before)
+                    input.tickFrame();
             }
             window.presentNESFrame(session.get());
+
+            applyPendingSessionAction();
 
             if (guiActive && !window.isMenuOpen() && session &&
                 window.getTicks() - lastMouseMoveTime >= 1000) {
@@ -40,31 +46,14 @@ public:
         }
     }
 
-    void pushAudioSample(float sample, double dt) override {
+    void pushAudioSample(float sample, double dt) {
         audio.addNESSample(sample, dt);
     }
 
-    void onFrameReady() override { input.tickFrame(); }
 
-    void onOpen() override {
-        std::string newPath = window.openFileDialog();
-        if (newPath.empty())
-            return;
-        session.reset();
-        session = makeSession(newPath);
-    }
-
-    void onReload() override {
-        if (!session)
-            return;
-        const std::string p = session->path;
-        session.reset();
-        session = makeSession(p);
-    }
-
-    void onClose() override {
-        session.reset();
-    }
+    void onOpen()   override { pending = PendingAction::Open;   }
+    void onReload() override { pending = PendingAction::Reload; }
+    void onClose()  override { pending = PendingAction::Close;  }
 
     void onReset() override {
         if (!session)
@@ -77,12 +66,48 @@ public:
     bool isMenuVisible() override { return guiActive; }
 
 private:
+    enum class PendingAction { None, Open, Reload, Close };
+
+    void applyPendingSessionAction() {
+        const PendingAction action = pending;
+        pending = PendingAction::None;
+        switch (action) {
+            case PendingAction::None:
+                return;
+            case PendingAction::Open: {
+                std::string newPath = window.openFileDialog();
+                if (newPath.empty()) return;
+                session.reset();
+                try {
+                    session = makeSession(newPath);
+                } catch (const std::exception& e) {
+                    std::cerr << "[App] failed to open " << newPath << ": " << e.what() << "\n";
+                }
+                return;
+            }
+            case PendingAction::Reload: {
+                if (!session) return;
+                const std::string p = session->path;
+                session.reset();
+                try {
+                    session = makeSession(p);
+                } catch (const std::exception& e) {
+                    std::cerr << "[App] failed to reload " << p << ": " << e.what() << "\n";
+                }
+                return;
+            }
+            case PendingAction::Close:
+                session.reset();
+                return;
+        }
+    }
+
     std::unique_ptr<IFileSession> makeSession(const std::string &path) {
         if (IFileSession::isNesRomFile(path)) {
             return std::make_unique<NESSession>(path, input, window, settings,
-                                                *this, audio);
+                                                audio);
         }
-        return std::make_unique<NSFSession>(path, window, *this, audio,
+        return std::make_unique<NSFSession>(path, window, audio,
                                             settings);
     }
 
@@ -143,6 +168,9 @@ private:
         case AppKey::Reset:
             onReset();
             return;
+        case AppKey::Open:
+            onOpen();
+            return;
         default:
             if (session)
                 session->processKeyDown(key);
@@ -164,6 +192,8 @@ private:
     AppSettings &settings;
 
     std::unique_ptr<IFileSession> session;
+
+    PendingAction pending = PendingAction::None;
 
     bool running = true;
     bool guiActive = true;

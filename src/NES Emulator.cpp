@@ -12,6 +12,10 @@
 #pragma comment(lib, "winmm.lib")
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "wasapi");
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_RAW_STREAM, "1");
+
     int argc;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
@@ -25,7 +29,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         WindowAPI platformAPI;
         SDLWindow window(platformAPI);
         AppSettings settings;
-        SDLAudioStream audio(settings.audioSettings);
+        SDLAudioStream audio(settings);
         SDLInputContext input(settings);
 
         App app(romPath, window, input, audio, settings);

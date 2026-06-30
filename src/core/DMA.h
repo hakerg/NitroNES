@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <cstdio>
+#include "Tracer.h"
 
 class IDMA {
 public:
@@ -118,6 +120,7 @@ public:
                 else                          oamAddr++;
                 break;
         }
+        emitTrace();
     }
 
     uint16_t getAddr() {
@@ -138,16 +141,30 @@ public:
     bool dmcIsActive()  const { return dmcPhase != DMCPhase::Idle; }
     bool oamIsActive()  const { return oamPhase != OAMPhase::Idle; }
     bool actionIsDMCGet() const { return action == Action::DMCGet; }
-    int  dmcPhaseId()   const { return (int)dmcPhase; }
-    int  oamPhaseId()   const { return (int)oamPhase; }
-    int  actionId()     const { return (int)action; }
+
+    void setTracer(Tracer* t) { tracer = t; }
 
 private:
     enum class OAMPhase { Idle, Halt, Transfer };
     enum class DMCPhase { Idle, Halt, Dummy, Read };
     enum class Action   { None, OAMGet, OAMPut, DMCGet };
 
+    void emitTrace() {
+        if (!tracer || !tracer->dma) return;
+        static const char* dmcPh[] = { "Idle", "Halt", "Dummy", "Read" };
+        static const char* oamPh[] = { "Idle", "Halt", "Xfer" };
+        static const char* acts[]  = { "None", "OAMGet", "OAMPut", "DMCGet" };
+        char buf[96];
+        std::snprintf(buf, sizeof(buf), "DMA:%s/%s %s @%04X",
+                      oamPh[(int)oamPhase & 3],
+                      dmcPh[(int)dmcPhase & 3],
+                      acts[(int)action    & 3],
+                      (unsigned)getAddr());
+        tracer->appendDma(buf);
+    }
+
     IDMA& idma;
+    Tracer* tracer = nullptr;
     bool rdy = true;
 
     OAMPhase oamPhase = OAMPhase::Idle;

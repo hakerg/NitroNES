@@ -1,5 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <cstdio>
+#include <string>
+#include "Tracer.h"
 
 class ICPUBus {
 public:
@@ -43,6 +46,8 @@ public:
         nmiPollSignal   = false;
         irqDetected = false;
 
+        cycle = 0;
+
         currentStep = emitRead(&CPU6502::reset1, PC);
         nextOp = currentStep.next;
     }
@@ -59,14 +64,18 @@ public:
         nmiEdgeDetected = nmiPending;
         irqDetected = !irqLevel;
 
+        const RegSnap pre{ PC, A, X, Y, S, P };
+
         if (isStalled()) {
             origHigh = 0xFE;
+            emitTracePhi1(pre, true);
             return;
         }
 
         currentOp = nextOp;
         currentStep = (this->*nextOp)();
         nextOp = currentStep.next;
+        emitTracePhi1(pre, false);
     }
 
     void clockPhi2() {
@@ -80,6 +89,9 @@ public:
         }
         nmiLevel = currentNMILevel;
         irqLevel = bus.pollIRQ();
+
+        emitTracePhi2();
+        cycle++;
     }
 
     uint16_t getAddr()      { return currentStep.busAddr; }
@@ -87,6 +99,9 @@ public:
     bool     isRead()       { return currentStep.isRead; }
     uint8_t  getOpcode() const { return opcode; }
     bool     isStalledOut() const { return isStalled(); }
+    uint64_t getCycle() const { return cycle; }
+
+    void setTracer(Tracer* t) { tracer = t; }
 
     const char* currentOpName() const;
     const char* currentStepName() const;
@@ -132,6 +147,10 @@ private:
     MicroOp currentOp = nullptr;
     Step currentStep = { nullptr, 0, false, 0 };
 
+    Tracer* tracer = nullptr;
+    uint64_t cycle = 0;
+
+    struct RegSnap { uint16_t PC; uint8_t A, X, Y, S, P; };
 
     uint8_t opcode = 0;
     uint16_t addr = 0;
@@ -158,11 +177,11 @@ private:
     uint8_t branchOffset = 0;
     uint8_t origHigh = 0;
 
-    Step emitRead(MicroOp next, uint16_t busAddr) {
+    static Step emitRead(MicroOp next, uint16_t busAddr) {
         return { next, busAddr, true, 0 };
     }
 
-    Step emitWrite(MicroOp next, uint16_t busAddr, uint8_t writeData) {
+    static Step emitWrite(MicroOp next, uint16_t busAddr, uint8_t writeData) {
         return { next, busAddr, false, writeData };
     }
 
@@ -250,7 +269,7 @@ private:
 
     void doExecADC() {
         uint16_t s = (uint16_t)A + fetched + ((P & FLAG_C) ? 1 : 0);
-        uint8_t  r = (uint8_t)s;
+        auto r = (uint8_t)s;
         P = (P & ~(FLAG_C | FLAG_Z | FLAG_V | FLAG_N))
             | (s > 0xFF ? FLAG_C : 0) | (r == 0 ? FLAG_Z : 0)
             | (((~(A ^ fetched) & (A ^ r)) & 0x80) ? FLAG_V : 0) | (r & 0x80);
@@ -260,7 +279,7 @@ private:
     void doExecSBC() {
         uint8_t v = fetched ^ 0xFF;
         uint16_t s = (uint16_t)A + v + ((P & FLAG_C) ? 1 : 0);
-        uint8_t  r = (uint8_t)s;
+        auto r = (uint8_t)s;
         P = (P & ~(FLAG_C | FLAG_Z | FLAG_V | FLAG_N))
             | (s > 0xFF ? FLAG_C : 0) | (r == 0 ? FLAG_Z : 0)
             | (((~(A ^ v) & (A ^ r)) & 0x80) ? FLAG_V : 0) | (r & 0x80);
@@ -343,7 +362,6 @@ private:
             case ExecKind::CLV: P &= ~FLAG_V; break;
             case ExecKind::CLD: P &= ~FLAG_D; break;
             case ExecKind::SED: P |=  FLAG_D; break;
-            case ExecKind::NOP_IMP: break;
             default: break;
         }
     }
@@ -377,6 +395,55 @@ private:
             case StoreKind::SHS: S = A & X; return S & ((uint8_t)(origHigh + 1));
         }
         return 0;
+    }
+
+    static std::string flagStr(uint8_t p) {
+        const char* names = "NV-BDIZC";
+        std::string out(8, '-');
+        for (int i = 0; i < 8; ++i) {
+            bool set = (p >> (7 - i)) & 1;
+            out[i] = set ? names[i] : (char)(names[i] | 0x20);
+        }
+        out[2] = (p & 0x20) ? 'U' : 'u';
+        return out;
+    }
+
+    void emitTracePhi1(const RegSnap& pre, bool stalled) {
+        if (!tracer || !tracer->cpu) return;
+        const uint16_t a = currentStep.busAddr;
+        const std::string sym = tracer->symbolExact(a);
+        char addrField[48];
+        if (currentStep.isRead) {
+            std::snprintf(addrField, sizeof(addrField),
+                          sym.empty() ? "R $%04X" : "R $%04X(%s)",
+                          a, sym.c_str());
+        } else {
+            std::snprintf(addrField, sizeof(addrField),
+                          sym.empty() ? "W $%04X=%02X" : "W $%04X=%02X(%s)",
+                          a, currentStep.writeData, sym.c_str());
+        }
+        char body[256];
+        const std::string near = tracer->symbolNear(pre.PC);
+        std::snprintf(body, sizeof(body),
+            "PHI1 PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%s %-28s %-4s %-18s%s%s%s",
+            pre.PC, pre.A, pre.X, pre.Y, pre.S, flagStr(pre.P).c_str(),
+            stalled ? "STALL" : addrField,
+            stalled ? "----" : currentOpName(),
+            stalled ? "stalled" : currentStepName(),
+            near.empty() ? "" : " ; ", near.c_str(), "");
+        tracer->writeCpu(body);
+    }
+
+    void emitTracePhi2() {
+        if (!tracer || !tracer->cpu) return;
+        char body[64];
+        if (currentStep.isRead && !bus.isReadOverridden())
+            std::snprintf(body, sizeof(body), "PHI2 fetched=%02X", fetched);
+        else if (!currentStep.isRead)
+            std::snprintf(body, sizeof(body), "PHI2 wrote=%02X", currentStep.writeData);
+        else
+            std::snprintf(body, sizeof(body), "PHI2 (dma-override)");
+        tracer->writeCpu(body);
     }
 };
 
@@ -746,8 +813,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
 
     case 0x00: currentInt = IntKind::SoftwareBRK; return emitRead(&CPU6502::int1_dummy, PC);
 
-    case 0xEA: return implied(ExecKind::NOP_IMP);
-    case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xFA: return implied(ExecKind::NOP_IMP);
+    case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xEA: case 0xFA: return implied(ExecKind::NOP_IMP);
 
     case 0x80: case 0x82: case 0x89: case 0xC2: case 0xE2: return setRead(ExecKind::NOP_, &CPU6502::am_imm_exec);
     case 0x04: case 0x44: case 0x64: return setRead(ExecKind::NOP_, &CPU6502::am_zp_1);
