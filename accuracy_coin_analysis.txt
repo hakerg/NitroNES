@@ -1,0 +1,943 @@
+================================================================================
+           AccuracyCoin — Analiza wszystkich faili (17 testów)
+           Data: 2026-06-30 (aktualizacja w trakcie sesji)
+           Wynik: 124/140 PASS (16 FAIL) — naprawiono FAIL 7
+================================================================================
+
+Legenda:
+  [P] = prawdopodobna przyczyna
+  [F] = sugerowana poprawka
+  [R] = ryzyko (co może się popsuć przy zmianie)
+
+================================================================================
+GRUPA 1: CPU INTERRUPTS (Page 12) — 3 fail
+================================================================================
+
+--- FAIL 1: Page 12, Test 1 — "Interrupt flag latency" ---
+  Kod błędu: A
+  Komunikat: "Branch instructions should not poll for interrupts before cycle 3."
+
+  OPIS TESTU (TEST_IFlagLatency, test A, linia ~9657):
+    Test sprawdza, czy rozgałęzienia (branch) NIE odpytują o przerwania
+    przed cyklem 3. Konkretnie: branch NOT taken (BNE po LDA <ErrorCode,
+    gdzie ErrorCode != 0, więc branch JEST taken — ale test sprawdza, że
+    IRQ nie zostanie wykryte w cyklu 3 brancha, tylko w następnej instrukcji).
+
+    Scenariusz:
+    - IRQ level detector zostaje ustawiony w trakcie wykonywania brancha
+      (między cyklem 2 a 3).
+    - Branch nie powinien odpytywać o przerwania po cyklu 3 (gdy branch
+      nie przekracza strony — polluje tylko raz przed cyklem 2).
+    - IRQ powinno nastąpić dopiero po następnej instrukcji (INX).
+
+  [P] CPU6502::am_rel_1() wywołuje pollInterrupts() gdy wykryje page cross,
+      ale dla branch NOT crossing page nie ma dodatkowego polla — to jest OK.
+      Problem może być w tym, że opFetch() (cykl 1 nowej instrukcji) polluje
+      przerwania, a branch powinien pollować TYLKO przed cyklem 2 (czyli
+      w am_rel_1). Jeśli CPU polluje w cyklu 1 brancha (opFetch przed
+      decodeAndDispatch), to może wykryć IRQ za wcześnie.
+
+      Patrz: clockPhi1() ustawia nmiPollSignal/irqDetected, a opFetch()
+      wywołuje pollInterrupts(). To znaczy że poll występuje w cyklu 1
+      każdej instrukcji (włącznie z branchami). Zgodnie z komentarzem w
+      teście: "A branch that isn't taken only polls once before the second
+      cycle, while a branch that is taken additionally polls right before
+      the fourth cycle."
+
+      Aktualny kod: opFetch() polluje w cyklu 1 (przed decodeAndDispatch).
+      To jest poll "przed cyklem 2" — poprawne dla brancha.
+      ALE: am_rel_1() jest wywoływane w cyklu 2 (po fetchu operandu).
+      Jeśli branch jest taken i nie crossuje strony, am_rel_2_taken()
+      wraca do opFetch() — co powoduje poll w cyklu 3. To jest poll
+      "przed cyklem 4" — ale test mówi że branch NOT crossing page
+      powinien pollować TYLKO przed cyklem 2, NIE przed cyklem 3.
+
+  [F] Dla branch taken nie crossującego strony, am_rel_2_taken() powinno
+      wrócić bezpośrednio do opFetch(), ale opFetch() nie powinien pollować
+      przerwań w tym cyklu — to jest cykl 3 brancha, a poll powinien być
+      tylko przed cyklem 2 i (dla branch crossing page) przed cyklem 4.
+
+      Problem strukturalny: opFetch() zawsze polluje. Trzeba rozróżnić
+      "poll w cyklu 1 nowej instrukcji" od "poll w cyklu 3 brancha".
+      Może dodać flagę "skipPoll" lub restrukturować branch timing.
+
+  [R] Zmiana pollowania przerwań wpłynie na wszystkie testy CPU interrupts
+      oraz na gry korzystające z precyzyjnego timingu NMI/IRQ.
+
+--- FAIL 2: Page 12, Test 2 — "NMI Overlap BRK" ---
+  Kod błędu: 2
+  Komunikat: "Either NMI timing is off, or interrupt hijacking is incorrectly handled."
+
+  OPIS TESTU (TEST_NmiAndBrk, linia ~9830):
+    Test synchronizuje CPU tak, że NMI występuje na 8-A cykli przed VBlank.
+    Następnie uruchamia BRK. Sprawdza "interrupt hijacking" — co się dzieje
+    gdy NMI i BRK występują jednocześnie.
+
+    BRK to instrukcja 7-cyklowa. NMI może "przejąć" (hijack) BRK w różnych
+    momentach. Test sprawdza 16 różnych timingów (A=0..15) i porównuje
+    z kluczem odpowiedzi (answer key).
+
+    Klucz odpowiedzi zawiera wartości $A5, $A4, $35, $34, $25, $24, $00.
+    Wartości te reprezentują różne stany: czy BRK pominął bajt, czy NMI
+    przejął wektor, jakie flagi zostały zapisane na stosie.
+
+  [P] Interrupt hijacking w CPU6502::int3_pushPCL() (linia 581):
+      Kod sprawdza nmiEdgeDetected w trakcie push PCL. Jeśli NMI zostało
+      wykryte, currentInt zmienia się na NMI. Ale to działa tylko dla
+      BRK→NMI hijacking w jednym konkretnym momencie.
+
+      Problem może być w timingie detekcji NMI:
+      - nmiPending jest ustawiane w clockPhi2() gdy wykryto edge.
+      - nmiEdgeDetected jest ustawiane w clockPhi1() (jako snapshot).
+      - nmiPollSignal = nmiEdgeDetected (poprzedni cykl).
+      - pollInterrupts() używa nmiPollSignal.
+
+      To oznacza 1 cykl opóźnienia między edge a poll. Ale test wymaga
+      precyzyjnego timingu — NMI musi być wykryte w odpowiednim cyklu BRK.
+
+      Dodatkowo: int1_dummy() inkrementuje PC dla BRK (PC++), ale jeśli
+      NMI przejmuje, PC nie powinien być inkrementowane. Aktualny kod
+      robi PC++ w int1_dummy() ZANIM sprawdza hijacking w int3_pushPCL().
+      To może być problem — jeśli NMI przejmuje, PC już został inkrementowane.
+
+  [F] 1. Sprawdzić czy int1_dummy() powinno inkrementować PC tylko gdy
+        currentInt == SoftwareBRK i NMI NIE przejmuje.
+     2. Sprawdzić timing detekcji NMI edge — może być potrzebny dodatkowy
+        poll w cyklu 3 lub 4 BRK (zgodnie z komentarzem w teście: "BRK seems
+        to poll before cycle 2, 3, 4, and 5").
+     3. Hijacking powinien być sprawdzany w int3_pushPCL() — ale może też
+        w int1_dummy() lub int2_pushPCH().
+
+  [R] Zmiana hijackingu wpłynie na FAIL 3 (NMI Overlap IRQ) i potencjalnie
+      na inne testy z przerwaniami.
+
+--- FAIL 3: Page 12, Test 3 — "NMI Overlap IRQ" ---
+  Kod błędu: 1
+  Komunikat: "Either NMI timing is off, IRQ timing is off, or interrupt hijacking is incorrectly handled."
+
+  OPIS TESTU (TEST_NmiAndIrq, linia ~9954):
+    Podobny do testu NMI Overlap BRK, ale zamiast BRK używa IRQ.
+    Synchronizuje CPU tak, że NMI występuje 8-A cykli przed VBlank,
+    a IRQ jest już włączone (CLI przed pętlą).
+
+    Test sprawdza 16 timingów (A=0..15) i porównuje z answer key.
+    Wartości: $A5, $22, $23, $21, $20, $25, $24, $27, $26.
+
+  [P] Podobne problemy jak w FAIL 2 — timing detekcji NMI i IRQ oraz
+      interrupt hijacking. Dodatkowo:
+      - IRQ jest level-sensitive (nie edge), więc może być wykrywane
+        wielokrotnie. Hijacking IRQ→NMI powinien działać podobnie jak
+        BRK→NMI, ale z różnicą że IRQ nie inkrementuje PC.
+      - W int3_pushPCL() jest sprawdzane nmiEdgeDetected, ale dla IRQ
+        (currentInt == IRQ) nie ma specjalnej logiki hijackingu.
+        Powinno być: jeśli currentInt == IRQ i NMI edge detected,
+        to currentInt = NMI (hijack).
+
+  [F] 1. Dodać hijacking dla IRQ→NMI w int3_pushPCL() (obecnie jest tylko
+        dla "currentInt != NMI && nmiEdgeDetected" — to powinno działać,
+        ale może timing jest zły).
+     2. Sprawdzić timing pollowania IRQ — irqDetected jest ustawiane w
+        clockPhi1(), ale irqInhibitSnapshot jest ustawiane w opFetch().
+        Może być problem z kolejnością.
+
+  [R] Powiązane z FAIL 2. Zmiany w hijackingu mogą naprawić oba testy
+      lub żaden.
+
+================================================================================
+GRUPA 2: DMA / APU (Page 13-14) — 4 fail
+================================================================================
+
+--- FAIL 4: Page 13, Test 9 — "Explicit DMA Abort" ---
+  Kod błędu: 2
+  Komunikat: "The aborted DMAs did not spend the correct number of CPU cycles."
+
+  OPIS TESTU (TEST_ExplicitDMAAbort, linia ~13190):
+    Test wyłącza DMC ($4015 = 0) w trakcie trwania DMA i mierzy ile cykli
+    CPU DMA zajęło. Answer key: $04 $04 $04 $04 $04 $04 $03 $04 $01 $01
+    $00 $00 $00 $00 $00 $00.
+
+    Wartości oznaczają liczbę cykli DMA:
+    - $04 = normalny 4-cyklowy DMA (reload, halt on put)
+    - $03 = 3-cyklowy DMA (load, halt on get, lub reload z opóźnieniem)
+    - $01 = 1-cyklowy aborted DMA (tylko halt cycle)
+    - $00 = DMA nie wystąpiło wcale
+
+    Test sprawdza 16 różnych timingów wyłączenia DMC.
+
+  [P] DMA::clockPhi1() — logika abortu w DMCPhase::Halt i DMCPhase::Dummy:
+      - W Halt: jeśli !isDMCSampleNeeded(), dmcPhase = Idle (DMA nie wystąpi)
+      - W Dummy: jeśli !isDMCSampleNeeded(), dmcPhase = Idle (1-cyklowy abort)
+      - W Read: jeśli !isDMCSampleNeeded(), dmcPhase = Idle
+
+      Problem: dmcHaltArmed — flaga "uzbrojenia" halt. Jeśli DMA jest
+      "armed" ale nie jeszcze "halted", a potem DMC zostaje wyłączone,
+      kod w Halt sprawdza isDMCSampleNeeded() i wraca do Idle. To jest OK.
+
+      Ale: w DMCPhase::Dummy, jeśli DMC zostaje wyłączone, DMA kończy się
+      po 1 cyklu (tylko halt). To daje $01. Ale answer key pokazuje $00
+      dla ostatnich 6 przypadków — DMA nie wystąpiło wcale.
+
+      Specyfikacja (dma.txt "Bugs"):
+      "When sample playback is stopped during the APU cycle before a reload
+      DMA would schedule (2nd or 3rd CPU cycle before the halt attempt),
+      the DMA starts but is aborted after a single cycle. If the halt is
+      delayed due to a write cycle, the aborted DMA doesn't occur at all."
+
+      Kluczowe: "If the halt is delayed due to a write cycle, the aborted
+      DMA doesn't occur at all." — to tłumaczy $00 dla niektórych przypadków.
+
+  [F] 1. Sprawdzić czy DMA poprawnie obsługuje przypadek gdy halt jest
+        opóźniony przez write cycle i DMC zostaje wyłączone — DMA nie
+        powinno wystąpić wcale ($00).
+     2. Sprawdzić czy dmcHaltArmed jest poprawnie resetowane gdy DMC
+        zostaje wyłączone w fazie Halt.
+     3. Obliczyć timing: dmc.dmaDelay = 3 po $4015 write. DMA próbuje
+        halt po 2 APU cyklach. Jeśli DMC jest wyłączane w odpowiednim
+        cyklu, DMA może być w różnych fazach.
+
+  [R] Zmiany w DMA abort wpłyną na FAIL 5 (Implicit DMA Abort) i potencjalnie
+      na testy DMC.
+
+--- FAIL 5: Page 13, Test 10 — "Implicit DMA Abort" ---
+  Kod błędu: 2
+  Komunikat: "The aborted DMAs did not spend the correct number of CPU cycles."
+
+  OPIS TESTU (TEST_ImplicitDMAAbort, linia ~13261):
+    Test używa 1-bajtowego sample z looping disabled. Load DMA ładuje 1 bajt,
+    potem buffer zostaje pusty i reload DMA jest schedulowane, ale sample
+    już się skończył (bytesRemaining == 0), więc DMA jest aborted.
+
+    Answer keys (3 pętle po 16 wyników):
+    - Key1 ($500): normalne abort timing
+    - Key2 ($520): z write cycle (JSR) — 1-cycle DMA nie występuje na write
+    - Key3 ($540): z looping włączonym
+
+    Komentarz w teście: "The 1-cycle DMA does not get delayed by a write
+    cycle, instead it just doesn't occur at all."
+
+  [P] Podobne jak FAIL 4, ale dotyczy implicit abort (gdy sample kończy się
+    naturalnie, nie przez wyłączenie $4015).
+
+      W DMCChannel::loadSampleBuffer(): gdy bytesRemaining == 0 i !loopFlag,
+      irqPending = true (jeśli irqEnabled). Ale sampleBufferEmpty = false
+      (właśnie załadowano). Potem gdy buffer zostaje opróżniony (clockTimer),
+      sampleBufferEmpty = true i dmaHaltOnPut = true. needsDMAFetch() zwraca
+      false bo bytesRemaining == 0.
+
+      Problem: gdy bytesRemaining == 0, needsDMAFetch() zwraca false, więc
+      DMA nigdy nie wystąpi. Ale specyfikacja mówi, że reload DMA jest
+      schedulowane gdy buffer zostaje opróżniony — nawet jeśli sample się
+      skończył, DMA jest aborted po 1 cyklu.
+
+      Klucz: dmaHaltOnPut jest ustawiane w clockTimer() gdy buffer zostaje
+      opróżniony. Ale needsDMAFetch() sprawdza bytesRemaining > 0, więc
+      jeśli sample się skończył, DMA nie jest schedulowane.
+
+      To jest BŁĄD: reload DMA powinno być schedulowane niezależnie od
+      bytesRemaining — jest schedulowane gdy buffer zostaje opróżniony.
+      Dopiero w trakcie DMA (w fazie Halt/Dummy/Read) sprawdzane jest
+      czy sample nadal jest potrzebne.
+
+  [F] 1. Rozdzielić "DMA requested" od "sample needed":
+       - DMA powinno być schedulowane gdy sampleBufferEmpty && dmaHaltOnPut
+         (buffer został opróżniony podczas playbacku).
+       - needsDMAFetch() powinno zwracać true gdy buffer jest pusty i
+         DMA zostało requested, NIE zależnie od bytesRemaining.
+       - W DMA::clockPhi1(), w fazie Halt/Dummy/Read, sprawdzać
+         isDMCSampleNeeded() — jeśli false, abort.
+     2. Dodać flagę "dmaRequested" w DMCChannel, ustawianą gdy buffer
+        zostaje opróżniony, czyszczoną gdy DMA zostanie zrealizowane
+        lub aborted.
+
+  [R] Zmiany wpłyną na FAIL 4, FAIL 6 (DMC), i potencjalnie na inne
+      testy DMA. To jest znacząca zmiana w logice DMA.
+
+--- FAIL 6: Page 14, Test 6 — "Delta Modulation Channel" ---
+  Kod błędu: L
+  Komunikat: "Writing $4015 when the DMC timer has 2 cycles until clocked
+              should not trigger a DMC DMA until after the 3/4 cycle delay."
+
+  OPIS TESTU (TEST_DeltaModulationChannel, test L, linia ~11300):
+    Test sprawdza opóźnienie DMA po zapisie do $4015:
+    - DMC timer ma 2 cykle do zera.
+    - Zapis $10 do $4015 włącza DMC.
+    - DMA powinno być opóźnione o 1 cykl (bo DMC nie jest jeszcze włączone
+      gdy timer osiąga zero).
+    - DMA powinno trwać 3 cykle zamiast 4 (bo jest alignment cycle).
+
+    Scenariusz:
+    1. DMASync_50CyclesRemaining — synchronizacja
+    2. Wyłączenie DMC, ustawienie 1-bajtowego sample z loop
+    3. Clockslide_25 — timer = 7
+    4. STA $4015 — włączenie DMC z 2 cyklami do zera timera
+    5. DMA powinno być opóźnione o 1 cykl (3 cykle zamiast 4)
+
+  [P] APU::writeData() case 0x4015:
+      Gdy data & 0x10 i bytesRemaining == 0:
+        dmc.restart();
+        dmc.dmaDelay = 3;
+
+      dmaDelay = 3 oznacza 3 cykle opóźnienia. Ale test mówi że gdy timer
+      ma 2 cykle do zera, DMA powinno być opóźnione o 1 cykl (bo DMC
+      włącza się po 3 cyklach, a timer osiąga zero po 2 cyklach).
+
+      Problem: dmaDelay = 3 to opóźnienie w APU cyklach. Ale DMC timer
+      osiąga zero po 2 cyklach. Wtedy needsDMAFetch() sprawdza dmaDelay == 0
+      — jeśli dmaDelay = 1 (po 2 cyklach), DMA nie wystąpi. Dobrze.
+
+      Ale: gdy dmaDelay osiągnie 0 (po 3 cyklach), needsDMAFetch() zwraca
+      true (jeśli sampleBufferEmpty && bytesRemaining > 0). W tym momencie
+      DMA jest schedulowane jako "load" DMA (halt on get).
+
+      Test oczekuje że DMA będzie 3-cyklowe (z alignment cycle) zamiast
+      4-cyklowego. To zależy od tego czy halt występuje na get czy put.
+      Load DMA haltuje na get → 3 cykle. To powinno działać.
+
+      Problem może być w tym, że gdy timer osiąga zero PRZED włączeniem DMC,
+      DMC próbuje schedulować reload DMA (gdy buffer zostaje opróżniony),
+      ale DMC nie jest jeszcze włączone. To jest powiązane z FAIL 5.
+
+      Dodatkowo: dmc.tickDMADelay() jest wywoływane w APU::clock(), ale
+      dmaDelay jest ustawiane na 3. Po 3 cyklach APU (6 cyklach CPU? nie,
+      1 APU cycle = 1 CPU cycle), dmaDelay = 0. Ale test mówi o 2 cyklach
+      do zera timera — to znaczy że timer osiąga zero zanim dmaDelay = 0.
+
+      Gdy timer osiąga zero, clockTimer() jest wywoływane. Jeśli to był
+      ostatni bit w buforze, sampleBufferEmpty = true i dmaHaltOnPut = true.
+      Ale needsDMAFetch() zwraca false bo dmaDelay > 0. Po 1 cyklu dmaDelay
+      = 0 i needsDMAFetch() zwraca true. Ale dmaHaltOnPut = true (reload DMA),
+      a nie false (load DMA). To jest problem — powinno być load DMA (halt
+      on get), bo to jest DMA po $4015 write, nie reload.
+
+  [F] 1. Gdy $4015 włącza DMC, dmaHaltOnPut powinno być ustawione na false
+        (load DMA) w restart() — to już jest.
+     2. Ale gdy timer osiąga zero i buffer zostaje opróżniony PRZED
+        dmaDelay = 0, dmaHaltOnPut jest ustawiane na true (reload) w
+        clockTimer(). To nadpisuje wartość false z restart().
+     3. Rozwiązanie: gdy dmaDelay > 0, nie ustawiaj dmaHaltOnPut = true
+        w clockTimer(), bo to nie jest reload DMA — to jest load DMA
+        opóźnione przez dmaDelay.
+
+  [R] Powiązane z FAIL 5. Zmiana w logice dmaHaltOnPut może wpłynąć na
+      inne testy DMC.
+
+--- FAIL 7: Page 14, Test 7 — "APU Register Activation" ---
+  Kod błędu: 6
+  Komunikat: "OAM DMA should be able to read from APU registers (and mirrors)
+              if $40 is written to $4016 and the bus is $4000-$401F."
+
+  OPIS TESTU (TEST_APURegActivation, test 6, linia ~8220):
+    Test sprawdza czy OAM DMA może czytać z rejestrów APU gdy 6502 address
+    bus jest w zakresie $4000-$401F.
+
+    Scenariusz:
+    1. Wykonaj STA $4014 (A=$40) z adresu $3FFE.
+    2. 6502 address bus będzie $4001 gdy OAM DMA wystąpi.
+    3. OAM DMA czyta z page $40 ($4000-$40FF).
+    4. Ponieważ 6502 address bus jest w $4000-$401F, rejestry APU są aktywne.
+    5. OAM DMA powinno czytać wartości z rejestrów APU ($4015, $4016, $4017)
+       i ich mirrorów co $20 bajtów.
+
+    Oczekiwane wyniki w OAM (patrz komentarz w teście, linia ~8251):
+    - $4015 mirror → $44 (frame IRQ flag + triangle)
+    - $4016 mirror → $01 (controller 1)
+    - $4017 mirror → $00 (controller 2)
+    - Pozostałe → open bus ($50 lub $40)
+
+  [P] A2A03::readDMA() — logika aktywacji rejestrów APU:
+      const bool regActive = (coreAddr >= 0x4000 && coreAddr <= 0x401F);
+      To sprawdza czy 6502 core address jest w $4000-$401F.
+
+      Ale: OAM DMA używa dma.getAddr() (adres OAM DMA), a coreAddr to
+      cpu.getAddr() (adres CPU). Gdy OAM DMA jest aktywne, CPU jest halted
+      i powtarza ostatni read cycle. coreAddr powinno być adresem instrukcji
+      STA $4014, czyli $3FFE lub $3FFF... ale test celowo ustawia to tak,
+      że 6502 address bus jest $4001.
+
+      Problem: gdy OAM DMA czyta z $4015, kod w readDMA() sprawdza:
+      if (regActive && reg == 0x4015) — to powinno działać.
+      Ale OAM DMA nie używa readDMA() — to jest tylko dla DMC DMA!
+
+      OAM DMA używa dmaReadData() → readData() → ale readData() sprawdza
+      dma.overridesAddr(). Dla OAM DMA, dma.overridesAddr() zwraca true
+      (action != None). Więc readData() wywołuje readDMA().
+
+      W readDMA(): regActive sprawdza coreAddr (cpu.getAddr()). Dla OAM DMA,
+      cpu.getAddr() zwraca currentStep.busAddr — ale CPU jest stalled,
+      więc currentStep nie jest aktualizowane. currentStep.busAddr to
+      adres ostatniego read cycle CPU, czyli adres instrukcji.
+
+      Test wykonuje STA $4014 z $3FFE. Po STA $4014, CPU wykonuje read
+      cycle (następna instrukcja). Ale OAM DMA haltuje CPU na tym read cycle.
+      Adres tego read cycle to $4000 lub $4001 (następna instrukcja po
+      STA $4014 z $3FFE).
+
+      Problem: cpu.getAddr() zwraca currentStep.busAddr, ale gdy CPU jest
+      stalled (RDY low), currentStep nie jest aktualizowane — zatrzymuje się
+      na ostatnim adresie. To może być $3FFF lub $4000, zależnie od timingu.
+
+      Test wymaga aby 6502 address bus był $4001. Jeśli CPU jest stalled
+      na read cycle z adresu $4001, to coreAddr = $4001 i regActive = true.
+
+      Ale: OAM DMA w DMA::clockPhi1() używa idma.pollIsRead() (cpu.isRead()).
+      Gdy OAM DMA jest w fazie Transfer, CPU jest halted (rdy = false).
+      cpu.isRead() zwraca currentStep.isRead. Jeśli CPU był w read cycle
+      gdy zostało zhaltowane, isRead = true.
+
+      Kluczowy problem: readDMA() dla OAM DMA get używa dmaAddr (adres OAM
+      DMA = $40xx), ale regActive sprawdza coreAddr (adres CPU). Jeśli
+      coreAddr = $4001, to regActive = true. Ale readDMA() czyta z
+      readExternal(dmaAddr) — dmaAddr = $40xx. readExternal() sprawdza:
+      if (addr >= 0x4000 && addr <= 0x401F) return busData;
+      To zwraca busData (open bus) zamiast czytać rejestr APU!
+
+      Dla OAM DMA czytającego $4015, $4016, $4017:
+      - dmaAddr = $4015, $4016, $4017
+      - readExternal($4015) → return busData (bo $4015 w $4000-$401F)
+      - Ale powinno czytać rejestr APU!
+
+      readDMA() ma specjalną logikę dla reg == 0x4015 i reg == 0x4016/4017,
+      ale tylko dla DMC DMA (dma.actionIsDMCGet()). OAM DMA (OAMGet) nie
+      ma tej logiki.
+
+  [F] 1. W readDMA(), dodać obsługę OAM DMA dla rejestrów APU:
+       - Jeśli regActive i reg == 0x4015, czytaj $4015 z APU.
+       - Jeśli regActive i reg == 0x4016/4017, czytaj controller.
+       - To powinno działać dla OAMGet tak samo jak dla DMCGet.
+     2. Usunąć warunek dma.actionIsDMCGet() — logika aktywacji rejestrów
+        powinna działać dla każdego DMA, nie tylko DMC.
+
+  [R] Zmiana wpłynie na testy DMA + $4015 Read, DMA + $4016 Read (obecnie
+      PASS) — trzeba uważać, żeby ich nie zepsuć.
+
+================================================================================
+GRUPA 3: PPU SPRITE EVALUATION (Page 18) — 3 fail
+================================================================================
+
+--- FAIL 8: Page 18, Test 3 — "$2002 flag timing" ---
+  Kod błędu: 1
+  Komunikat: "The flags were not cleared on the correct PPU cycle."
+
+  OPIS TESTU (TEST_2002FlagTiming, linia ~2263):
+    Test czyta $2002 w różnych momentach pre-render scanline i sprawdza
+    kiedy flagi sprite_zero_hit i sprite_overflow są czyszczone.
+
+    Klucz: Wszystkie flagi ($2002 bit 7, 6, 5) są czyszczone na dot 1
+    pre-render scanline. ALE: reads from $2002 latch vblank na początku
+    read (M2 high), a sprite flags są latched na końcu read (M2 low).
+    To oznacza ~1.875 PPU cykli różnicy.
+
+    Answer key: $E0, $E0, $80, $00 (lub alt: $E0, $80, $80, $00)
+    - $E0 = vblank + sprite_overflow + sprite_zero_hit (wszystkie ustawione)
+    - $80 = tylko vblank
+    - $00 = wszystkie wyczyszczone
+
+  [P] PPU2C02::clock() — czyszczenie flag na pre-render dot 1:
+    if (prerender && cycle == 1) {
+        status.vertical_blank  = 0;
+        status.sprite_zero_hit = 0;
+        status.sprite_overflow = 0;
+    }
+
+    To czyści wszystkie flagi na dot 1. Ale test pokazuje że sprite flags
+    powinny być widoczne dłużej niż vblank flag — bo $2002 read latchuje
+    vblank na początku cyklu, a sprite flags na końcu.
+
+    Problem: readStatus() czyta status.reg natychmiast. Nie ma opóźnienia
+    między latchowaniem vblank a sprite flags. W rzeczywistości:
+    - Vblank jest latchowany gdy M2 goes high (początek CPU read)
+    - Sprite flags są latchowane gdy M2 goes low (koniec CPU read)
+    - To jest ~1.875 PPU cykli różnicy (7.5 master clock / 4 = 1.875)
+
+    W emulatorze: CPU read zajmuje 1 cykl CPU = 3 cykle PPU. $2002 read
+    zaczyna się w cyklu CPU N. Vblank powinien być latchowany na początku
+    cyklu N (PPU cycle odpowiadający początkowi CPU cycle). Sprite flags
+    powinny być latchowane na końcu cyklu N (PPU cycle odpowiadający końcowi
+    CPU cycle = 2-3 PPU cykle później).
+
+  [F] 1. W readStatus(), oddzielić latchowanie vblank od sprite flags:
+       - Vblank: latch na początku CPU read (obecny PPU cycle)
+       - Sprite flags: latch na końcu CPU read (PPU cycle + 2 lub 3)
+     2. Alternatywnie: zapamiętać wartość sprite flags z PPU cycle + 2
+        i zwrócić ją w readStatus().
+     3. To wymaga śledzenia kiedy CPU read się kończy — może użyć
+        clockPhi2() do zaktualizowania latcha.
+
+  [R] Zmiana wpłynie na wszystkie testy czytające $2002, w tym testy
+      VBlank timing (obecnie PASS).
+
+--- FAIL 9: Page 18, Test 7 — "Address $2004 behavior" ---
+  Kod błędu: 8
+  Komunikat: "Reads from $2004 during PPU cycles 65-256 of a visible scanline
+              (rendering enabled) should read the current OAM address."
+
+  OPIS TESTU (TEST_Address2004_Behavior, test 8, linia ~8023):
+    Test czyta $2004 w trakcie sprite evaluation (cykle 65-256) i sprawdza
+    czy zwracana wartość odpowiada aktualnemu adresowi OAM, który zmienia
+    się co 2 cykle PPU.
+
+    OAM jest przygotowane z wartościami $00-$FF (indeks = wartość).
+    Test sprawdza że wartość nie jest $00 ani $FF.
+
+  [P] PPU2C02::readOAMData():
+    if (renderingEnabled() && scanline <= SCANLINE_VISIBLE_LAST
+        && ((cycle >= 1 && cycle <= 64) || (cycle >= 257 && cycle <= 320))) {
+        return 0xFF;
+    }
+    uint8_t data = OAM[oamAddr];
+
+    Dla cykli 65-256, kod czyta OAM[oamAddr]. Ale w trakcie sprite evaluation,
+    oamAddr jest modyfikowane przez PPU (sprite evaluation używa OAM address).
+    Test oczekuje że readOAMData zwraca wartość z OAM buffer (internal OAM
+    address używany przez sprite evaluation), nie z oamAddr (CPU-side OAM addr).
+
+    Problem: w trakcie sprite evaluation (cykle 65-256), PPU używa wewnętrznego
+    adresu OAM do sprite evaluation. CPU read z $2004 powinien zwrócić wartość
+    z tego wewnętrznego adresu, nie z oamAddr (który jest ustawiany przez CPU
+    zapisy do $2003).
+
+    Dodatkowo: oamAddr może overflowować podczas sprite evaluation (gdy jest
+    mniej niż 8 sprite'ów w zasięgu), co powoduje glitchy inkrementacji.
+
+  [F] 1. W trakcie sprite evaluation (cykle 65-256), readOAMData powinno
+        zwracać OAM[wewnętrzny adres OAM używany przez sprite evaluation].
+     2. Trzeba śledzić wewnętrzny adres OAM podczas sprite evaluation
+        (oddzielny od oamAddr).
+     3. Dla OAMADDR overflow case: oamAddr powinien być inkrementowany
+        w specyficzny sposób (glitchy) podczas sprite evaluation.
+
+  [R] Zmiana wpłynie na FAIL 11 ($2004 Stress Test) i potencjalnie na
+      OAM Corruption test.
+
+--- FAIL 10: Page 18, Test 8 — "OAM Corruption" ---
+  Kod błędu: 2
+  Komunikat: "OAM Corruption should corrupt a row in OAM by copying the 8
+              values from row 0 to another row."
+
+  OPIS TESTU (TEST_OAM_Corruption, linia ~14061):
+    Gdy rendering jest wyłączane w trakcie visible scanline, a potem
+    włączane ponownie, OAM zostaje skompromitowane:
+    - 8 bajtów OAM (jeden "row") zostaje nadpisanych wartościami z OAM[0-7].
+    - Który row zostaje skompromitowany zależy od "Secondary OAM Address"
+      w momencie wyłączenia renderingu.
+    - Row = SecondaryOAMAddress * 8.
+
+  [P] PPU2C02 nie implementuje OAM Corruption w ogóle.
+    Nie ma żadnej logiki kopiującej OAM[0-7] do innego row'a gdy rendering
+    jest przełączane.
+
+    Dodatkowo: PPU nie śledzi "Secondary OAM Address" — adres używany
+    wewnętrznie przez sprite evaluation do adresowania secondary OAM.
+    To jest oddzielny adres od oamAddr.
+
+  [F] 1. Dodać śledzenie secondary OAM address (oddzielny rejestr).
+     2. Gdy rendering jest wyłączane w trakcie visible scanline (cykle 1-256),
+        zapamiętać secondary OAM address.
+     3. Gdy rendering jest włączane ponownie (następny PPU cycle na visible
+        scanline lub pre-render), skopiować OAM[0-7] do OAM[secondaryOAMAddr*8].
+     4. Obsłużyć ceiling do najbliższego multiple of 4 dla cykli 65-256.
+     5. Obsłużyć różnice między clock alignments.
+
+  [R] Zmiana wpłynie na FAIL 9, FAIL 11 i potencjalnie na sprite evaluation
+      w innych testach. To jest duża zmiana w PPU.
+
+================================================================================
+GRUPA 4: PPU MISC (Page 19) — 7 fail
+================================================================================
+
+--- FAIL 11: Page 19, Test 3 — "Stale BG Shift Registers" ---
+  Kod błędu: 1
+  Komunikat: "Sprite Zero Hits should be working."
+
+  OPIS TESTU (TEST_StaleBGShiftRegisters, test 1, linia ~15363):
+    Test weryfikuje że sprite zero hits działają poprawnie jako prerequisite.
+    Ustawia sprite zero i background, renderuje, i sprawdza czy sprite zero
+    hit wystąpił.
+
+  [P] To jest test prerequisite — sprite zero hit nie działa w tym konkretnym
+    scenariuszu. Może być problem z:
+    - Sprite evaluation (sprite zero nie jest poprawnie ewaluowany)
+    - Sprite zero hit detection (renderPixel nie ustawia flagi)
+    - Timing sprite zero hit (flaga ustawiana w złym cyklu)
+
+    Patrz renderPixel() i sampleSprite():
+    - bSpriteZeroHitPossible jest ustawiane w evaluateSprites() gdy n == 0.
+    - W renderPixel(), sprite zero hit jest sprawdzane gdy:
+      bSpriteZeroHitPossible && isSpriteZeroPixel && bg.nonzero && sp.nonzero
+      && mask.render_background && mask.render_sprites
+      && cycle >= xLo && cycle < 256
+
+    Problem może być w tym, że test używa mask = $06 (show leftmost 8 pixels
+    only), a xLo = (mask.render_background_left && mask.render_sprites_left) ? 2 : 9.
+    Dla mask = $06: render_background_left = 1, render_sprites_left = 1,
+    więc xLo = 2. To powinno działać.
+
+    Może problem w tym, że sprite zero hit jest sprawdzane w renderPixel()
+    ale test używa DoSpriteZeroHitTest który może mieć inny timing.
+
+  [F] 1. Uruchomić nes_test z trace dla tego konkretnego testu i sprawdzić
+        czy sprite zero hit jest wykrywany.
+     2. Sprawdzić czy evaluateSprites() poprawnie ustawia
+        bSpriteZeroHitPossible.
+     3. Sprawdzić czy renderPixel() poprawnie wykrywa kolizję.
+
+  [R] Niskie — to jest prerequisite test, naprawa powinna pomóc innym.
+
+--- FAIL 12: Page 19, Test 4 — "Stale Sprite Shift Regs" ---
+  Kod błędu: 3
+  Komunikat: "The sprite shift registers should not be clocked during F-Blank
+              or H-Blank."
+
+  OPIS TESTU (TEST_StaleSpriteShiftRegs, test 3, linia ~3055):
+    Test wyłącza rendering na kilka scanline'ów, a potem włącza ponownie.
+    Sprawdza czy sprite shift registers nie są clockowane gdy rendering
+    jest wyłączone (F-Blank) lub podczas H-Blank.
+
+    Scenariusz:
+    1. Sprite zero na X=$30.
+    2. Wyłącz rendering na scanline 4 dot 0.
+    3. Włącz rendering na scanline 14 dot 340.
+    4. Sprite zero hit powinien wystąpić — bo sprite counters nie są
+       zatrzymywane przez F-Blank, ale sprite shift registers są.
+
+  [P] PPU2C02::UpdateShifters():
+    if (renderingEnabled() && cycle >= 1 && cycle < 258) {
+        for (int i = 0; i < sprite_count; i++) {
+            if (spriteScanline[i * 4 + 3] > 0)
+                spriteScanline[i * 4 + 3]--;
+            else if (visibleScanline) {
+                sprite_shifter_pattern_lo[i] <<= 1;
+                sprite_shifter_pattern_hi[i] <<= 1;
+            }
+        }
+    }
+
+    Problem: sprite shift registers są clockowane TYLKO gdy renderingEnabled().
+    Ale test mówi że sprite counters (spriteScanline[i*4+3], czyli X counter)
+    NIE powinny być zatrzymywane przez F-Blank — powinny nadal się dekrementować.
+
+    Aktualny kod: cała pętla jest w if (renderingEnabled()) — więc gdy
+    rendering jest wyłączone, sprite counters nie są dekrementowane.
+    Ale test oczekuje że counters są dekrementowane nawet gdy rendering
+    jest wyłączone (F-Blank).
+
+    Dodatkowo: test 5 mówi że gdy rendering jest wyłączone na dot 339,
+    sprite counters nie przechodzą z "halted" do "counting" — więc
+    sprite jest rysowany natychmiast po włączeniu renderingu.
+
+  [F] 1. Rozdzielić clockowanie sprite counters od sprite shift registers:
+       - Sprite counters (X position countdown) powinny być dekrementowane
+         nawet gdy rendering jest wyłączone (F-Blank), ale tylko na visible
+         scanlines.
+       - Sprite shift registers powinny być clockowane TYLKO gdy rendering
+         jest włączone.
+     2. Dodać logikę "halted" vs "counting" dla sprite counters:
+       - Na dot 339 (jeśli rendering włączone): counters → "counting"
+       - Jeśli rendering wyłączone na dot 339: counters zostają w "halted"
+       - W "halted": sprite jest rysowany natychmiast (shift registers clockowane)
+       - W "counting": counter dekrementowany do 0, potem "halted"
+
+  [R] Zmiana wpłynie na FAIL 11, FAIL 13, FAIL 14 i wszystkie sprite-related
+      testy. To jest znacząca zmiana w sprite rendering logic.
+
+--- FAIL 13: Page 19, Test 5 — "BG Serial In" ---
+  Kod błędu: 2
+  Komunikat: "BG shift registers should bring in a 1 into bit 0 when shifted
+              (visible via timed $2001 writes)."
+
+  OPIS TESTU (TEST_BGSerialIn, linia ~15904):
+    Test wyłącza rendering na chwilę (między dot 6 a dot 0 następnego tile'a),
+    a potem włącza ponownie. W tym czasie BG shift registers są shiftowane
+    z wartością 1 w bit 0 (high bitplane) i 0 (low bitplane).
+
+    To powoduje że "stale" 1 bits są renderowane, tworząc widoczny wzór
+    na pustym nametable. Sprite zero hit jest używany do detekcji.
+
+  [P] PPU2C02::UpdateShifters():
+    bg_shifter_pattern_lo <<= 1;
+    bg_shifter_pattern_hi = (bg_shifter_pattern_hi << 1) | 0x0001;
+
+    To wygląda poprawnie — high bitplane shiftuje w 1, low shiftuje w 0.
+    ALE: UpdateShifters() jest wywoływane tylko gdy renderingEnabled().
+    Gdy rendering jest wyłączone, shift registers nie są shiftowane.
+
+    Test wyłącza rendering na kilka cykli i włącza ponownie. W tym czasie
+    shift registers powinny być shiftowane (z wartościami 1/0), ale nie
+    są — bo renderingEnabled() jest false.
+
+    Problem: BG shift registers powinny być shiftowane nawet gdy rendering
+    jest wyłączone, ALE tylko jeśli rendering był włączony w tym scanline
+    (czyli PPU jest w trybie rendering, ale z mask=0).
+
+    Albo: shift registers są sprzętowe i zawsze działają gdy PPU jest
+    w trybie visible scanline, niezależnie od mask.
+
+    Patrz specyfikacja PPU rendering.txt:
+    "The two 16-bit pattern shift registers each shift in a constant value.
+    Because the first 8 bits of the shift registers are reloaded every 8
+    dots, these constants are normally overwritten with fresh pattern data,
+    but toggling rendering mid-frame may cause more than 8 shifts between
+    loads, allowing these constants to be rendered."
+
+    To potwierdza: shift registers są shiftowane gdy PPU wykonuje fetch
+    (czyli gdy rendering jest włączone w sensie PPU — backgroundFetchPhase
+    działa). Ale gdy mask = 0 (F-Blank), backgroundFetchPhase() zwraca
+    early (if (!renderingEnabled()) return;).
+
+  [F] 1. BG shift registers powinny być shiftowane gdy PPU jest w trybie
+        rendering (visible/prerender scanline), nawet gdy mask = 0 (ale
+        PPU musi być "w trybie renderingu" — czyli nie VBlank).
+     2. Trzeba rozróżnić "rendering enabled" (mask != 0) od "PPU in rendering
+        mode" (scanline 0-261, nie VBlank).
+     3. UpdateShifters() powinno działać gdy PPU jest w rendering mode,
+        nawet gdy mask = 0. Ale backgroundFetchPhase() też powinno działać?
+        Nie — fetch phase czyta z pamięci, co wymaga rendering enabled.
+        Ale shift registers są sprzętowe i działają niezależnie.
+
+  [R] Zmiana wpłynie na FAIL 12 i wszystkie testy z przełączaniem renderingu.
+      To jest powiązane z "renderingEnabled()" vs "in rendering mode".
+
+--- FAIL 14: Page 19, Test 6 — "Sprites On Scanline 0" ---
+  Kod błędu: 2
+  Komunikat: "A sprite should be drawn at Y=0 via the pre-render scanline's
+              sprite fetch with stale secondary OAM data."
+
+  OPIS TESTU (TEST_Scanline0Sprites, test 2, linia ~15570):
+    Sprajty na scanline 0 mogą być narysowane jeśli pre-render scanline
+    traktuje secondary OAM jako dane dla scanline 5 (261 & 255 = 5).
+    To powoduje że sprite fetch na pre-render scanline ładuje stare dane
+    z secondary OAM do sprite shift registers, które są rysowane na
+    scanline 0.
+
+  [P] PPU2C02::spriteFetchPhase():
+    const bool visible = (scanline >= SCANLINE_VISIBLE_FIRST
+                       && scanline <= NES::SCANLINE_VISIBLE_LAST);
+    const bool active = visible && spriteIdx < sprite_count;
+
+    Problem: spriteFetchPhase() działa tylko dla visible scanlines.
+    Na pre-render scanline (261), visible = false, więc sprite fetch
+    nie ładuje danych do sprite shift registers.
+
+    Ale test oczekuje że pre-render scanline WYKONUJE sprite fetch
+    (z secondary OAM), ładując dane do shift registers, które są
+    rysowane na scanline 0.
+
+    Patrz specyfikacja PPU rendering.txt:
+    "This is a dummy scanline, whose sole purpose is to fill the shift
+    registers with the data for the first two tiles of the next scanline."
+    "for the sprite fetches, whatever data is currently in secondary OAM"
+
+    Pre-render scanline wykonuje sprite fetch! Ale spriteFetchPhase()
+    ma warunek `visible` który wyklucza pre-render.
+
+  [F] 1. W spriteFetchPhase(), zmienić warunek aby pre-render scanline
+        też wykonywał sprite fetch:
+        const bool active = (visible || prerender) && spriteIdx < sprite_count;
+     2. Ale: na pre-render scanline, sprite_count i spriteScanline pochodzą
+        z poprzedniej klatki (scanline 239). Trzeba upewnić się że
+        evaluateSprites() nie jest wywoływane na pre-render (bo obecnie
+        jest tylko dla visible scanlines).
+     3. Dodatkowo: pre-render traktuje scanline jako 5 (261 & 255 = 5)
+        dla in-range check. To znaczy że sprite Y=5 jest "in range" na
+        pre-render scanline. To wpływa na to które sprite'y są fetchowane.
+
+  [R] Zmiana wpłynie na FAIL 12 i sprite rendering na scanline 0.
+
+--- FAIL 15: Page 19, Test 7 — "$2004 Stress Test" ---
+  Kod błędu: 2
+  Komunikat: "Reading from $2004 (rendering enabled) should read from the OAM
+              Buffer; results didn't match (OAMADDR overflow case)."
+
+  OPIS TESTU (TEST_2004_Stress, linia ~1928):
+    Test czyta $2004 na każdym PPU cyklu visible scanline i sprawdza
+    czy wartości odpowiadają OAM buffer. Używa dwóch konfiguracji OAM:
+    1. $FF-$00 descending (mniej niż 8 sprite'ów w zasięgu → OAMADDR overflow)
+    2. 8 sprite'ów w zasięgu + $00-$BF ascending
+
+  [P] Powiązane z FAIL 9 — readOAMData() nie zwraca wartości z OAM buffer
+    w trakcie sprite evaluation. Dodatkowo OAMADDR overflow case wymaga
+    specyficznej logiki glitchy inkrementacji OAM address.
+
+    PPU2C02::readOAMData() dla cykli 65-256:
+    uint8_t data = OAM[oamAddr];
+    To czyta z oamAddr (CPU-side), ale powinno czytać z wewnętrznego
+    OAM address używanego przez sprite evaluation.
+
+  [F] 1. Jak w FAIL 9 — śledzić wewnętrzny OAM address podczas sprite
+        evaluation i zwracać OAM[wewnętrzny adres] w readOAMData().
+     2. Dodać OAMADDR overflow glitch behavior.
+     3. Trzeba dokładnie śledzić OAM address w każdej fazie sprite evaluation:
+        - Cykle 1-64: clearing secondary OAM (adres inkrementowany co 2 cykle)
+        - Cykle 65-256: sprite evaluation (adres zależy od sprite evaluation)
+        - Cykle 257-320: sprite fetch (adres w specyficznym patternie)
+
+  [R] Powiązane z FAIL 9, FAIL 10. Duża zmiana w PPU OAM logic.
+
+--- FAIL 16: Page 19, Test 8 — "$2007 Stress Test" ---
+  Kod błędu: 2
+  Komunikat: "Reading from $2007 should set up the PPU Read Buffer two PPU
+              cycles after the CPU read ends; likely wrong PPU cycle or
+              missing dummy nametable reads."
+
+  OPIS TESTU (TEST_2007_Stress, linia ~2436):
+    Test czyta $2007 na każdym PPU cyklu visible scanline i sprawdza
+    co trafia do PPU Read Buffer. PPU DATA State Machine działa w 3 cykle:
+    1. CPU read kończy się → state machine start
+    2. 1 PPU cycle później: ALE (address latch setup)
+    3. 2 PPU cycle później: idle
+    4. 3 PPU cycle później: read from memory → update read buffer
+
+    Test weryfikuje że read buffer jest ustawiony poprawnie 2 PPU cykle
+    po zakończeniu CPU read.
+
+  [P] PPU2C02::readPPUData():
+    uint8_t data = ppu_data_buffer;
+    ppu_data_buffer = ppuRead(busAddr);
+    To czyta buffer i natychmiast ładuje nową wartość. Ale w rzeczywistości:
+    - CPU read kończy się na końcu cyklu CPU (M2 low)
+    - PPU DATA state machine startuje
+    - 3 PPU cykle później read buffer jest aktualizowany
+
+    Problem: readPPUData() aktualizuje buffer natychmiast, nie po 3 PPU
+    cyklach. W trakcie visible scanline, to powoduje że buffer jest
+    aktualizowany w złym momencie — powinien być aktualizowany 3 PPU cykle
+    po CPU read, ale jest aktualizowany natychmiast.
+
+    Dodatkowo: w trakcie visible scanline, PPU wykonuje background/sprite
+    fetch co 2 cykle. PPU DATA state machine działa co 3 cykle. To powoduje
+    konflikty (ALE + Read jednocześnie) które mogą prowadzić do unstable
+    reads z adresów hybrydowych.
+
+  [F] 1. Zaimplementować PPU DATA State Machine:
+       - Gdy CPU read z $2007 kończy się, zaplanuj aktualizację read buffer
+         3 PPU cykle później.
+       - W trakcie tych 3 cykli, PPU może wykonywać normalne fetche (BG/sprite).
+       - Aktualizacja read buffer używa adresu z v register, ale może być
+         zakłócona przez normalne fetche (hybrydowy adres).
+     2. To wymaga śledzenia PPU DATA state w clock() i aktualizacji
+        ppu_data_buffer w odpowiednim cyklu.
+     3. Trzeba też obsłużyć unstable reads (ALE + Read jednocześnie).
+
+  [R] Duża zmiana w PPU. Wpłynie na FAIL 17 (ALE + Read) i wszystkie
+      testy czytające $2007.
+
+--- FAIL 17: Page 19, Test 9 — "ALE + Read" ---
+  Kod błędu: 2
+  Komunikat: "A well timed read from $2007 should affect the PPU Address Bus
+              during the BG read cadence, reading a bit plane from an
+              unintended address."
+
+  OPIS TESTU (TEST_ALERead, linia ~3154):
+    Test czyta $2007 w precyzyjnym momencie (dot 214) aby skoryumpować
+    background fetch cadence. PPU DATA state machine interferuje z
+    normalnym BG fetch, powodując czytanie z nieoczekiwanego adresu.
+
+    Scenariusz:
+    1. Pusty nametable (tile $F0 — transparent)
+    2. LDA $2007 na dot 214
+    3. PPU DATA state machine interferuje z BG fetch na dot 229
+    4. Octal latch zostaje ustawiony na $FF (feedback loop)
+    5. BG shift register ładuje $FF zamiast $00
+    6. Sprite zero hit wykrywa ten artefakt
+
+  [P] Powiązane z FAIL 16 — wymaga PPU DATA State Machine.
+    Bez implementacji state machine, $2007 read nie interferuje z BG fetch.
+
+  [F] 1. Zaimplementować PPU DATA State Machine (jak w FAIL 16).
+     2. Obsłużyć ALE + Read jednoczesne (feedback loop w octal latch).
+     3. Gdy state machine ustawia ALE, a BG fetch też ustawia ALE,
+        BG fetch ma priorytet (adres z BG fetch).
+     4. Gdy state machine czyta, a BG fetch ustawia ALE, występuje
+        feedback loop — adres i dane stają się $FF (w tym konkretnym teście).
+
+  [R] Powiązane z FAIL 16. To jest zaawansowana zmiana w PPU.
+
+================================================================================
+PODSUMOWANIE — Klastrowanie poprawek
+================================================================================
+
+KLASTER A: DMC DMA Abort / DMC Timing (FAIL 4, 5, 6)
+  Wspólna przyczyna: logika DMA abort i dmaHaltOnPut w DMC.
+  Sugerowana poprawka: rozdzielić "DMA requested" od "sample needed",
+  naprawić dmaHaltOnPut gdy dmaDelay > 0.
+  Ryzyko: średnie — wpłynie na wszystkie testy DMC.
+  Liczba testów: 3
+
+KLASTER B: PPU OAM / Sprite Evaluation (FAIL 9, 10, 15)
+  Wspólna przyczyna: brak śledzenia wewnętrznego OAM address, brak OAM
+  corruption, readOAMData nie czyta z OAM buffer.
+  Sugerowana poprawka: dodać secondary OAM address tracking, OAM corruption,
+  poprawić readOAMData.
+  Ryzyko: wysokie — duża zmiana w PPU OAM logic.
+  Liczba testów: 3
+
+KLASTER C: PPU Shift Registers / Rendering Mode (FAIL 12, 13, 14)
+  Wspólna przyczyna: "renderingEnabled()" (mask != 0) używane zamiast
+  "PPU in rendering mode" (scanline 0-261, nie VBlank). Shift registers
+  i sprite counters nie działają gdy mask = 0.
+  Sugerowana poprawka: rozróżnić "rendering enabled" od "in rendering mode",
+  shiftować registers gdy in rendering mode, dodać sprite counter halted/
+  counting logic, dodać sprite fetch na pre-render scanline.
+  Ryzyko: wysokie — wpłynie na wszystkie sprite-related testy.
+  Liczba testów: 3 (plus FAIL 11 jako prerequisite)
+
+KLASTER D: PPU DATA State Machine (FAIL 16, 17)
+  Wspólna przyczyna: brak PPU DATA State Machine dla $2007 reads.
+  Sugerowana poprawka: zaimplementować 3-cyklowy state machine, obsłużyć
+  ALE + Read conflicts.
+  Ryzyko: wysokie — zaawansowana zmiana w PPU.
+  Liczba testów: 2
+
+KLASTER E: $2002 Flag Timing (FAIL 8)
+  Przyczyna: brak oddzielnego latchowania vblank vs sprite flags.
+  Sugerowana poprawka: latchować vblank na początku CPU read, sprite flags
+  na końcu (~2 PPU cykle później).
+  Ryzyko: średnie — wpłynie na testy VBlank timing.
+  Liczba testów: 1
+
+KLASTER F: CPU Interrupt Polling / Hijacking (FAIL 1, 2, 3)
+  Wspólna przyczyna: branch polling timing i interrupt hijacking.
+  Sugerowana poprawka: naprawić poll w cyklu 3 brancha, dodać hijacking
+  dla IRQ→NMI, sprawdzić timing detekcji NMI edge.
+  Ryzyko: średnie — wpłynie na wszystkie testy z przerwaniami.
+  Liczba testów: 3
+
+KLASTER G: APU Register Activation (FAIL 7)
+  Przyczyna: OAM DMA nie czyta rejestrów APU gdy 6502 address bus jest
+  w $4000-$401F.
+  Sugerowana poprawka: dodać obsługę OAM DMA w readDMA() dla rejestrów APU.
+  Ryzyko: niskie — zmiana lokalna w readDMA().
+  Liczba testów: 1
+
+KLASTER H: Sprite Zero Hit Prerequisite (FAIL 11)
+  Przyczyna: sprite zero hit nie działa w konkretnym scenariuszu testu
+  Stale BG Shift Registers.
+  Sugerowana poprawka: zdiagnozować za pomocą nes_test trace.
+  Ryzyko: niskie — prerequisite test.
+  Liczba testów: 1
+
+================================================================================
+ZALECANA KOLEJNOŚĆ POPRAWEK (od najmniejszego ryzyka / największego zysku)
+================================================================================
+
+1. KLASTER G (FAIL 7) — 1 test, niskie ryzyko, lokalna zmiana
+2. KLASTER E (FAIL 8) — 1 test, średnie ryzyko
+3. KLASTER A (FAIL 4, 5, 6) — 3 testy, średnie ryzyko
+4. KLASTER F (FAIL 1, 2, 3) — 3 testy, średnie ryzyko
+5. KLASTER H (FAIL 11) — 1 test, niskie ryzyko (wymaga diagnozy)
+6. KLASTER C (FAIL 12, 13, 14) — 3 testy, wysokie ryzyko
+7. KLASTER B (FAIL 9, 10, 15) — 3 testy, wysokie ryzyko
+8. KLASTER D (FAIL 16, 17) — 2 testy, wysokie ryzyko
+
+Uwaga: Klastry C i B są powiązane — zmiany w OAM/sprite evaluation
+mogą naprawić kilka testów naraz, ale też zepsuć istniejące PASS testy.
+Zaleca się dokładne testowanie po każdej zmianie (uruchom accuracy_coin).
+
+================================================================================
+NARZĘDZIA TESTERSKIE
+================================================================================
+
+accuracy_coin.exe — działa poprawnie, zwraca wyniki.
+nes_test.exe — nie testowano w tej sesji, ale powinien działać (budowany przez ninja).
+
+Wszystkie narzędzia działają poprawnie — nie wymagały naprawy.

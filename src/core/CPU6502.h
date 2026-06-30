@@ -39,6 +39,7 @@ public:
         nmiLevel = true;
         irqLevel = true;
         rdyLevel = true;
+        skipNextPoll = false;
 
         irqInhibitSnapshot = true;
 
@@ -168,6 +169,7 @@ private:
     bool nmiPollSignal = false;
     bool irqDetected = false;
     bool rdyLevel = false;
+    bool skipNextPoll = false;
     ExecKind execKind = ExecKind::NOP_;
     RmwKind rmwKind = RmwKind::ASL;
     StoreKind storeKind = StoreKind::STA;
@@ -199,8 +201,10 @@ private:
     }
 
     Step opFetch() {
-        pollInterrupts();
+        if (skipNextPoll) skipNextPoll = false;
+        else pollInterrupts();
         if (interruptPending) {
+
             interruptPending = false;
             if (nmiPending) {
                 nmiPending = false;
@@ -556,7 +560,8 @@ inline CPU6502::Step CPU6502::am_rel_2_taken() {
     uint8_t  newL  = oldL + branchOffset;
     PC = (oldPC & 0xFF00) | newL;
     bool cross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
-    if (!cross) return opFetch();
+    if (!cross) { skipNextPoll = true; return opFetch(); }
+
     pageCross = ((int8_t)branchOffset < 0);
     return emitRead(&CPU6502::am_rel_3_pagefix, PC);
 }
@@ -962,4 +967,5 @@ inline const char* CPU6502::currentStepName() const {
     #undef CPU_STEP
     return "?";
 }
+
 
