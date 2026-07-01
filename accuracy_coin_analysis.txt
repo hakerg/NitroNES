@@ -1,422 +1,439 @@
 ================================================================================
-           AccuracyCoin — Analiza wszystkich faili (17 testów)
-           Data: 2026-06-30 (aktualizacja w trakcie sesji)
-           Wynik: 124/140 PASS (16 FAIL) — naprawiono FAIL 7
+           AccuracyCoin — Analiza wszystkich faili
+           Data: 2026-06-30 (sesja 1) / 2026-07-01 (sesja 2)
+           Wynik AKTUALNY: 128/140 PASS (12 FAIL)
+           Naprawione dotąd: FAIL 1, 2, 3 (CAŁY klaster CPU Interrupts,
+           Page 12 - "all tests passed"), FAIL 6 (Delta Modulation
+           Channel), FAIL 7 (APU Register Activation).
 ================================================================================
 
 Legenda:
   [P] = prawdopodobna przyczyna
-  [F] = sugerowana poprawka
+  [F] = sugerowana poprawka / próba podjęta
   [R] = ryzyko (co może się popsuć przy zmianie)
 
+UWAGA WAŻNA DLA KOLEJNYCH SESJI: Kod źródłowy (DMA.h, A2A03.h, APU.h) bywa
+refaktoryzowany między sesjami — hipotezy [P] z poprzednich sesji mogą
+odnosić się do kodu, który już nie istnieje w tej formie. ZAWSZE zweryfikuj
+aktualny stan pliku źródłowego (read_file) PRZED podjęciem próby poprawki
+opisanej niżej, nawet jeśli wygląda na dobrze zbadaną.
+
 ================================================================================
-GRUPA 1: CPU INTERRUPTS (Page 12) — 3 fail
+GRUPA 1: CPU INTERRUPTS (Page 12) — 0 fail (WSZYSTKIE 3 naprawione!)
 ================================================================================
 
---- FAIL 1: Page 12, Test 1 — "Interrupt flag latency" ---
-  Kod błędu: A
-  Komunikat: "Branch instructions should not poll for interrupts before cycle 3."
+--- FAIL 1: Page 12, Test 1 — "Interrupt flag latency" — NAPRAWIONY ---
+  Status na początku sesji 2: już PASS. Przyczyna/poprawka nieudokumentowana
+  (być może naprawiona przy okazji innej zmiany w CPU6502.h). Hipoteza z
+  sesji 1 (poniżej) zachowana wyłącznie jako kontekst historyczny — NIE
+  odzwierciedla już stanu kodu.
 
-  OPIS TESTU (TEST_IFlagLatency, test A, linia ~9657):
-    Test sprawdza, czy rozgałęzienia (branch) NIE odpytują o przerwania
-    przed cyklem 3. Konkretnie: branch NOT taken (BNE po LDA <ErrorCode,
-    gdzie ErrorCode != 0, więc branch JEST taken — ale test sprawdza, że
-    IRQ nie zostanie wykryte w cyklu 3 brancha, tylko w następnej instrukcji).
+  [Hipoteza sesji 1, może nieaktualna]: Branch instructions powinny pollować
+  przerwania tylko przed cyklem 2 (am_rel_1) i — jeśli page-cross — przed
+  cyklem 4, ale NIE przed cyklem 3. Podejrzenie było, że opFetch() zawsze
+  polluje bez rozróżnienia kontekstu brancha.
 
-    Scenariusz:
-    - IRQ level detector zostaje ustawiony w trakcie wykonywania brancha
-      (między cyklem 2 a 3).
-    - Branch nie powinien odpytywać o przerwania po cyklu 3 (gdy branch
-      nie przekracza strony — polluje tylko raz przed cyklem 2).
-    - IRQ powinno nastąpić dopiero po następnej instrukcji (INX).
-
-  [P] CPU6502::am_rel_1() wywołuje pollInterrupts() gdy wykryje page cross,
-      ale dla branch NOT crossing page nie ma dodatkowego polla — to jest OK.
-      Problem może być w tym, że opFetch() (cykl 1 nowej instrukcji) polluje
-      przerwania, a branch powinien pollować TYLKO przed cyklem 2 (czyli
-      w am_rel_1). Jeśli CPU polluje w cyklu 1 brancha (opFetch przed
-      decodeAndDispatch), to może wykryć IRQ za wcześnie.
-
-      Patrz: clockPhi1() ustawia nmiPollSignal/irqDetected, a opFetch()
-      wywołuje pollInterrupts(). To znaczy że poll występuje w cyklu 1
-      każdej instrukcji (włącznie z branchami). Zgodnie z komentarzem w
-      teście: "A branch that isn't taken only polls once before the second
-      cycle, while a branch that is taken additionally polls right before
-      the fourth cycle."
-
-      Aktualny kod: opFetch() polluje w cyklu 1 (przed decodeAndDispatch).
-      To jest poll "przed cyklem 2" — poprawne dla brancha.
-      ALE: am_rel_1() jest wywoływane w cyklu 2 (po fetchu operandu).
-      Jeśli branch jest taken i nie crossuje strony, am_rel_2_taken()
-      wraca do opFetch() — co powoduje poll w cyklu 3. To jest poll
-      "przed cyklem 4" — ale test mówi że branch NOT crossing page
-      powinien pollować TYLKO przed cyklem 2, NIE przed cyklem 3.
-
-  [F] Dla branch taken nie crossującego strony, am_rel_2_taken() powinno
-      wrócić bezpośrednio do opFetch(), ale opFetch() nie powinien pollować
-      przerwań w tym cyklu — to jest cykl 3 brancha, a poll powinien być
-      tylko przed cyklem 2 i (dla branch crossing page) przed cyklem 4.
-
-      Problem strukturalny: opFetch() zawsze polluje. Trzeba rozróżnić
-      "poll w cyklu 1 nowej instrukcji" od "poll w cyklu 3 brancha".
-      Może dodać flagę "skipPoll" lub restrukturować branch timing.
-
-  [R] Zmiana pollowania przerwań wpłynie na wszystkie testy CPU interrupts
-      oraz na gry korzystające z precyzyjnego timingu NMI/IRQ.
-
---- FAIL 2: Page 12, Test 2 — "NMI Overlap BRK" ---
+--- FAIL 2: Page 12, Test 2 — "NMI Overlap BRK" — NAPRAWIONY (sesja 2) ---
   Kod błędu: 2
-  Komunikat: "Either NMI timing is off, or interrupt hijacking is incorrectly handled."
+  Kod błędu był: 2. Komunikat: "Either NMI timing is off, or interrupt hijacking is incorrectly handled."
+  STATUS: NAPRAWIONY.
 
-  OPIS TESTU (TEST_NmiAndBrk, linia ~9830):
-    Test synchronizuje CPU tak, że NMI występuje na 8-A cykli przed VBlank.
-    Następnie uruchamia BRK. Sprawdza "interrupt hijacking" — co się dzieje
-    gdy NMI i BRK występują jednocześnie.
+  OPIS TESTU (TEST_NmiAndBrk, AccuracyCoin.asm ~9830):
+    Test synchronizuje CPU tak, że NMI występuje 8-A cykli przed VBlank,
+    uruchamia BRK (7 cykli), i sprawdza "interrupt hijacking" — co się
+    dzieje gdy NMI i BRK nakładają się w czasie. 16 timingów (A=0..15),
+    porównanie z answer key ($A5, $A4, $35, $34, $25, $24, $00 — różne
+    kombinacje: czy BRK pominął bajt, czy NMI przejęło wektor, jakie flagi
+    trafiły na stos).
 
-    BRK to instrukcja 7-cyklowa. NMI może "przejąć" (hijack) BRK w różnych
-    momentach. Test sprawdza 16 różnych timingów (A=0..15) i porównuje
-    z kluczem odpowiedzi (answer key).
+  [P] ZWERYFIKOWANE dogłębnie (metodologia: nawigacja Page 12/wiersz 2 = 11x
+      RIGHT + 2x DOWN; test ma 32 iteracje X=0..31, każda synchronizowana do
+      VBlank ~23 klatki; znaleziono dokładny moment błędnej iteracji X=3
+      przez bisekcję z info/mem:0x503:1, potem trace:cpu:on w wąskim oknie).
+      Specyfikacja (nes_specs/CPU interrupts.txt): "polling happens during
+      the final cycle of the instruction, before the opcode fetch for the
+      next instruction" ORAZ kluczowe: "The interrupt sequences themselves
+      do not perform interrupt polling, meaning at least one instruction
+      from the interrupt handler will execute before another interrupt is
+      serviced."
+      Test structure: BRK/NMI vectors przekierowane do trampolin w RAM
+      (600/700), każda zaczynająca się od ORA #$80 (2-cyklowa instrukcja,
+      ustawia N=1 w akumulatorze) PRZED skokiem do właściwego handlera
+      zapisującego P (pushed flags) do pamięci wynikowej.
+      BUG: CPU6502::int6_readHigh() (ostatni/7-my krok sekwencji BRK/IRQ/NMI,
+      fetch PCH z vectora) wołał WSPÓLNĄ funkcję rti5_pullPCH(), zwracającą
+      opFetch() - który ZAWSZE polluje przerwania PRZED emitowaniem fetchu.
+      Zgodnie ze specyfikacją, fetch OPCODE PIERWSZEJ INSTRUKCJI HANDLERA
+      (np ORA #$80) NIE powinien być poprzedzony pollem (bo "sekwencja
+      przerwania sama nie polluje") - poll powinien nastąpić DOPIERO na
+      końcu tej pierwszej instrukcji handlera. Skutek buga: gdy drugie
+      przerwanie (np NMI za późno na hijacking BRK) było wykrywane, nasz
+      kod robił to W TRAKCIE fetchu opcode ORA (zanim ORA #$80 zdążyło
+      ustawić N=1), dając pushed P z N=0 zamiast N=1 (wynik $25 zamiast
+      oczekiwanego $A5 dla iteracji X=3).
+      rti5_pullPCH JEST poprawne dla PRAWDZIWEGO RTI (zwykła instrukcja,
+      poll na końcu jest OK), ale BŁĘDNE gdy reużywane jako ostatni krok
+      sekwencji BRK/IRQ/NMI, gdzie interrupt sequence NIE powinna pollować.
 
-    Klucz odpowiedzi zawiera wartości $A5, $A4, $35, $34, $25, $24, $00.
-    Wartości te reprezentują różne stany: czy BRK pominął bajt, czy NMI
-    przejął wektor, jakie flagi zostały zapisane na stosie.
-
-  [P] Interrupt hijacking w CPU6502::int3_pushPCL() (linia 581):
-      Kod sprawdza nmiEdgeDetected w trakcie push PCL. Jeśli NMI zostało
-      wykryte, currentInt zmienia się na NMI. Ale to działa tylko dla
-      BRK→NMI hijacking w jednym konkretnym momencie.
-
-      Problem może być w timingie detekcji NMI:
-      - nmiPending jest ustawiane w clockPhi2() gdy wykryto edge.
-      - nmiEdgeDetected jest ustawiane w clockPhi1() (jako snapshot).
-      - nmiPollSignal = nmiEdgeDetected (poprzedni cykl).
-      - pollInterrupts() używa nmiPollSignal.
-
-      To oznacza 1 cykl opóźnienia między edge a poll. Ale test wymaga
-      precyzyjnego timingu — NMI musi być wykryte w odpowiednim cyklu BRK.
-
-      Dodatkowo: int1_dummy() inkrementuje PC dla BRK (PC++), ale jeśli
-      NMI przejmuje, PC nie powinien być inkrementowane. Aktualny kod
-      robi PC++ w int1_dummy() ZANIM sprawdza hijacking w int3_pushPCL().
-      To może być problem — jeśli NMI przejmuje, PC już został inkrementowane.
-
-  [F] 1. Sprawdzić czy int1_dummy() powinno inkrementować PC tylko gdy
-        currentInt == SoftwareBRK i NMI NIE przejmuje.
-     2. Sprawdzić timing detekcji NMI edge — może być potrzebny dodatkowy
-        poll w cyklu 3 lub 4 BRK (zgodnie z komentarzem w teście: "BRK seems
-        to poll before cycle 2, 3, 4, and 5").
-     3. Hijacking powinien być sprawdzany w int3_pushPCL() — ale może też
-        w int1_dummy() lub int2_pushPCH().
-
-  [R] Zmiana hijackingu wpłynie na FAIL 3 (NMI Overlap IRQ) i potencjalnie
-      na inne testy z przerwaniami.
+  [F] ZAIMPLEMENTOWANE w src/core/CPU6502.h: dodano nową funkcję
+      int7_fetchOpcode() (goły fetch opcode handlera, BEZ poll - ustawia PC
+      z vector i emituje read dla decodeAndDispatch, odświeża
+      irqInhibitSnapshot). Zmieniono int6_readHigh() żeby wołało
+      int7_fetchOpcode zamiast rti5_pullPCH. rti5_pullPCH pozostaje
+      NIETKNIĘTE, używane wyłącznie przez prawdziwe RTI (rti4_pullPCL).
+      Dodano int7_fetchOpcode do currentStepName() (trace).
+  [R] ZWERYFIKOWANE: pełny accuracy_coin.exe PRZED (126/140) i PO (127/140)
+      - zero regresji, naprawiono dokładnie 1 test bez wpływu na inne. Ta
+      sama poprawka NIE wystarczyła by naprawić FAIL 3 (patrz niżej).
 
 --- FAIL 3: Page 12, Test 3 — "NMI Overlap IRQ" ---
-  Kod błędu: 1
-  Komunikat: "Either NMI timing is off, IRQ timing is off, or interrupt hijacking is incorrectly handled."
+--- FAIL 3: Page 12, Test 3 — "NMI Overlap IRQ" — NAPRAWIONY (sesja 2) ---
+  Kod błędu był: 1. Komunikat: "Either NMI timing is off, IRQ timing is off, or interrupt hijacking is incorrectly handled."
 
-  OPIS TESTU (TEST_NmiAndIrq, linia ~9954):
-    Podobny do testu NMI Overlap BRK, ale zamiast BRK używa IRQ.
-    Synchronizuje CPU tak, że NMI występuje 8-A cykli przed VBlank,
-    a IRQ jest już włączone (CLI przed pętlą).
+  [P] ZWERYFIKOWANE dogłębnie (metodologia identyczna jak FAIL 2: Page 12
+      wiersz 3 = 11x RIGHT + 3x DOWN; 16 iteracji X=0..15; bisekcja z
+      info/mem:0x502:1 znalazła błędną iterację X=2 dokładnie w tym samym
+      cyklu-rejonie jak FAIL 2 [zbieg okoliczności struktury testu], trace
+      wycięty w oknie 2 klatek).
+      Test structure: IRQ (z DMC, level-sensitive, "pending" cały czas od
+      TEST_NmiAndIrq_SetIRQ) zablokowane przez SEI. W pętli: CLI (odblokuj)
+      + LDA #0 + NOP — komentarz w kodzie: "Assuming you passed Interrupt
+      flag latency test, IRQ will occur here" (czyli PO LDA #0, zgodnie z
+      already-fixed FAIL 1 - CLI polluje ZANIM zmieni I flag, więc IRQ
+      wykrywane dopiero po NASTĘPNEJ instrukcji).
+      Odkryto PRZEZ PORÓWNANIE trace CPU z trace PPU (trace:ppu:on
+      dodatkowo) w tym samym oknie: sygnał "NMI=" w PPU trace zmienia się
+      z 0 na 1 W DOKŁADNIE TYM SAMYM cyklu CPU, w którym nasz
+      int3_pushPCL() (hijack check dla PIERWSZEGO przerwania, IRQ) już się
+      wykonywał — czyli o dokładnie 1 cykl ZA PÓŹNO żeby hijacking (NMI
+      przejmujące IRQ) mogło zadziałać, bo nmiEdgeDetected (sprawdzane przez
+      hijack check) jest opóźnione o 1 cykl względem nmiPending/PPU output.
+      DALSZA ANALIZA numeracji cykli (porównanie z nes_specs/CPU
+      interrupts.txt "IRQ and NMI tick-by-tick execution", 7-krokowa
+      tabela) ujawniła PRAWDZIWĄ PRZYCZYNĘ: dla SPRZĘTOWYCH przerwań
+      (IRQ/NMI, NIE BRK), dokumentacja wymaga DWÓCH dummy PC reads przed
+      push PCH (kroki 1 i 2, oba czytają PC bez incrementacji - "read next
+      instruction byte, PC increment suppressed"). Nasz CPU6502::opFetch()
+      (gałąź interruptPending) emitował TYLKO JEDEN dummy read
+      (emitRead(int1_dummy, PC)) przed przejściem do int1_dummy (push PCH)
+      — sekwencja IRQ/NMI miała więc 6 cykli zamiast 7! To przesuwało CAŁĄ
+      sekwencję (w tym int3_pushPCL/hijack check) o 1 cykl ZA WCZEŚNIE
+      względem prawdziwego sprzętu. Dla BRK (softwarowe), liczba cykli była
+      i pozostaje poprawna (7), bo tam decodeAndDispatch->int1_dummy jest
+      wywoływane już PO tym jak PC zostało zinkrementowane przez POPRZEDNI
+      opFetch (inny mechanizm rozliczania cykli, kompensujący naturalnie).
 
-    Test sprawdza 16 timingów (A=0..15) i porównuje z answer key.
-    Wartości: $A5, $22, $23, $21, $20, $25, $24, $27, $26.
-
-  [P] Podobne problemy jak w FAIL 2 — timing detekcji NMI i IRQ oraz
-      interrupt hijacking. Dodatkowo:
-      - IRQ jest level-sensitive (nie edge), więc może być wykrywane
-        wielokrotnie. Hijacking IRQ→NMI powinien działać podobnie jak
-        BRK→NMI, ale z różnicą że IRQ nie inkrementuje PC.
-      - W int3_pushPCL() jest sprawdzane nmiEdgeDetected, ale dla IRQ
-        (currentInt == IRQ) nie ma specjalnej logiki hijackingu.
-        Powinno być: jeśli currentInt == IRQ i NMI edge detected,
-        to currentInt = NMI (hijack).
-
-  [F] 1. Dodać hijacking dla IRQ→NMI w int3_pushPCL() (obecnie jest tylko
-        dla "currentInt != NMI && nmiEdgeDetected" — to powinno działać,
-        ale może timing jest zły).
-     2. Sprawdzić timing pollowania IRQ — irqDetected jest ustawiane w
-        clockPhi1(), ale irqInhibitSnapshot jest ustawiane w opFetch().
-        Może być problem z kolejnością.
-
-  [R] Powiązane z FAIL 2. Zmiany w hijackingu mogą naprawić oba testy
-      lub żaden.
-
-================================================================================
-GRUPA 2: DMA / APU (Page 13-14) — 4 fail
-================================================================================
-
---- FAIL 4: Page 13, Test 9 — "Explicit DMA Abort" ---
-  Kod błędu: 2
-  Komunikat: "The aborted DMAs did not spend the correct number of CPU cycles."
-
-  OPIS TESTU (TEST_ExplicitDMAAbort, linia ~13190):
-    Test wyłącza DMC ($4015 = 0) w trakcie trwania DMA i mierzy ile cykli
-    CPU DMA zajęło. Answer key: $04 $04 $04 $04 $04 $04 $03 $04 $01 $01
-    $00 $00 $00 $00 $00 $00.
-
-    Wartości oznaczają liczbę cykli DMA:
-    - $04 = normalny 4-cyklowy DMA (reload, halt on put)
-    - $03 = 3-cyklowy DMA (load, halt on get, lub reload z opóźnieniem)
-    - $01 = 1-cyklowy aborted DMA (tylko halt cycle)
-    - $00 = DMA nie wystąpiło wcale
-
-    Test sprawdza 16 różnych timingów wyłączenia DMC.
-
-  [P] DMA::clockPhi1() — logika abortu w DMCPhase::Halt i DMCPhase::Dummy:
-      - W Halt: jeśli !isDMCSampleNeeded(), dmcPhase = Idle (DMA nie wystąpi)
-      - W Dummy: jeśli !isDMCSampleNeeded(), dmcPhase = Idle (1-cyklowy abort)
-      - W Read: jeśli !isDMCSampleNeeded(), dmcPhase = Idle
-
-      Problem: dmcHaltArmed — flaga "uzbrojenia" halt. Jeśli DMA jest
-      "armed" ale nie jeszcze "halted", a potem DMC zostaje wyłączone,
-      kod w Halt sprawdza isDMCSampleNeeded() i wraca do Idle. To jest OK.
-
-      Ale: w DMCPhase::Dummy, jeśli DMC zostaje wyłączone, DMA kończy się
-      po 1 cyklu (tylko halt). To daje $01. Ale answer key pokazuje $00
-      dla ostatnich 6 przypadków — DMA nie wystąpiło wcale.
-
-      Specyfikacja (dma.txt "Bugs"):
-      "When sample playback is stopped during the APU cycle before a reload
-      DMA would schedule (2nd or 3rd CPU cycle before the halt attempt),
-      the DMA starts but is aborted after a single cycle. If the halt is
-      delayed due to a write cycle, the aborted DMA doesn't occur at all."
-
-      Kluczowe: "If the halt is delayed due to a write cycle, the aborted
-      DMA doesn't occur at all." — to tłumaczy $00 dla niektórych przypadków.
-
-  [F] 1. Sprawdzić czy DMA poprawnie obsługuje przypadek gdy halt jest
-        opóźniony przez write cycle i DMC zostaje wyłączone — DMA nie
-        powinno wystąpić wcale ($00).
-     2. Sprawdzić czy dmcHaltArmed jest poprawnie resetowane gdy DMC
-        zostaje wyłączone w fazie Halt.
-     3. Obliczyć timing: dmc.dmaDelay = 3 po $4015 write. DMA próbuje
-        halt po 2 APU cyklach. Jeśli DMC jest wyłączane w odpowiednim
-        cyklu, DMA może być w różnych fazach.
-
-  [R] Zmiany w DMA abort wpłyną na FAIL 5 (Implicit DMA Abort) i potencjalnie
-      na testy DMC.
-
---- FAIL 5: Page 13, Test 10 — "Implicit DMA Abort" ---
-  Kod błędu: 2
-  Komunikat: "The aborted DMAs did not spend the correct number of CPU cycles."
-
-  OPIS TESTU (TEST_ImplicitDMAAbort, linia ~13261):
-    Test używa 1-bajtowego sample z looping disabled. Load DMA ładuje 1 bajt,
-    potem buffer zostaje pusty i reload DMA jest schedulowane, ale sample
-    już się skończył (bytesRemaining == 0), więc DMA jest aborted.
-
-    Answer keys (3 pętle po 16 wyników):
-    - Key1 ($500): normalne abort timing
-    - Key2 ($520): z write cycle (JSR) — 1-cycle DMA nie występuje na write
-    - Key3 ($540): z looping włączonym
-
-    Komentarz w teście: "The 1-cycle DMA does not get delayed by a write
-    cycle, instead it just doesn't occur at all."
-
-  [P] Podobne jak FAIL 4, ale dotyczy implicit abort (gdy sample kończy się
-    naturalnie, nie przez wyłączenie $4015).
-
-      W DMCChannel::loadSampleBuffer(): gdy bytesRemaining == 0 i !loopFlag,
-      irqPending = true (jeśli irqEnabled). Ale sampleBufferEmpty = false
-      (właśnie załadowano). Potem gdy buffer zostaje opróżniony (clockTimer),
-      sampleBufferEmpty = true i dmaHaltOnPut = true. needsDMAFetch() zwraca
-      false bo bytesRemaining == 0.
-
-      Problem: gdy bytesRemaining == 0, needsDMAFetch() zwraca false, więc
-      DMA nigdy nie wystąpi. Ale specyfikacja mówi, że reload DMA jest
-      schedulowane gdy buffer zostaje opróżniony — nawet jeśli sample się
-      skończył, DMA jest aborted po 1 cyklu.
-
-      Klucz: dmaHaltOnPut jest ustawiane w clockTimer() gdy buffer zostaje
-      opróżniony. Ale needsDMAFetch() sprawdza bytesRemaining > 0, więc
-      jeśli sample się skończył, DMA nie jest schedulowane.
-
-      To jest BŁĄD: reload DMA powinno być schedulowane niezależnie od
-      bytesRemaining — jest schedulowane gdy buffer zostaje opróżniony.
-      Dopiero w trakcie DMA (w fazie Halt/Dummy/Read) sprawdzane jest
-      czy sample nadal jest potrzebne.
-
-  [F] 1. Rozdzielić "DMA requested" od "sample needed":
-       - DMA powinno być schedulowane gdy sampleBufferEmpty && dmaHaltOnPut
-         (buffer został opróżniony podczas playbacku).
-       - needsDMAFetch() powinno zwracać true gdy buffer jest pusty i
-         DMA zostało requested, NIE zależnie od bytesRemaining.
-       - W DMA::clockPhi1(), w fazie Halt/Dummy/Read, sprawdzać
-         isDMCSampleNeeded() — jeśli false, abort.
-     2. Dodać flagę "dmaRequested" w DMCChannel, ustawianą gdy buffer
-        zostaje opróżniony, czyszczoną gdy DMA zostanie zrealizowane
-        lub aborted.
-
-  [R] Zmiany wpłyną na FAIL 4, FAIL 6 (DMC), i potencjalnie na inne
-      testy DMA. To jest znacząca zmiana w logice DMA.
-
---- FAIL 6: Page 14, Test 6 — "Delta Modulation Channel" ---
-  Kod błędu: L
-  Komunikat: "Writing $4015 when the DMC timer has 2 cycles until clocked
-              should not trigger a DMC DMA until after the 3/4 cycle delay."
-
-  OPIS TESTU (TEST_DeltaModulationChannel, test L, linia ~11300):
-    Test sprawdza opóźnienie DMA po zapisie do $4015:
-    - DMC timer ma 2 cykle do zera.
-    - Zapis $10 do $4015 włącza DMC.
-    - DMA powinno być opóźnione o 1 cykl (bo DMC nie jest jeszcze włączone
-      gdy timer osiąga zero).
-    - DMA powinno trwać 3 cykle zamiast 4 (bo jest alignment cycle).
-
-    Scenariusz:
-    1. DMASync_50CyclesRemaining — synchronizacja
-    2. Wyłączenie DMC, ustawienie 1-bajtowego sample z loop
-    3. Clockslide_25 — timer = 7
-    4. STA $4015 — włączenie DMC z 2 cyklami do zera timera
-    5. DMA powinno być opóźnione o 1 cykl (3 cykle zamiast 4)
-
-  [P] APU::writeData() case 0x4015:
-      Gdy data & 0x10 i bytesRemaining == 0:
-        dmc.restart();
-        dmc.dmaDelay = 3;
-
-      dmaDelay = 3 oznacza 3 cykle opóźnienia. Ale test mówi że gdy timer
-      ma 2 cykle do zera, DMA powinno być opóźnione o 1 cykl (bo DMC
-      włącza się po 3 cyklach, a timer osiąga zero po 2 cyklach).
-
-      Problem: dmaDelay = 3 to opóźnienie w APU cyklach. Ale DMC timer
-      osiąga zero po 2 cyklach. Wtedy needsDMAFetch() sprawdza dmaDelay == 0
-      — jeśli dmaDelay = 1 (po 2 cyklach), DMA nie wystąpi. Dobrze.
-
-      Ale: gdy dmaDelay osiągnie 0 (po 3 cyklach), needsDMAFetch() zwraca
-      true (jeśli sampleBufferEmpty && bytesRemaining > 0). W tym momencie
-      DMA jest schedulowane jako "load" DMA (halt on get).
-
-      Test oczekuje że DMA będzie 3-cyklowe (z alignment cycle) zamiast
-      4-cyklowego. To zależy od tego czy halt występuje na get czy put.
-      Load DMA haltuje na get → 3 cykle. To powinno działać.
-
-      Problem może być w tym, że gdy timer osiąga zero PRZED włączeniem DMC,
-      DMC próbuje schedulować reload DMA (gdy buffer zostaje opróżniony),
-      ale DMC nie jest jeszcze włączone. To jest powiązane z FAIL 5.
-
-      Dodatkowo: dmc.tickDMADelay() jest wywoływane w APU::clock(), ale
-      dmaDelay jest ustawiane na 3. Po 3 cyklach APU (6 cyklach CPU? nie,
-      1 APU cycle = 1 CPU cycle), dmaDelay = 0. Ale test mówi o 2 cyklach
-      do zera timera — to znaczy że timer osiąga zero zanim dmaDelay = 0.
-
-      Gdy timer osiąga zero, clockTimer() jest wywoływane. Jeśli to był
-      ostatni bit w buforze, sampleBufferEmpty = true i dmaHaltOnPut = true.
-      Ale needsDMAFetch() zwraca false bo dmaDelay > 0. Po 1 cyklu dmaDelay
-      = 0 i needsDMAFetch() zwraca true. Ale dmaHaltOnPut = true (reload DMA),
-      a nie false (load DMA). To jest problem — powinno być load DMA (halt
-      on get), bo to jest DMA po $4015 write, nie reload.
-
-  [F] 1. Gdy $4015 włącza DMC, dmaHaltOnPut powinno być ustawione na false
-        (load DMA) w restart() — to już jest.
-     2. Ale gdy timer osiąga zero i buffer zostaje opróżniony PRZED
-        dmaDelay = 0, dmaHaltOnPut jest ustawiane na true (reload) w
-        clockTimer(). To nadpisuje wartość false z restart().
-     3. Rozwiązanie: gdy dmaDelay > 0, nie ustawiaj dmaHaltOnPut = true
-        w clockTimer(), bo to nie jest reload DMA — to jest load DMA
-        opóźnione przez dmaDelay.
-
-  [R] Powiązane z FAIL 5. Zmiana w logice dmaHaltOnPut może wpłynąć na
-      inne testy DMC.
-
---- FAIL 7: Page 14, Test 7 — "APU Register Activation" ---
-  Kod błędu: 6
-  Komunikat: "OAM DMA should be able to read from APU registers (and mirrors)
-              if $40 is written to $4016 and the bus is $4000-$401F."
-
-  OPIS TESTU (TEST_APURegActivation, test 6, linia ~8220):
-    Test sprawdza czy OAM DMA może czytać z rejestrów APU gdy 6502 address
-    bus jest w zakresie $4000-$401F.
-
-    Scenariusz:
-    1. Wykonaj STA $4014 (A=$40) z adresu $3FFE.
-    2. 6502 address bus będzie $4001 gdy OAM DMA wystąpi.
-    3. OAM DMA czyta z page $40 ($4000-$40FF).
-    4. Ponieważ 6502 address bus jest w $4000-$401F, rejestry APU są aktywne.
-    5. OAM DMA powinno czytać wartości z rejestrów APU ($4015, $4016, $4017)
-       i ich mirrorów co $20 bajtów.
-
-    Oczekiwane wyniki w OAM (patrz komentarz w teście, linia ~8251):
-    - $4015 mirror → $44 (frame IRQ flag + triangle)
-    - $4016 mirror → $01 (controller 1)
-    - $4017 mirror → $00 (controller 2)
-    - Pozostałe → open bus ($50 lub $40)
-
-  [P] A2A03::readDMA() — logika aktywacji rejestrów APU:
-      const bool regActive = (coreAddr >= 0x4000 && coreAddr <= 0x401F);
-      To sprawdza czy 6502 core address jest w $4000-$401F.
-
-      Ale: OAM DMA używa dma.getAddr() (adres OAM DMA), a coreAddr to
-      cpu.getAddr() (adres CPU). Gdy OAM DMA jest aktywne, CPU jest halted
-      i powtarza ostatni read cycle. coreAddr powinno być adresem instrukcji
-      STA $4014, czyli $3FFE lub $3FFF... ale test celowo ustawia to tak,
-      że 6502 address bus jest $4001.
-
-      Problem: gdy OAM DMA czyta z $4015, kod w readDMA() sprawdza:
-      if (regActive && reg == 0x4015) — to powinno działać.
-      Ale OAM DMA nie używa readDMA() — to jest tylko dla DMC DMA!
-
-      OAM DMA używa dmaReadData() → readData() → ale readData() sprawdza
-      dma.overridesAddr(). Dla OAM DMA, dma.overridesAddr() zwraca true
-      (action != None). Więc readData() wywołuje readDMA().
-
-      W readDMA(): regActive sprawdza coreAddr (cpu.getAddr()). Dla OAM DMA,
-      cpu.getAddr() zwraca currentStep.busAddr — ale CPU jest stalled,
-      więc currentStep nie jest aktualizowane. currentStep.busAddr to
-      adres ostatniego read cycle CPU, czyli adres instrukcji.
-
-      Test wykonuje STA $4014 z $3FFE. Po STA $4014, CPU wykonuje read
-      cycle (następna instrukcja). Ale OAM DMA haltuje CPU na tym read cycle.
-      Adres tego read cycle to $4000 lub $4001 (następna instrukcja po
-      STA $4014 z $3FFE).
-
-      Problem: cpu.getAddr() zwraca currentStep.busAddr, ale gdy CPU jest
-      stalled (RDY low), currentStep nie jest aktualizowane — zatrzymuje się
-      na ostatnim adresie. To może być $3FFF lub $4000, zależnie od timingu.
-
-      Test wymaga aby 6502 address bus był $4001. Jeśli CPU jest stalled
-      na read cycle z adresu $4001, to coreAddr = $4001 i regActive = true.
-
-      Ale: OAM DMA w DMA::clockPhi1() używa idma.pollIsRead() (cpu.isRead()).
-      Gdy OAM DMA jest w fazie Transfer, CPU jest halted (rdy = false).
-      cpu.isRead() zwraca currentStep.isRead. Jeśli CPU był w read cycle
-      gdy zostało zhaltowane, isRead = true.
-
-      Kluczowy problem: readDMA() dla OAM DMA get używa dmaAddr (adres OAM
-      DMA = $40xx), ale regActive sprawdza coreAddr (adres CPU). Jeśli
-      coreAddr = $4001, to regActive = true. Ale readDMA() czyta z
-      readExternal(dmaAddr) — dmaAddr = $40xx. readExternal() sprawdza:
-      if (addr >= 0x4000 && addr <= 0x401F) return busData;
-      To zwraca busData (open bus) zamiast czytać rejestr APU!
-
-      Dla OAM DMA czytającego $4015, $4016, $4017:
-      - dmaAddr = $4015, $4016, $4017
-      - readExternal($4015) → return busData (bo $4015 w $4000-$401F)
-      - Ale powinno czytać rejestr APU!
-
-      readDMA() ma specjalną logikę dla reg == 0x4015 i reg == 0x4016/4017,
-      ale tylko dla DMC DMA (dma.actionIsDMCGet()). OAM DMA (OAMGet) nie
-      ma tej logiki.
-
-  [F] 1. W readDMA(), dodać obsługę OAM DMA dla rejestrów APU:
-       - Jeśli regActive i reg == 0x4015, czytaj $4015 z APU.
-       - Jeśli regActive i reg == 0x4016/4017, czytaj controller.
-       - To powinno działać dla OAMGet tak samo jak dla DMCGet.
-     2. Usunąć warunek dma.actionIsDMCGet() — logika aktywacji rejestrów
-        powinna działać dla każdego DMA, nie tylko DMC.
-
-  [R] Zmiana wpłynie na testy DMA + $4015 Read, DMA + $4016 Read (obecnie
-      PASS) — trzeba uważać, żeby ich nie zepsuć.
+  [F] ZAIMPLEMENTOWANE w src/core/CPU6502.h: dodano nową funkcję
+      intHw_dummy2() (drugi goły dummy read pod tym samym adresem PC, wynik
+      dyskardowany identycznie jak pierwszy). Zmieniono opFetch() (gałąź
+      interruptPending, WYŁĄCZNIE dla ścieżki sprzętowych IRQ/NMI) żeby
+      emitowało emitRead(intHw_dummy2, PC) zamiast emitRead(int1_dummy, PC)
+      bezpośrednio — intHw_dummy2() z kolei emituje emitRead(int1_dummy,
+      PC) jako drugi krok. Ścieżka BRK (decodeAndDispatch -> int1_dummy
+      bezpośrednio) pozostała NIETKNIĘTA. Dodano intHw_dummy2 do
+      currentStepName() (trace).
+  [R] ZWERYFIKOWANE: pełny accuracy_coin.exe PRZED (127/140) i PO (128/140)
+      — zero regresji, naprawiono dokładnie 1 test (Page 12 teraz "all
+      tests passed" w całości — CAŁY KLASTER CPU Interrupts naprawiony).
 
 ================================================================================
-GRUPA 3: PPU SPRITE EVALUATION (Page 18) — 3 fail
+GRUPA 2: DMA / APU (Page 13-14) — 2 fail (z 4, FAIL 6 i 7 naprawione)
 ================================================================================
+
+--- FAIL 6: Page 14, Test 6 — "Delta Modulation Channel" — NAPRAWIONY (sesja 2) ---
+  Kod błędu był: L. Komunikat: "Writing $4015 when the DMC timer has 2
+  cycles until clocked should not trigger a DMC DMA until after the 3/4
+  cycle delay."
+
+  [P] ZWERYFIKOWANE (sesja 2): DMCChannel::restart() ustawiał bezwarunkowo
+      dmaHaltOnPut=false. restart() jest wołane z DWÓCH miejsc o różnej
+      semantyce:
+      1. APU::writeData() $4015, gdy D4=1 i bytesRemaining==0 (explicit
+         restart — to POWINNO być "load" => dmaHaltOnPut=false).
+      2. DMCChannel::loadSampleBuffer(), gdy bytesRemaining dojdzie do 0
+         PODCZAS ładowania bajtu I loopFlag=true (auto-restart z powodu
+         zapętlenia — to NIE jest "load", to kontynuacja odtwarzania;
+         dmaHaltOnPut NIE powinno być tknięte, bo kolejne opróżnienie
+         bufora [clockTimer] ustawi je poprawnie na true/reload).
+      Scenariusz testu L: DMC wyłączone (bytesRemaining=0), ale output unit
+      (shiftReg/timer) wciąż odtwarza STARE dane z poprzedniego (już
+      zatrzymanego) sample'a — timer/shiftReg działają NIEZALEŻNIE od
+      enabled. STA $4015 (enable) → restart() → bytesRemaining=1,
+      dmaHaltOnPut=false, dmaDelay=3. Zanim dmaDelay dojdzie do 0, STARY
+      bufor (sprzed restartu) opróżnia się przez clockTimer, co PRZED
+      poprawką nadpisywało dmaHaltOnPut=true (reload), psując timing
+      (4 cykle zamiast oczekiwanych 3 dla load DMA).
+
+  [F] ZAIMPLEMENTOWANE (src/core/APU.h), zweryfikowane, zachowane w kodzie:
+      1. restart() już NIE ustawia dmaHaltOnPut — tylko resetuje
+         currentAddr/bytesRemaining.
+      2. APU::writeData() case 0x4015 (explicit restart z zewnątrz)
+         explicite ustawia dmc.dmaHaltOnPut=false PO dmc.restart().
+      3. DMCChannel::clockTimer() — w gałęzi "buffer emptied": ustawia
+         dmaHaltOnPut=true TYLKO gdy dmaDelay==0 (czyli gdy nie ma świeżo
+         pending load DMA po $4015 restart — inaczej to opróżnienie
+         należy do "starego" stanu output unit sprzed restartu).
+  [R] ZWERYFIKOWANE: pełny accuracy_coin.exe PRZED i PO zmianie — 126/140
+      (wcześniej 125/140), zero regresji w innych testach DMC/DMA.
+
+--- FAIL 7: Page 14, Test 7 — "APU Register Activation" — NAPRAWIONY (wcześniej) ---
+  Status na początku sesji 2: już PASS (variant 2 — "The controllers were
+  clocked by the bus conflict with the OAM DMA"). Kod A2A03.h::readDMA()
+  obecnie poprawnie obsługuje regActive dla OAMGet i DMCGet jednolicie
+  (dma.getAddr() zwraca odpowiedni adres zależnie od akcji; readDMA() nie
+  ma już ograniczenia do dma.actionIsDMCGet()).
+
+--- FAIL 4: Page 13, Test 9 — "Explicit DMA Abort" — ZBADANY DOGŁĘBNIE, NIE NAPRAWIONY ---
+  Kod błędu: 2 ("The aborted DMAs did not spend the correct number of CPU cycles.")
+
+  STAN KODU (sesja 2 — DMA.h zostało zrefaktoryzowane od sesji 1, opis
+  poniżej ZASTĘPUJE hipotezy z sesji 1):
+    - DMA::clockPhi1(): `if (dmcPhase==Idle && idma.isDMCSampleNeeded())
+      dmcPhase=Halt;` — inicjacja i "kontynuacja/abort" w Halt/Dummy/Read
+      UŻYWAJĄ TEJ SAMEJ metody isDMCSampleNeeded() (= APU::dmcNeedsSample()
+      = DMCChannel::needsDMAFetch() = `sampleBufferEmpty && bytesRemaining>0
+      && dmaDelay==0`).
+    - dmcHaltArmed/dmcHaltOnPut mechanizm (3 vs 4 cykle, load vs reload) już
+      DZIAŁA POPRAWNIE dla normalnych przypadków — zweryfikowane krok po
+      kroku w trace (patrz niżej).
+
+  METODOLOGIA WERYFIKACJI (WAŻNE dla kolejnej sesji — jak odtworzyć bez
+  tracenia czasu na pomyłki nawigacyjne):
+    Nawigacja menu przez nes_test: strona 13 = 12x RIGHT (zaczynamy od
+    strony 1). ODKRYCIE o mechanice menu: kursor startuje na "top"
+    (highlight numeru strony, menuCursorYPos=$FF). W tym stanie RIGHT/LEFT
+    zmienia STRONĘ, ale DOWN/UP NIE przesuwa po testach — PIERWSZE DOWN
+    dopiero schodzi z "top" do wiersza 0 (pierwszy test). Czyli:
+    liczba_DOWN = numer_wiersza_testu (1-indexed), NIE numer_wiersza-1!
+    (potwierdzone przykładem w AGENTS.md: "wiersz 6" = 6x DOWN). Dla
+    "Explicit DMA Abort" (wiersz 9, Suite_DMATests / Page 13): 9x DOWN.
+    Po dojściu na miejsce, komenda (bez dalszych frames nawigacyjnych):
+      trace:cpu:on trace:dma:on pad1+A frames:2 pad1-A frames:2
+    (cały test kończy się w ~2 klatki; NIE trzeba więcej — plik trace.log
+    urósł do ~23MB na 4 klatki z cpu+dma, więc ograniczać okno agresywnie).
+    UWAGA: trace.log bywa zablokowany między kolejnymi wywołaniami nes_test
+    (uchwyt pliku) — używać `trace-file:innanazwa.log` zamiast domyślnego
+    trace.log, jeśli pojawi się "cannot open trace file".
+    Do czytania dużych plików trace w PowerShell: używać
+      [System.IO.File]::ReadAllLines($path) + indeksowanie / Select -Skip
+    NIE Get-Content (wolne/zawodne na plikach >10MB), NIE read_file tool
+    (ma limit rozmiaru, zwraca "File too large" na plikach tej wielkości).
+
+  WYNIK OBECNY (X = wartość testowana 0..15, mem $50-$5F):
+    Nasz:     04 04 04 04 04 04 01 00 00 00 00 00 00 00 00 00
+    Expected: 04 04 04 04 04 04 03 04 01 01 00 00 00 00 00 00
+    (rozjazd zaczyna się od X=6)
+
+  MECHANIZM TESTU (CalculateDMADuration, AccuracyCoin.asm ~13008 + CycleClockBegin/
+  End ~13027/13039 + CheckDMATiming ~13053):
+    - Test NIE mierzy bezpośrednio "ile cykli trwał DMA". Zamiast tego:
+      zaczynając ~50 cykli przed oczekiwanym DMA, pętla robi `LDA $4000`
+      (4 cykle, normalnie zwraca otwartą magistralę $40) i sprawdza czy
+      wynik==0. To się zdarza TYLKO gdy krok instrukcji odpowiadający
+      fetchowi DANYCH pod adresem $4000 koliduje z "residual open bus"
+      pozostawionym przez DMC DMA fetch (sample w tym teście to same
+      zera). Jeśli wynik != 0, pętla robi Clockslide o 560 cykli (o 1
+      MNIEJ niż pełny 576-cyklowy odstęp DMC dla użytego rate) i powtarza
+      (Y++, licznik iteracji). Y = wynik zapisywany do pamięci testu.
+    - KLUCZOWE ODKRYCIE (zweryfikowane trace'em cykl-po-cyklu, patrz sesja
+      2 transkrypt): "halt" DMA NIE zawsze zamraża CPU dokładnie na kroku
+      "fetch danych z $4000" (ostatni cykl instrukcji LDA absolute) — może
+      zamrozić na kroku WCZEŚNIEJSZYM (fetch HIGH BYTE argumentu instrukcji
+      — adres to ROM, NIE $4000!). Zależnie od tego, "dummy read"
+      powtarzany podczas stall czyta z ROM (nie zaburza busData, bo to jest
+      zwykły, stały bajt z ROM) albo z $4000 (odsłania residual busData
+      pozostawione przez DMC DMA — może być 0). To decyduje, czy pętla
+      testu wykryje "0" w danej iteracji. Krótko: semantyka Y zależy w
+      BARDZO subtelny sposób od DOKŁADNEJ fazy instrukcji CPU w momencie
+      halt, nie tylko od surowej "liczby cykli trwania DMA".
+    - Dla X=0..5 (poprawne, dają $04): explicit disable trafia PO
+      zakończeniu bieżącego (w tym momencie trwającego) DMA (dmcPhase
+      wraca do Idle), enable restartuje (load DMA, 3 cykle poprawnie
+      zweryfikowane w trace: Halt+Dummy+Get, dmaHaltOnPut=false).
+    - Dla X=6 (dajemy $01, oczekiwane $03): explicit disable trafia
+      DOKŁADNIE w trakcie AKTYWNEGO Halt (dmcHaltArmed już true, czeka na
+      najbliższy read cycle). Halt SUCCEEDS mimo disable (kod:
+      `dmcHaltArmed && cpuRead` ma priorytet nad sprawdzeniem
+      isDMCSampleNeeded), po czym w fazie Dummy natychmiast abort
+      (bytesRemaining==0) → TYLKO 1 cykl stall. Oczekiwane 3 cykle
+      (prawdopodobnie Halt+Dummy+Align, BEZ finalnego Get — czyli sprzęt
+      "mechanicznie" przechodzi przez więcej faz przed faktycznym abortem
+      niż nasza implementacja).
+    - Dla X=7,8,9 (dajemy $00,$00,$00, oczekiwane $04,$01,$01): explicit
+      disable trafia w Idle (przed jakimkolwiek Halt). Load DMA (po
+      enable) i loop-triggered drugi restart działają POPRAWNIE
+      (zweryfikowane trace, 3-cyklowy load DMA z dmaHaltOnPut=false).
+      Rozjazd z answer key wynika z subtelnego mechanizmu "faza CPU w
+      momencie halt kolejnego (trzeciego) DMA" opisanego wyżej — TO NIE
+      JEST oczywisty/prosty błąd w samej logice DMA (która działa
+      poprawnie na poziomie halt/dummy/align/get), tylko w tym, JAK test
+      mierzy wynik pośrednio przez residual bus behavior.
+
+  PRÓBA POPRAWKI PODJĘTA I WYCOFANA W SESJI 2 (WAŻNE — NIE POWTARZAĆ w tej
+  formie bez nowej analizy czasowej):
+    Hipoteza: nes_specs/dma.txt "Bugs" mówi że reload DMA "schedules
+    regardless of how playback was stopped" — więc Idle->Halt trigger
+    POWINIEN być niezależny od bytesRemaining>0 (zależny tylko od
+    sampleBufferEmpty przy opróżnieniu bufora). Zaimplementowano osobną
+    flagę `dmaRequested` (w DMCChannel) ustawianą BEZWARUNKOWO w
+    clockTimer przy opróżnieniu bufora, używaną do Idle->Halt zamiast
+    `bytesRemaining>0` (rozdzielono na dmaFetchRequested()/
+    sampleStillNeeded(), z nowymi metodami IDMA::isDMCDMARequested()/
+    clearDMCRequest()).
+    WYNIK: POGORSZENIE — X=0..5 zaczęło dawać $05 zamiast poprawnego $04
+    (czyli 6 dodatkowych regresji, bez naprawienia X=6..9). Przyczyna: w
+    X=0..5, explicit disable dzieje się DUŻO WCZEŚNIEJ (setki cykli) przed
+    tym jak bufor naturalnie się opróżni (timer/shiftReg działają
+    niezależnie od enabled), więc "trigger niezależny od bytesRemaining"
+    zaczął fałszywie inicjować "ghost" 1-cyklowe aborty w KAŻDEJ iteracji
+    testu (nie tylko w wąskim oknie 2-3 cykli opisanym w specyfikacji),
+    przesuwając fazę wszystkich kolejnych DMA o dodatkowy cykl.
+    WNIOSEK: specyfikacja opisuje efekt BARDZO WĄSKIEGO OKNA CZASOWEGO
+    (dosłownie "2nd or 3rd CPU cycle before the halt attempt [succeeds]",
+    prawdopodobnie race condition w sprzęcie między memory reader a
+    "channel enabled" latch) — NIE bezwarunkowe/trwałe zachowanie.
+    Implementacja poprawna wymagałaby śledzenia PRECYZYJNIE ile cykli
+    upłynęło między spadkiem bytesRemaining do 0 a momentem halt-succeeds,
+    NIE prostej bool flagi bez ograniczenia czasowego.
+    ZMIANA CAŁKOWICIE WYCOFANA — kod DMA.h/APU.h/A2A03.h wrócił do stanu
+    sprzed tej próby (z fix FAIL 6 zachowanym). Zweryfikowano ponownie
+    126/140 po wycofaniu.
+
+  [F] SUGEROWANE DALSZE KROKI (dla kolejnej sesji, w kolejności):
+      1. Zbadać X=6 NAJPIERW w izolacji (osobno od X=7,8,9, bo to inny
+         mechanizm — abort podczas JUŻ aktywnego Halt, nie problem
+         inicjacji). Hipoteza: "abort" nie powinien przerywać natychmiast w
+         fazie Dummy, tylko dopiero w fazie Read/Align (czyli DMA zawsze
+         mechanicznie przechodzi Halt+Dummy+Align niezależnie od
+         isDMCSampleNeeded, i DOPIERO na granicy Align->Get sprawdza czy
+         faktycznie fetchować spod pamięci). To by dało 3 cykle zamiast 1
+         cyklu dla X=6. PRZETESTOWAĆ tę zmianę OSOBNO, bez ruszania
+         inicjacji Idle->Halt, i zweryfikować czy X=0..5 pozostają
+         poprawne (04) oraz X=6 staje się 03.
+      2. Dopiero po (1), zbadać X=7,8,9 ponownie — może się okazać że
+         zmiana z (1) coś zmienia w fazowaniu i naprawia je częściowo lub
+         całkowicie (bo abort timing wpływa na fazę kolejnych DMA).
+      3. Jeśli nadal rozjazd, rozważyć dokładniejszy model z licznikiem
+         cykli "ile temu bytesRemaining spadło do 0", z oknem 2-3 cykli
+         (nie bezwarunkowo) dla przypadku "explicit stop tuż przed
+         zaplanowanym reload" — ale to prawdopodobnie NIE dotyczy X=7,8,9
+         (które są zbadane jako "mechanicznie poprawne" — patrz wyżej).
+      4. Po KAŻDEJ próbie: zweryfikować OBA testy (Explicit I Implicit DMA
+         Abort, mem $50 i odpowiednio $500/$520/$540) ORAZ pełny
+         accuracy_coin.exe dla regresji w innych testach DMC/DMA (DMA +
+         $2002 Read, DMC DMA Bus Conflicts, DMC DMA + OAM DMA, Delta
+         Modulation Channel — wszystkie obecnie PASS).
+  [R] Wysokie — mechanizm bardzo subtelny, jedna próba już się nie
+      powiodła (regresja). Testować bardzo ostrożnie, małymi krokami.
+
+--- FAIL 5: Page 13, Test 10 — "Implicit DMA Abort" — NIE ZBADANY DOGŁĘBNIE ---
+  Kod błędu: 2 (identyczny komunikat jak FAIL 4)
+  Prawdopodobnie POWIĄZANY z FAIL 4 (ten sam mechanizm bazowy DMA abort).
+
+  OPIS TESTU (TEST_ImplicitDMAAbort, AccuracyCoin.asm ~13261): Test używa
+  1-bajtowego sample z looping disabled. Load DMA ładuje 1 bajt, bufor
+  zostaje pusty i reload DMA jest zaplanowane, ale sample już się skończył
+  (bytesRemaining==0 naturalnie, nie przez $4015 write) — DMA jest aborted.
+  Trzy pod-testy (16 wyników każdy):
+    Key1 @ $500: normalne abort timing.
+    Key2 @ $520: z write cycle (JSR) tuż w okolicy — komentarz w kodzie:
+      "The 1-cycle DMA does not get delayed by a write cycle, instead it
+      just doesn't occur at all" (inaczej niż normalne DMA, które są tylko
+      opóźniane przez write cykle).
+    Key3 @ $540: z looping włączonym (kontrolne, nie powinno dawać
+      abortów wcale — same $04).
+  README.md (AccuracyCoin-main) wspomina TAKŻE dodatkowe success code
+  warianty "1: post-1990 CPU" / "2: pre-1990 CPU" (AlternateBehavior —
+  rzadki bug RP2A03G/H z "unexpected DMA") — sprawdzić $508==$04 w kodzie
+  testu decyduje która ścieżka (AltKey vs Key) jest sprawdzana. Nasz
+  emulator PRAWDOPODOBNIE nie powinien implementować tego rzadkiego
+  pre-1990 bugu (implementacja "post-1990" / Key1/2/3 jest defaultowa i
+  bardziej powszechna).
+
+  Nie analizowany szczegółowo trace'em w sesji 2 z braku czasu (priorytet
+  oddano FAIL 4, który dzieli mechanizm bazowy). ZALECANE: zbadać PO
+  rozwiązaniu FAIL 4 — ten sam fix (jeśli poprawny) prawdopodobnie
+  częściowo lub całkowicie naprawi też ten test, bo oba używają tego
+  samego DMA::clockPhi1() abort mechanizmu.
+
+================================================================================
+GRUPA 3: PPU SPRITE EVALUATION (Page 18) — 3 fail — NIE ZBADANE W SESJI 2
+================================================================================
+(Analiza z sesji 1 poniżej — NIE zweryfikowana z aktualnym kodem PPU2C02.h
+w sesji 2. Ponieważ KLASTER A [DMA] okazał się częściowo nieaktualny
+względem sesji 1 z powodu refaktoryzacji, TRAKTOWAĆ poniższe hipotezy z
+ostrożnością i zweryfikować aktualny kod PPU2C02.h przed próbą poprawki.)
 
 --- FAIL 8: Page 18, Test 3 — "$2002 flag timing" ---
   Kod błędu: 1
   Komunikat: "The flags were not cleared on the correct PPU cycle."
+  STATUS (sesja 2): ZBADANY DOGŁĘBNIE, PRÓBA POPRAWKI PODJĘTA I WYCOFANA
+  (regresja zbyt duża). NIE PRÓBOWAĆ PONOWNIE tej samej prostej metody bez
+  nowej, głębszej analizy.
+
+  ZWERYFIKOWANY DOKŁADNY SCENARIUSZ TESTU (AccuracyCoin.asm ~2263,
+  ReadFrom2002WithExactTiming ~1738): Test czyta $2002 4 razy, każdy odczyt
+  "kończąc się" (M2 low) 1 PPU dot później niż poprzedni: scanline260/dot339,
+  dot340, scanline261(pre-render)/dot0, dot1. Answer key: $E0,$E0,$80,$00
+  (lub Alt: $E0,$80,$80,$00 — różnica na drugiej pozycji, zależna od
+  clock alignment). Flagi (VBL+sprite_zero+sprite_overflow) są czyszczone
+  NA dot1 pre-render (potwierdzone w komentarzu ASM i już zaimplementowane
+  poprawnie w PPU2C02::clock() `if(prerender&&cycle==1){...=0;}`). ALE: VBL
+  bit w ODCZYCIE $2002 jest "stary" względem sprite flags w tym samym
+  odczycie — bo VBL jest latchowany na POCZĄTKU CPU read (M2 high), a
+  sprite flags czytane NA ŻYWO na KOŃCU (M2 low), ~1.875 PPU cykli później
+  (komentarz ASM, "revision G CPU M2 duty cycle 15/24").
+
+  ARCHITEKTURA ZWERYFIKOWANA (src/core/NESSystem.h::clockOneCycle()):
+    ppu.clock() (sub0) ; ppu.clock() (sub1) ; cart.clock() ; a2a03.clockPhi1()
+    (CPU DECYDUJE krok) ; ppu.clock() (sub2) ; a2a03.clockPhi2() (CPU
+    FAKTYCZNIE CZYTA DANE — to wywołuje memRead()->ppu.cpuRead()->
+    readStatus(), a więc CAŁY readStatus() dzieje się PO sub2, czyli na
+    "końcu" cyklu CPU, z aktualnym [live] stanem PPU).
+
+  PRÓBA PODJĘTA: dodano `latchVblankForCpuCycle()` wywoływane na SAMYM
+  POCZĄTKU clockOneCycle() (PRZED sub0), zapisujące snapshot
+  status.vertical_blank; readStatus() zmieniono by używało tego snapshotu
+  dla bitu VBL (bit7), zostawiając sprite flags (bits5-6) jako live read
+  (bez zmian). To dawało 3 PPU dots różnicy między VBL-snapshot a
+  sprite-flags-live (sub0,sub1,sub2), zamiast oczekiwanych ~1.875-2.
+  WYNIK: DUŻA REGRESJA (122/140 zamiast 128/140) — zepsuło: VBlank
+  beginning, NMI Timing, NMI Suppression, NMI at VBlank end, NMI disabled
+  at VBlank, Sprite 0 Hit behavior (Page 19 test 2) — 6 DODATKOWYCH faili,
+  a docelowy test ($2002 flag timing) DALEJ FAILOWAŁ (błędna liczba dots
+  opóźnienia, prawdopodobnie 3 zamiast ~2, ALE GŁÓWNY problem to że
+  OPÓŹNIENIE ZASTOSOWANE BEZWARUNKOWO DO WSZYSTKICH ODCZYTÓW $2002 psuje
+  inne testy które zakładają natychmiastowy [bez latency] odczyt VBL w
+  SWOICH scenariuszach synchronizacji).
+  ZMIANA CAŁKOWICIE WYCOFANA (NESSystem.h i PPU2C02.h wrócily do stanu
+  sprzed). Zweryfikowano ponownie 128/140 po wycofaniu.
+
+  WNIOSEK / HIPOTEZA DO ZBADANIA W PRZYSZŁOŚCI: mechanizm latch
+  vblank-vs-sprite-flags jest PRAWDZIWY (potwierdzony komentarzem w ASM
+  źródle testu), ale NASZA IMPLEMENTACJA (zawsze-3-dots snapshot wzięty na
+  sztywno PRZED sub0) jest zbyt prostacka i/lub błędnie umiejscowiona.
+  Możliwe kierunki dla następnej sesji:
+    1. Zbadać DOKŁADNIE test "VBlank beginning" (Page 17, test 1) i "NMI
+       Timing" (Page 17, test 4) — zrozumieć JAK ONE mierzą moment VBL,
+       żeby zrozumieć jaki jest "oczekiwany" (bez regresji) timing $2002
+       reads w tych scenariuszach — może dają wskazówkę o PRAWIDŁOWYM
+       umiejscowieniu snapshotu (być może TYLKO 1 dot różnicy, nie 3, albo
+       snapshot powinien być brany W INNYM miejscu niż "początek
+       clockOneCycle" — np. dokładnie w momencie clockPhi1, między sub1 a
+       sub2, dający 1 dot różnicy zamiast 3).
+    2. Rozważyć czy VBL latch powinien zależeć od TEGO KTÓRY dokładny PPU
+       sub-cykl (0,1,2) odpowiada "M2 high" dla RÓŻNYCH trybów
+       adresowania/instrukcji (bo różne instrukcje CPU mogą mieć różne
+       wewnętrzne fazowanie względem PPU — to jest BARDZO subtelne i może
+       wymagać przebudowy architektury synchronizacji CPU/PPU).
+    3. Alternatywnie: może zamiast globalnego snapshotu w clockOneCycle,
+       potrzebny jest DEDYKOWANY mechanizm TYLKO gdy adres==0x2002 (co
+       wymaga że PPU/NESSystem wie o adresie PRZED odczytem — możliwe przez
+       sprawdzenie cpu.getAddr()/cpu.isRead() PRZED clockPhi2, w momencie
+       clockPhi1, i przekazanie tej informacji do PPU jako "hint").
+  [R] Wysokie — już jedna próba spowodowała regresję 6 testów. Testować
+      BARDZO ostrożnie, jeden mały krok na raz, z pełnym accuracy_coin.exe
+      po KAŻDEJ mikro-zmianie.
 
   OPIS TESTU (TEST_2002FlagTiming, linia ~2263):
     Test czyta $2002 w różnych momentach pre-render scanline i sprawdza
@@ -506,7 +523,7 @@ GRUPA 3: PPU SPRITE EVALUATION (Page 18) — 3 fail
      3. Dla OAMADDR overflow case: oamAddr powinien być inkrementowany
         w specyficzny sposób (glitchy) podczas sprite evaluation.
 
-  [R] Zmiana wpłynie na FAIL 11 ($2004 Stress Test) i potencjalnie na
+  [R] Zmiana wpłynie na FAIL 15 ($2004 Stress Test) i potencjalnie na
       OAM Corruption test.
 
 --- FAIL 10: Page 18, Test 8 — "OAM Corruption" ---
@@ -538,12 +555,13 @@ GRUPA 3: PPU SPRITE EVALUATION (Page 18) — 3 fail
      4. Obsłużyć ceiling do najbliższego multiple of 4 dla cykli 65-256.
      5. Obsłużyć różnice między clock alignments.
 
-  [R] Zmiana wpłynie na FAIL 9, FAIL 11 i potencjalnie na sprite evaluation
+  [R] Zmiana wpłynie na FAIL 9, FAIL 15 i potencjalnie na sprite evaluation
       w innych testach. To jest duża zmiana w PPU.
 
 ================================================================================
-GRUPA 4: PPU MISC (Page 19) — 7 fail
+GRUPA 4: PPU MISC (Page 19) — 7 fail — NIE ZBADANE W SESJI 2
 ================================================================================
+(Analiza z sesji 1 — WYMAGA weryfikacji z aktualnym kodem przed poprawką.)
 
 --- FAIL 11: Page 19, Test 3 — "Stale BG Shift Registers" ---
   Kod błędu: 1
@@ -853,91 +871,96 @@ GRUPA 4: PPU MISC (Page 19) — 7 fail
   [R] Powiązane z FAIL 16. To jest zaawansowana zmiana w PPU.
 
 ================================================================================
-PODSUMOWANIE — Klastrowanie poprawek
+PODSUMOWANIE — Klastrowanie poprawek (aktualizowane po sesji 2)
 ================================================================================
 
-KLASTER A: DMC DMA Abort / DMC Timing (FAIL 4, 5, 6)
-  Wspólna przyczyna: logika DMA abort i dmaHaltOnPut w DMC.
-  Sugerowana poprawka: rozdzielić "DMA requested" od "sample needed",
-  naprawić dmaHaltOnPut gdy dmaDelay > 0.
-  Ryzyko: średnie — wpłynie na wszystkie testy DMC.
-  Liczba testów: 3
+KLASTER A: DMC DMA Abort (FAIL 4, 5) — CZĘŚCIOWO naprawiony (FAIL 6 osobno)
+  FAIL 6 NAPRAWIONY w sesji 2 (restart/dmaHaltOnPut separacja explicit vs
+  loop-driven). FAIL 4/5 pozostają — mechanizm subtelny, próba w sesji 2
+  (dmaRequested bezwarunkowe) wycofana z powodu regresji. Patrz sekcja
+  FAIL 4 wyżej dla szczegółowego planu dalszych kroków.
+  Ryzyko: wysokie. Liczba testów pozostałych: 2 (FAIL 4, 5).
 
 KLASTER B: PPU OAM / Sprite Evaluation (FAIL 9, 10, 15)
   Wspólna przyczyna: brak śledzenia wewnętrznego OAM address, brak OAM
   corruption, readOAMData nie czyta z OAM buffer.
-  Sugerowana poprawka: dodać secondary OAM address tracking, OAM corruption,
-  poprawić readOAMData.
-  Ryzyko: wysokie — duża zmiana w PPU OAM logic.
-  Liczba testów: 3
+  Ryzyko: wysokie — duża zmiana w PPU OAM logic. Liczba testów: 3.
 
-KLASTER C: PPU Shift Registers / Rendering Mode (FAIL 12, 13, 14)
+KLASTER C: PPU Shift Registers / Rendering Mode (FAIL 11, 12, 13, 14)
   Wspólna przyczyna: "renderingEnabled()" (mask != 0) używane zamiast
-  "PPU in rendering mode" (scanline 0-261, nie VBlank). Shift registers
-  i sprite counters nie działają gdy mask = 0.
-  Sugerowana poprawka: rozróżnić "rendering enabled" od "in rendering mode",
-  shiftować registers gdy in rendering mode, dodać sprite counter halted/
-  counting logic, dodać sprite fetch na pre-render scanline.
+  "PPU in rendering mode" (scanline 0-261, nie VBlank).
   Ryzyko: wysokie — wpłynie na wszystkie sprite-related testy.
-  Liczba testów: 3 (plus FAIL 11 jako prerequisite)
+  Liczba testów: 4 (FAIL 11 jako prerequisite dla 12/13/14).
 
 KLASTER D: PPU DATA State Machine (FAIL 16, 17)
   Wspólna przyczyna: brak PPU DATA State Machine dla $2007 reads.
-  Sugerowana poprawka: zaimplementować 3-cyklowy state machine, obsłużyć
-  ALE + Read conflicts.
-  Ryzyko: wysokie — zaawansowana zmiana w PPU.
-  Liczba testów: 2
+  Ryzyko: wysokie — zaawansowana zmiana w PPU. Liczba testów: 2.
 
 KLASTER E: $2002 Flag Timing (FAIL 8)
   Przyczyna: brak oddzielnego latchowania vblank vs sprite flags.
-  Sugerowana poprawka: latchować vblank na początku CPU read, sprite flags
-  na końcu (~2 PPU cykle później).
-  Ryzyko: średnie — wpłynie na testy VBlank timing.
-  Liczba testów: 1
+  Ryzyko: średnie — wpłynie na testy VBlank timing. Liczba testów: 1.
 
-KLASTER F: CPU Interrupt Polling / Hijacking (FAIL 1, 2, 3)
-  Wspólna przyczyna: branch polling timing i interrupt hijacking.
-  Sugerowana poprawka: naprawić poll w cyklu 3 brancha, dodać hijacking
-  dla IRQ→NMI, sprawdzić timing detekcji NMI edge.
-  Ryzyko: średnie — wpłynie na wszystkie testy z przerwaniami.
-  Liczba testów: 3
+KLASTER F: CPU Interrupt Hijacking NMI/BRK/IRQ (FAIL 1, 2, 3) — NAPRAWIONY W CAŁOŚCI.
+  Przyczyna 1 (FAIL 2): rti5_pullPCH (reużywane z RTI) błędnie pollowało
+  przerwania jako ostatni krok sekwencji BRK/IRQ/NMI — naprawione przez
+  nową funkcję int7_fetchOpcode (goły fetch, bez poll).
+  Przyczyna 2 (FAIL 3): sekwencja sprzętowych IRQ/NMI miała 6 cykli zamiast
+  7 (brakował drugi dummy PC read) — naprawione przez intHw_dummy2.
+  Ryzyko: było średnie, zrealizowane bez regresji. Testów naprawionych: 3
+  (Page 12 "all tests passed" w całości).
 
-KLASTER G: APU Register Activation (FAIL 7)
-  Przyczyna: OAM DMA nie czyta rejestrów APU gdy 6502 address bus jest
-  w $4000-$401F.
-  Sugerowana poprawka: dodać obsługę OAM DMA w readDMA() dla rejestrów APU.
-  Ryzyko: niskie — zmiana lokalna w readDMA().
-  Liczba testów: 1
+KLASTER G: APU Register Activation (FAIL 7) — NAPRAWIONY.
 
-KLASTER H: Sprite Zero Hit Prerequisite (FAIL 11)
-  Przyczyna: sprite zero hit nie działa w konkretnym scenariuszu testu
-  Stale BG Shift Registers.
-  Sugerowana poprawka: zdiagnozować za pomocą nes_test trace.
-  Ryzyko: niskie — prerequisite test.
-  Liczba testów: 1
+KLASTER H: Sprite Zero Hit Prerequisite (FAIL 11) — patrz KLASTER C
+  (połączony, bo FAIL 11 jest prerequisite dla 12/13/14 w tej samej grupie).
 
 ================================================================================
-ZALECANA KOLEJNOŚĆ POPRAWEK (od najmniejszego ryzyka / największego zysku)
+ZALECANA KOLEJNOŚĆ DALSZYCH POPRAWEK (aktualizacja po sesji 2, drugi przebieg)
 ================================================================================
 
-1. KLASTER G (FAIL 7) — 1 test, niskie ryzyko, lokalna zmiana
-2. KLASTER E (FAIL 8) — 1 test, średnie ryzyko
-3. KLASTER A (FAIL 4, 5, 6) — 3 testy, średnie ryzyko
-4. KLASTER F (FAIL 1, 2, 3) — 3 testy, średnie ryzyko
-5. KLASTER H (FAIL 11) — 1 test, niskie ryzyko (wymaga diagnozy)
-6. KLASTER C (FAIL 12, 13, 14) — 3 testy, wysokie ryzyko
-7. KLASTER B (FAIL 9, 10, 15) — 3 testy, wysokie ryzyko
-8. KLASTER D (FAIL 16, 17) — 2 testy, wysokie ryzyko
+1. KLASTER A dokończenie (FAIL 4, 5) — DMA Abort, wymaga ostrożnej,
+   stopniowej analizy zgodnie z planem w sekcji FAIL 4 (krok 1: X=6 w
+   izolacji, osobno od X=7,8,9).
+2. KLASTER E (FAIL 8) — 1 test, średnie ryzyko, PPU $2002 timing.
+3. KLASTER C (FAIL 11, 12, 13, 14) — 4 testy, wysokie ryzyko.
+4. KLASTER B (FAIL 9, 10, 15) — 3 testy, wysokie ryzyko.
+5. KLASTER D (FAIL 16, 17) — 2 testy, wysokie ryzyko.
 
-Uwaga: Klastry C i B są powiązane — zmiany w OAM/sprite evaluation
-mogą naprawić kilka testów naraz, ale też zepsuć istniejące PASS testy.
-Zaleca się dokładne testowanie po każdej zmianie (uruchom accuracy_coin).
+Uwaga: Klastry C i B są powiązane — zmiany w OAM/sprite evaluation mogą
+naprawić kilka testów naraz, ale też zepsuć istniejące PASS testy. Klastry
+E i D dotyczą PPU $2002/$2007 timing — również potencjalnie powiązane.
+Zaleca się dokładne testowanie po KAŻDEJ zmianie (uruchom accuracy_coin.exe
+w całości, nie tylko pojedynczy test).
 
 ================================================================================
-NARZĘDZIA TESTERSKIE
+NARZĘDZIA TESTERSKIE I METODOLOGIA (zaktualizowane po sesji 2)
 ================================================================================
 
-accuracy_coin.exe — działa poprawnie, zwraca wyniki.
-nes_test.exe — nie testowano w tej sesji, ale powinien działać (budowany przez ninja).
+accuracy_coin.exe — działa poprawnie, zwraca wyniki. Uruchamiać po KAŻDEJ
+zmianie kodu dla pełnej regresji (kilka sekund, tani check).
 
-Wszystkie narzędzia działają poprawnie — nie wymagały naprawy.
+nes_test.exe — używany intensywnie w sesji 2, działa poprawnie. Kluczowe
+wnioski praktyczne (patrz też sekcja FAIL 4 wyżej dla pełnych szczegółów):
+  - Nawigacja menu AccuracyCoin: kursor startuje na "top" (numer strony).
+    RIGHT/LEFT na "top" zmienia stronę. Liczba_DOWN needed = numer_wiersza
+    testu (1-indexed) — PIERWSZE DOWN schodzi z "top" na wiersz 0.
+  - trace.log bywa zablokowany (uchwyt) między wywołaniami nes_test —
+    użyć `trace-file:nazwa.log` gdy pojawia się błąd "cannot open trace
+    file".
+  - Pliki trace >10MB: NIE używać read_file (limit "File too large") ani
+    Get-Content (wolne). Używać PowerShell
+    `[System.IO.File]::ReadAllLines($path)` z indeksowaniem tablicy, albo
+    `[System.IO.File]::ReadLines($path) | Select-Object -Skip N -First M`
+    do strumieniowej ekstrakcji fragmentu do mniejszego pliku pomocniczego.
+  - Ograniczać okno trace (włączać trace:cpu:on/trace:dma:on tuż przed
+    interesującym zdarzeniem, wyłączać/nie trzymać włączonego na długie
+    odcinki) — inaczej pliki puchną do dziesiątek MB w kilka klatek.
+
+Wszystkie narzędzia działają poprawnie — nie wymagały naprawy w żadnej sesji.
+
+
+
+
+
+
+

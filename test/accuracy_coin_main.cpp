@@ -98,7 +98,7 @@ void report(const Decoded& d) {
 
     int total = d.passed + d.failed + d.skipped;
     std::cout << "TESTS PASSED: " << d.passed << " / " << total
-              << "   (failed: " << d.failed
+              << " (failed: " << d.failed
               << ", skipped: " << d.skipped << ")\n\n";
 
     for (int p = 0; p < PAGE_COUNT; ++p) {

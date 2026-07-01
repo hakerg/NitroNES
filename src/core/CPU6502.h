@@ -212,7 +212,11 @@ private:
             } else {
                 currentInt = IntKind::IRQ;
             }
-            return emitRead(&CPU6502::int1_dummy, PC);
+            // IRQ/NMI take two dummy PC reads before pushing PCH (nes_specs/CPU
+            // interrupts.txt "IRQ and NMI tick-by-tick execution", cycles 1-2),
+            // unlike BRK where PC has already been incremented past the opcode
+            // by the time decodeAndDispatch dispatches to int1_dummy directly.
+            return emitRead(&CPU6502::intHw_dummy2, PC);
         }
         irqInhibitSnapshot = (P & FLAG_I) != 0;
         return emitRead(&CPU6502::decodeAndDispatch, PC++);
@@ -248,11 +252,13 @@ private:
     Step am_ind_1();  Step am_ind_2();  Step am_ind_3();  Step am_ind_4();
 
     Step int1_dummy();
+    Step intHw_dummy2();
     Step int2_pushPCH();
     Step int3_pushPCL();
     Step int4_pushP();
     Step int5_readLow();
     Step int6_readHigh();
+    Step int7_fetchOpcode();
 
     Step rti1_dummyRead(); Step rti2_incS(); Step rti3_pullP();
     Step rti4_pullPCL();   Step rti5_pullPCH();
@@ -582,6 +588,9 @@ inline CPU6502::Step CPU6502::int1_dummy() {
     if (currentInt == IntKind::SoftwareBRK) PC++;
     return emitWrite(&CPU6502::int2_pushPCH, 0x0100 | S--, (PC >> 8) & 0xFF);
 }
+// Second dummy PC read for hardware IRQ/NMI (see opFetch): both discard their
+// result, so this just re-reads the same address before int1_dummy pushes PCH.
+inline CPU6502::Step CPU6502::intHw_dummy2() { return emitRead(&CPU6502::int1_dummy, PC); }
 inline CPU6502::Step CPU6502::int2_pushPCH() { return emitWrite(&CPU6502::int3_pushPCL, 0x0100 | S--, PC & 0xFF); }
 inline CPU6502::Step CPU6502::int3_pushPCL() {
     bool wasBRK = (currentInt == IntKind::SoftwareBRK);
@@ -597,7 +606,19 @@ inline CPU6502::Step CPU6502::int3_pushPCL() {
     return emitWrite(&CPU6502::int5_readLow, 0x0100 | S--, pushP);
 }
 inline CPU6502::Step CPU6502::int5_readLow()  { return emitRead(&CPU6502::int6_readHigh, intVector()); }
-inline CPU6502::Step CPU6502::int6_readHigh() { addr = fetched; return emitRead(&CPU6502::rti5_pullPCH, intVector() + 1); }
+inline CPU6502::Step CPU6502::int6_readHigh() { addr = fetched; return emitRead(&CPU6502::int7_fetchOpcode, intVector() + 1); }
+// The interrupt sequence itself does not poll for interrupts (nes_specs/CPU
+// interrupts.txt): unlike a normal instruction's final cycle (opFetch, which
+// polls before fetching the next opcode), fetching the handler's first opcode
+// here is a bare fetch. Polling only resumes at the end of that first handler
+// instruction, so at least one of its instructions always executes before a
+// new interrupt (e.g. one that arrived too late to hijack this one) is taken.
+inline CPU6502::Step CPU6502::int7_fetchOpcode() {
+    addr |= fetched << 8;
+    PC = addr;
+    irqInhibitSnapshot = (P & FLAG_I) != 0;
+    return emitRead(&CPU6502::decodeAndDispatch, PC++);
+}
 
 inline CPU6502::Step CPU6502::rti1_dummyRead() { return emitRead(&CPU6502::rti2_incS, 0x0100 | S); }
 inline CPU6502::Step CPU6502::rti2_incS()      { S++; return emitRead(&CPU6502::rti3_pullP, 0x0100 | S); }
@@ -950,8 +971,8 @@ inline const char* CPU6502::currentStepName() const {
     CPU_STEP(am_ind_1); CPU_STEP(am_ind_2); CPU_STEP(am_ind_3); CPU_STEP(am_ind_4);
     CPU_STEP(readAndExec_);
     CPU_STEP(rmw_dummyWrite); CPU_STEP(rmw_finalWrite);
-    CPU_STEP(int1_dummy); CPU_STEP(int2_pushPCH); CPU_STEP(int3_pushPCL);
-    CPU_STEP(int5_readLow); CPU_STEP(int6_readHigh);
+    CPU_STEP(int1_dummy); CPU_STEP(intHw_dummy2); CPU_STEP(int2_pushPCH); CPU_STEP(int3_pushPCL);
+    CPU_STEP(int5_readLow); CPU_STEP(int6_readHigh); CPU_STEP(int7_fetchOpcode);
     CPU_STEP(rti1_dummyRead); CPU_STEP(rti2_incS); CPU_STEP(rti3_pullP);
     CPU_STEP(rti4_pullPCL);   CPU_STEP(rti5_pullPCH);
     CPU_STEP(rts1_dummyRead); CPU_STEP(rts2_incS); CPU_STEP(rts3_pullPCL);

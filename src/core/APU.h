@@ -361,8 +361,9 @@ struct DMCChannel {
     void restart() {
         currentAddr   = sampleAddr;
         bytesRemaining = sampleLength;
-        // A fetch caused directly by (re)starting playback is a "load" DMA: halt on get.
-        dmaHaltOnPut  = false;
+        // Note: this only reloads the address/length. Whether the next fetch is a
+        // "load" or "reload" DMA depends on what triggered the restart, not on the
+        // restart itself: see dmaHaltOnPut assignments at the two call sites below.
     }
 
     void tickDMADelay() {
@@ -380,6 +381,10 @@ struct DMCChannel {
         bytesRemaining--;
         if (bytesRemaining == 0) {
             if (loopFlag)
+                // Looping restart: this is still a continuation of playback, not a
+                // fresh (re)start, so it must not downgrade a pending reload DMA to
+                // a load DMA. The next buffer-empty event (clockTimer) sets
+                // dmaHaltOnPut on its own, as usual.
                 restart();
             else if (irqEnabled)
                 irqPending = true;
@@ -409,8 +414,11 @@ struct DMCChannel {
                     shiftReg          = sampleBuffer;
                     sampleBufferEmpty = true;
                     // Buffer emptied during playback => the next fetch is a "reload"
-                    // DMC DMA, which attempts to halt the CPU on a put cycle.
-                    dmaHaltOnPut      = true;
+                    // DMC DMA, which attempts to halt the CPU on a put cycle. But if a
+                    // load DMA is already pending (dmaDelay > 0, from a very recent
+                    // $4015 enable), don't downgrade it to reload -- this emptying
+                    // belongs to stale output-unit state predating that (re)start.
+                    if (dmaDelay == 0) dmaHaltOnPut = true;
                 }
             }
         } else {
@@ -503,6 +511,10 @@ public:
                     dmc.bytesRemaining = 0;
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
+                    // A fetch caused directly by this (re)start is a "load" DMA: halt
+                    // on get, unlike the "reload" DMAs triggered by buffer-empty
+                    // events during ordinary (e.g. looping) playback.
+                    dmc.dmaHaltOnPut = false;
                     // The load DMA after a $4015 enable is scheduled to halt on a get
                     // cycle during the 2nd APU cycle after the write (nes_specs/dma.txt),
                     // so its request is delayed a couple of CPU cycles.
