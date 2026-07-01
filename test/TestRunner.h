@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+template <typename CoreT>
 class TestRunner : public Tracer {
 public:
     explicit TestRunner(const std::string& romPath)
@@ -103,7 +104,7 @@ public:
     }
 
 private:
-    NESHeadlessSystem nes;
+    CoreT nes;
     std::map<uint16_t, std::string> symbolByAddr;
 
     std::FILE* traceFp = nullptr;
@@ -192,9 +193,31 @@ private:
             nes.tickCycles(parseInt(parts[1]));
             return true;
         }
+        if (cmd == "info") {
+            std::cout << "---- info frame=" << nes.frameNo() << " cyc=" << nes.cycleNo() << " ----\n";
+            return true;
+        }
         if (head == "mem" && parts.size() == 3) {
             printMem((uint16_t)parseInt(parts[1]), parseInt(parts[2]));
             return true;
+        }
+        if (head == "song" && parts.size() == 2) {
+            if constexpr (requires { nes.initSong(uint8_t{}); }) {
+                nes.initSong((uint8_t)parseInt(parts[1]));
+                return true;
+            } else return false;
+        }
+        if (cmd == "next") {
+            if constexpr (requires { nes.nextSong(); }) { nes.nextSong(); return true; }
+            else return false;
+        }
+        if (cmd == "prev") {
+            if constexpr (requires { nes.prevSong(); }) { nes.prevSong(); return true; }
+            else return false;
+        }
+        if (cmd == "songinfo") {
+            if constexpr (requires { nes.header(); }) { printSongInfo(); return true; }
+            else return false;
         }
         if (head == "trace-file" && parts.size() == 2) {
             tracePath = parts[1];
@@ -228,21 +251,38 @@ private:
 
     // memory / screen --------------------------------------------------------
     void printScreen() {
-        uint8_t tiles[960]{};
-        nes.dumpNametable(tiles, 0);
-        std::cout << "---- screen (NT0) frame=" << nes.frameNo()
-                  << " cyc=" << nes.cycleNo() << " ----\n";
-        for (int row = 0; row < 30; ++row) {
-            std::string line;
-            for (int col = 0; col < 32; ++col) {
-                uint8_t t = tiles[row * 32 + col];
-                line += (t >= 0x20 && t <= 0x7E) ? char(t) : ' ';
+        if constexpr (requires { nes.dumpNametable((uint8_t*)nullptr, 0); }) {
+            uint8_t tiles[960]{};
+            nes.dumpNametable(tiles, 0);
+            std::cout << "---- screen (NT0) frame=" << nes.frameNo()
+                      << " cyc=" << nes.cycleNo() << " ----\n";
+            for (int row = 0; row < 30; ++row) {
+                std::string line;
+                for (int col = 0; col < 32; ++col) {
+                    uint8_t t = tiles[row * 32 + col];
+                    line += (t >= 0x20 && t <= 0x7E) ? char(t) : ' ';
+                }
+                auto last = line.find_last_not_of(' ');
+                if (last != std::string::npos)
+                    std::cout << line.substr(0, last + 1) << "\n";
+                else
+                    std::cout << "\n";
             }
-            auto last = line.find_last_not_of(' ');
-            if (last != std::string::npos)
-                std::cout << line.substr(0, last + 1) << "\n";
-            else
-                std::cout << "\n";
+        } else {
+            std::cerr << "[nes_test] screen: not supported for this core\n";
+        }
+    }
+
+    void printSongInfo() {
+        if constexpr (requires { nes.header(); }) {
+            const auto& h = nes.header();
+            std::cout << "---- NSF song " << (int)nes.getCurrentSong() << "/"
+                      << (int)nes.getTotalSongs() << " \"" << h.title()
+                      << "\" by " << h.artistName() << " (" << h.copyrightText() << ")"
+                      << (h.isPAL() ? " [PAL]" : " [NTSC]") << " ----\n"
+                      << "load=$" << hex4(h.loadAddr)
+                      << " init=$" << hex4(h.initAddr)
+                      << " play=$" << hex4(h.playAddr) << "\n";
         }
     }
 

@@ -203,8 +203,8 @@ private:
     Step opFetch() {
         if (skipNextPoll) skipNextPoll = false;
         else pollInterrupts();
-        if (interruptPending) {
 
+        if (interruptPending) {
             interruptPending = false;
             if (nmiPending) {
                 nmiPending = false;

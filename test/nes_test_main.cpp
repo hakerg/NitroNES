@@ -1,10 +1,11 @@
 ﻿// nes_test — script-driven NES test harness.
 //
 // Usage:
-//   nes_test <rom-or-asm> [command]...
+//   nes_test <rom-or-asm-or-nsf> [command]...
 //
 // Input file handling:
 //   *.nes            run as-is
+//   *.nsf            run through the NSF player core (no PPU/screen)
 //   *.asm            assemble with nesasm3 (source dir contents copied to a
 //                    temp build dir; original tree is never modified)
 //   *.s              assemble + link with ca65/ld65 (artifacts go to a temp
@@ -15,10 +16,10 @@
 // CPU trace.
 //
 // Commands (run sequentially; one per argv):
-//   frames:N            tick N PPU frames
+//   frames:N            tick N PPU frames (or N play() calls for .nsf)
 //   cycles:N            tick N CPU cycles
 //   reset               trigger hardware reset
-//   screen              dump nametable 0 to stdout
+//   screen              dump nametable 0 to stdout (.nes only)
 //   mem:ADDR:LEN        dump LEN bytes from CPU bus ADDR (hex/dec/$hex/0xhex)
 //   pad1=BTNS           set controller 1 state (BTNS = comma list, empty=clear)
 //   pad1+BTN[,BTN..]    press buttons on controller 1
@@ -26,10 +27,15 @@
 //   pad2=... +... -...  same for controller 2
 //   trace:CHAN:STATE    enable/disable trace channel (CHAN=cpu|ppu|dma, STATE=on|off)
 //   trace-file:PATH     redirect trace output (default: trace.log)
+//   song:N              (.nsf only) initSong(N)
+//   next / prev         (.nsf only) switch to next/previous song
+//   songinfo            (.nsf only) print song name/artist/copyright
 //
 // Button names: A, B, SELECT, START, UP, DOWN, LEFT, RIGHT
 
 #include "TestRunner.h"
+#include "NESHeadlessNSF.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -156,14 +162,31 @@ static fs::path buildSrcCa65(const fs::path& srcPath, const fs::path& binaryDir)
     return nesOut;
 }
 
+template <typename CoreT>
+static int runTest(const fs::path& romPath, const std::vector<std::string>& commands) {
+    TestRunner<CoreT> runner(romPath.string());
+
+    std::error_code ec;
+    for (const char* symExt : { ".fns", ".lbl" }) {
+        fs::path sym = romPath; sym.replace_extension(symExt);
+        if (fs::exists(sym, ec)) {
+            runner.loadSymbols(sym.string());
+            std::cerr << "[nes_test] symbols: " << sym.string() << "\n";
+        }
+    }
+
+    return runner.run(commands) ? 0 : 1;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr <<
-            "Usage: nes_test <rom-or-asm> [command]...\n"
-            "Input: .nes (run), .asm (nesasm3), .s (ca65+ld65; tmp build dir)\n"
+            "Usage: nes_test <rom-or-asm-or-nsf> [command]...\n"
+            "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65; tmp build dir)\n"
             "Commands: frames:N cycles:N reset screen mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
             "          trace:cpu|ppu|dma:on|off  trace-file:PATH\n"
+            "NSF only: song:N next prev songinfo\n"
             "Buttons:  A B SELECT START UP DOWN LEFT RIGHT\n";
         return 1;
     }
@@ -178,20 +201,11 @@ int main(int argc, char* argv[]) {
         if      (ext == ".asm") romPath = buildAsmNesasm(input, binaryDir);
         else if (ext == ".s")   romPath = buildSrcCa65(input, binaryDir);
 
-        TestRunner runner(romPath.string());
-
-        std::error_code ec;
-        for (const char* symExt : { ".fns", ".lbl" }) {
-            fs::path sym = romPath; sym.replace_extension(symExt);
-            if (fs::exists(sym, ec)) {
-                runner.loadSymbols(sym.string());
-                std::cerr << "[nes_test] symbols: " << sym.string() << "\n";
-            }
-        }
-
         std::vector<std::string> commands;
         for (int i = 2; i < argc; ++i) commands.emplace_back(argv[i]);
-        return runner.run(commands) ? 0 : 1;
+
+        if (ext == ".nsf") return runTest<NESHeadlessNSF>(romPath, commands);
+        return runTest<NESHeadlessSystem>(romPath, commands);
     } catch (const std::exception& e) {
         std::cerr << "[nes_test] " << e.what() << "\n";
         return 1;

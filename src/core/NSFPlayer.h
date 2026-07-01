@@ -34,6 +34,19 @@ struct NSFHeader {
     bool isBankswitched() const {
         return std::any_of(std::begin(bankValues), std::end(bankValues), [](uint8_t bv) { return bv != 0; });
     }
+
+    bool isPAL()      const { return (palNtscBits & 0x01) != 0; }
+    bool isDualMode() const { return (palNtscBits & 0x02) != 0; }
+    std::string title()         const { return safeStr(songName); }
+    std::string artistName()    const { return safeStr(artist); }
+    std::string copyrightText() const { return safeStr(copyright); }
+
+private:
+    static std::string safeStr(const char* buf) {
+        int len = 0;
+        while (len < 32 && buf[len] != '\0') len++;
+        return std::string(buf, len);
+    }
 };
 #pragma pack(pop)
 
@@ -42,41 +55,13 @@ static_assert(sizeof(NSFHeader) == 0x80, "NSFHeader musi mieć 128 bajtów");
 struct NSFFile {
     NSFHeader header;
     std::vector<uint8_t> data;  // Dane muzyczne (od offsetu 0x80)
-
-    std::string name()      const { return safeStr(header.songName, 32); }
-    std::string artist()    const { return safeStr(header.artist,   32); }
-    std::string copyright() const { return safeStr(header.copyright,32); }
-
-    bool isBankswitched() const { return header.isBankswitched(); }
-
-    bool isPAL()     const { return  (header.palNtscBits & 0x01); }
-    bool isDualMode()const { return  (header.palNtscBits & 0x02); }
-
-    double playRateHz(bool pal = false) const {
-        uint16_t speed = pal ? header.speedPAL : header.speedNTSC;
-        if (speed == 0) speed = pal ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
-        return 1000000.0 / speed;
-    }
-
-    double playCyclesPerCall(bool pal = false) const {
-        double   cpuClock = pal ? NES::CPU_CLOCK_PAL  : NES::CPU_CLOCK_NTSC;
-        uint16_t speed    = pal ? header.speedPAL     : header.speedNTSC;
-        if (speed == 0) speed = pal ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
-        return cpuClock * speed / 1000000.0;
-    }
-
-private:
-    static std::string safeStr(const char* buf, int maxLen) {
-        int len = 0;
-        while (len < maxLen && buf[len] != '\0') len++;
-        return std::string(buf, len);
-    }
 };
 
 class NSFPlayer : public NESCoreBase {
 public:
-    static constexpr uint16_t TRAMPOLINE_ADDR = 0x5000;
-    static constexpr uint16_t RESET_VECTOR    = 0xFFFC;
+    static constexpr uint16_t TRAMPOLINE_ADDR   = 0x5000;
+    static constexpr uint16_t RESET_VECTOR      = 0xFFFC;
+    static constexpr int      CALL_WATCHDOG_CYCLES = 200000;
 
     explicit NSFPlayer(AudioSettings& audioSettings, const std::string& path)
         : NESCoreBase(audioSettings) {
@@ -181,7 +166,7 @@ public:
         a2a03.getCPU().jumpTo(nsfHeader.initAddr);
 
         int initCycles = 0;
-        for (; initCycles < 200000 && !isAtTrampoline(); initCycles++) {
+        for (; initCycles < CALL_WATCHDOG_CYCLES && !isAtTrampoline(); initCycles++) {
             a2a03.clockPhi1();
             a2a03.clockPhi2();
         }
@@ -202,6 +187,8 @@ public:
     uint8_t getCurrentSong()  const { return currentSong; }
     uint8_t getTotalSongs()   const { return nsfHeader.totalSongs; }
 
+    const NSFHeader& header() const { return nsfHeader; }
+
     double getBaseFramerate() const override {
         return NES::CPU_CLOCK_NTSC / playCycles;
     }
@@ -216,7 +203,10 @@ protected:
     void clockOneCycle() override {
         trampolineMaintenance();
         playTimer -= 1.0;
-        if (!callDone && isAtTrampoline()) callDone = true;
+        if (!callDone) {
+            if (isAtTrampoline()) callDone = true;
+            else if (playTimer < -CALL_WATCHDOG_CYCLES) triggerPlayCall();
+        }
 
         if (expChip) expChip->clock();
         a2a03.clockPhi1();
@@ -277,26 +267,22 @@ private:
     void trampolineMaintenance() {
         if (callDone && playTimer <= 0.0) {
             if (!a2a03.getCPU().isAtInstructionBoundary()) return;
-
-            a2a03.getCPU().S = 0xFD;
-            callDone = false;
-            pushWord(TRAMPOLINE_ADDR - 1);
-            a2a03.getCPU().jumpTo(nsfHeader.playAddr);
-
-            playTimer += playCycles;
-
-            completedFramesCount++;
+            triggerPlayCall();
         }
     }
 
+    void triggerPlayCall() {
+        a2a03.getCPU().S = 0xFD;
+        callDone = false;
+        pushWord(TRAMPOLINE_ADDR - 1);
+        a2a03.getCPU().jumpTo(nsfHeader.playAddr);
 
-    bool nsfIsPAL()      const { return (nsfHeader.palNtscBits & 0x01) != 0; }
-    bool nsfIsDualMode() const { return (nsfHeader.palNtscBits & 0x02) != 0; }
-    std::string nsfName() const {
-        int len = 0;
-        while (len < 32 && nsfHeader.songName[len] != '\0') len++;
-        return std::string(nsfHeader.songName, len);
+        playTimer += playCycles;
+
+        completedFramesCount++;
     }
+
+
 
     double calcPlayCycles() const {
         double clk = NES::CPU_CLOCK_NTSC;

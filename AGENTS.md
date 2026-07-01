@@ -40,6 +40,8 @@ Odpala AccuracyCoin.nes i zwraca listę testów z wynikami pass/fail.
 Skryptowalny harness — zamiast hard-coded logiki dostaje listę komend.
 Akceptowane wejście:
 - `*.nes` — uruchamia od razu
+- `*.nsf` — uruchamia przez rdzeń NSFPlayer (headless `NESHeadlessNSF`), brak
+  PPU/ekranu; komenda `frames:N` odpowiada N wywołaniom `play()`.
 - `*.asm` — kompiluje przez nesasm3. Zawartość katalogu źródłowego jest
   kopiowana do `%TEMP%/nes_test_build/<hash>/<basename>/` i build leci tam —
   repo nigdy nie jest modyfikowane. Obok wynikowego `.nes` pojawia się `.fns`.
@@ -53,20 +55,24 @@ Symbole z `.fns` (nesasm) lub `.lbl` w formacie VICE (ld65) są ładowane
 automatycznie z miejsca obok wynikowego `.nes` i pojawiają się w trace CPU.
 
 Użycie:
-  nes_test <rom-or-asm> [command]...
+  nes_test <rom-or-asm-or-nsf> [command]...
 
 Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
-  frames:N             clockuj N klatek PPU
+  frames:N             clockuj N klatek PPU (lub N wywołań play() dla .nsf)
   cycles:N             clockuj N cykli CPU
   reset                hard reset
-  screen               wypisz nametable 0 (32x30 znaków) na stdout
+  screen               wypisz nametable 0 (32x30 znaków) na stdout (tylko .nes)
   mem:ADDR:LEN         dump LEN bajtów z magistrali CPU od ADDR (hex/dec/$hex/0xhex)
+  info                 wypisz aktualny frame count i cycle count
   pad1=BTNS            ustaw stan pada 1 (BTNS = lista po przecinku, puste = wyzeruj)
   pad1+BTN[,BTN..]     naciśnij wskazane przyciski (set bit)
   pad1-BTN[,BTN..]     puść wskazane przyciski (clear bit)
   pad2=... +... -...   to samo dla pada 2
   trace:CHAN:STATE     włącz/wyłącz kanał trace (CHAN=cpu|ppu|dma, STATE=on|off)
   trace-file:PATH      zmień plik wyjściowy trace (domyślnie: trace.log)
+  song:N               (tylko .nsf) initSong(N)
+  next / prev          (tylko .nsf) przełącz na następny/poprzedni utwór
+  songinfo             (tylko .nsf) wypisz nazwę/artystę/copyright/load/init/play
 
 Przyciski: A, B, SELECT, START, UP, DOWN, LEFT, RIGHT
 
@@ -101,6 +107,22 @@ Przykłady:
   nes_test mytest.asm trace:cpu:on trace:dma:on frames:5
   nes_test ROM.nes frames:120 pad1+START frames:1 pad1-START frames:600 screen
   nes_test ROM.nes frames:600 reset frames:600 mem:0x6000:32
+  nes_test song.nsf songinfo cycles:5000000 trace:cpu:on cycles:100000 info
+
+### Diagnozowanie zawieszeń / zdarzeń odległych w czasie
+
+`cycles:N` nie zależy od żadnego stanu poza licznikiem cykli, więc jest
+bezpieczne i tanie do przewijania naprzód bez trace (w przeciwieństwie do
+`frames:N`, które może się zapętlić, jeśli licznik klatek rdzenia nigdy się
+nie zmieni). Żeby złapać w trace zdarzenie, które występuje dopiero po
+dłuższym czasie (np. utknięcie po kilku minutach grania):
+1. Przewiń bez trace: `cycles:<duże_N>` (szybkie, bez narzutu I/O)
+2. `info` — sprawdź frame/cycle count, bisekcją znajdź okolicę zdarzenia
+3. Włącz `trace:cpu:on` (`trace:dma:on` w razie potrzeby) dopiero blisko
+   interesującego miejsca, potem tylko kilkaset tysięcy cykli — inaczej plik
+   trace.log spuchnie do dziesiątek MB/GB
+4. Analizuj `trace.log`/plik z `trace-file:PATH` pod kątem adresu PC, na
+   którym coś poszło nie tak
 
 ### Uruchamianie pojedynczego testu AccuracyCoin z trace
 
