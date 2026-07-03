@@ -12,11 +12,11 @@
 ; immediately follows the
 ; instructions.
 ; 
-; JSR test OK
-; JMP test OK
-; RTS test OK
-; JMP+RTI test OK
-; BRK test OK
+; JSR+RTS TEST OK
+; JMP+RTS TEST OK
+; RTS+RTS TEST OK
+; JMP+RTI TEST OK
+; JMP+BRK TEST OK
 ; 
 ; Passed
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

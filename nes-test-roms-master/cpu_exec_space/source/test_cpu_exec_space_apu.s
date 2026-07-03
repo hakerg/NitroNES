@@ -13,7 +13,7 @@
 ; also the unallocated I/O
 ; space in $4018..$40FF.
 ; 
-; 40FF
+; 40FF 40
 ; Passed
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
@@ -60,7 +60,13 @@ open_bus_pathological_fail:
 
 main:   
 	jsr intro
-	
+
+	; Disable all APU channels and frame IRQ (ensure that $4015 reads back as $00)
+	lda #$00
+	sta $4015
+	lda #$40
+	sta $4017
+
 	ldx #>empty
 	ldy #<empty
 	lda #0
@@ -102,19 +108,19 @@ main:
 	sta console_pos
 	lda console_save+1
 	sta console_scroll
-	lda #8
-	jsr write_text_out
-	jsr write_text_out
-	jsr write_text_out
-	jsr write_text_out
-	jsr write_text_out
-
+	lda #13
+	jsr write_text_out ;CR
+	
 	cpx #$15
 	beq :+
 
 	tya
 	jsr print_hex
 	txa
+	jsr print_hex
+	lda #' '
+	jsr print_char
+	lda $4000,x
 	jsr print_hex
 	lda #' '
 	jsr print_char
@@ -203,6 +209,7 @@ crash_proof_end:
 irq:
 	; Presume we got here through a BRK opcode.
 	; Presumably, that opcode was placed in $8000..$E000 to trap wrong access.
+	plp
 wrong_code_executed_somewhere:
 	text_white
 	print_str "ERROR",newline

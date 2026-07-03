@@ -219,8 +219,8 @@ inc_addr:
 	; >= 30000 ? (7530)
 	; >= 20000 ? (4E20)
 	; >= 10000 ? (2710)
-digit10000_hi: .byte $27,$4E,$75,$9C,$C3,$EA
-digit10000_lo: .byte $10,$20,$30,$40,$50,$60
+digit10000_hi: .byte $00,$27,$4E,$75,$9C,$C3,$EA
+digit10000_lo: .byte $00,$10,$20,$30,$40,$50,$60
 	; >= 9000 ? (2328 (hex))
 	; >= 8000 ? (1F40 (hex))
 	; >= 7000 ? (1B58 (hex))
@@ -230,8 +230,8 @@ digit10000_lo: .byte $10,$20,$30,$40,$50,$60
 	; >= 3000 ? (BB8 (hex))
 	; >= 2000 ? (7D0 (hex))
 	; >= 1000 ? (3E8 (hex))
-digit1000_hi: .byte $03,$07,$0B,$0F,$13,$17,$1B,$1F,$23
-digit1000_lo: .byte $E8,$D0,$B8,$A0,$88,$70,$58,$40,$28
+digit1000_hi: .byte $00,$03,$07,$0B,$0F,$13,$17,$1B,$1F,$23
+digit1000_lo: .byte $00,$E8,$D0,$B8,$A0,$88,$70,$58,$40,$28
 ; >= 900 ? (384 (hex))
 ; >= 800 ? (320 (hex))
 ; >= 700 ? (2BC (hex))
@@ -241,27 +241,29 @@ digit1000_lo: .byte $E8,$D0,$B8,$A0,$88,$70,$58,$40,$28
 ; >= 300 ? (12C (hex))
 ; >= 200 ? (C8 (hex))
 ; >= 100 ? (64 (hex))
-digit100_hi: .byte $00,$00,$01,$01,$01,$02,$02,$03,$03
-digit100_lo: .byte $64,$C8,$2C,$90,$F4,$58,$BC,$20,$84
+digit100_hi: .byte $00,$00,$00,$01,$01,$01,$02,$02,$03,$03
+digit100_lo: .byte $00,$64,$C8,$2C,$90,$F4,$58,$BC,$20,$84
 .popseg
 
 .macro dec16_comparew table_hi, table_lo
 	.local @lt
-	cmp table_hi-1,y
+	cmp table_hi,y
 	bcc @lt
+	bne @lt ; only test the lo-part if hi-part is equal
 	pha
 	 txa
-	 cmp table_lo-1,y
+	 cmp table_lo,y
 	pla
 @lt:
 .endmacro
 .macro do_digit table_hi, table_lo
 	pha
+	 ; print Y as digit; put X in A and do SEC for subtraction
 	 jsr @print_dec16_helper
-	 sbc table_lo-1,y
+	 sbc table_lo,y
 	 tax
 	pla
-	sbc table_hi-1,y
+	sbc table_hi,y
 .endmacro
 
 ; Prints A:X as 2-5 digit decimal value, NO space after.
@@ -269,7 +271,7 @@ digit100_lo: .byte $64,$C8,$2C,$90,$F4,$58,$BC,$20,$84
 print_dec16:
 	ora #0
 	beq @less_than_256
-	
+
 	ldy #6
 	sty print_temp_
 
@@ -285,8 +287,8 @@ print_dec16:
 :	dec16_comparew digit1000_hi,digit1000_lo
 	bcs @got1000
 	dey
-	bne :-
-	cpy print_temp_
+	bne :-		; Y = 0.
+	cpy print_temp_ ; zero print_temp_ = print zero-digits
 	beq @got1000
 @cont_100:
 	ldy #9
@@ -313,15 +315,15 @@ print_dec16:
 	; value is now 00..99
 	txa
 	jmp print_dec_00_99
+@less_than_256:
+	txa
+	jmp print_dec
 @print_dec16_helper:
 	 tya
 	 jsr print_digit
 	 txa
 	 sec
 	rts
-@less_than_256:
-	txa
-	;jmp print_dec
 ; Prints A as 2-3 digit decimal value, NO space after.
 ; Preserved: Y
 print_dec:

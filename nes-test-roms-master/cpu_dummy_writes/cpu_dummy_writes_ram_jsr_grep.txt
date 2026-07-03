@@ -1,0 +1,1226 @@
+EA30  85 2A     sta $2A = 00                    A:60 X:00 Y:00 P:24 SP:FB CYC: 53 SL:254
+EA32  85 2E     sta $2E = 00                    A:60 X:00 Y:00 P:24 SP:FB CYC: 62 SL:254
+EA34  A9 F0     lda #$F0                        A:60 X:00 Y:00 P:24 SP:FB CYC: 71 SL:254
+EA36  85 2C     sta $2C = 00                    A:F0 X:00 Y:00 P:A4 SP:FB CYC: 77 SL:254
+EA38  A9 EA     lda #$EA                        A:F0 X:00 Y:00 P:A4 SP:FB CYC: 86 SL:254
+EA3A  85 2D     sta $2D = 00                    A:EA X:00 Y:00 P:A4 SP:FB CYC: 92 SL:254
+EA3C  A9 06     lda #$06                        A:EA X:00 Y:00 P:A4 SP:FB CYC:101 SL:254
+EA3E  85 35     sta $35 = 00                    A:06 X:00 Y:00 P:24 SP:FB CYC:107 SL:254
+--
+EA57  85 27     sta $27 = 00                    A:0E X:00 Y:00 P:25 SP:FB CYC:269 SL:254
+EA59  85 2B     sta $2B = 00                    A:0E X:00 Y:00 P:25 SP:FB CYC:278 SL:254
+EA5B  20 21 EB  jsr $EB21                       A:0E X:00 Y:00 P:25 SP:FB CYC:287 SL:254
+EB21  E6 25     inc $25 = 18                    A:0E X:00 Y:00 P:25 SP:F9 CYC:305 SL:254
+--
+EA5E  85 29     sta $29 = 00                    A:20 X:00 Y:00 P:25 SP:FB CYC: 27 SL:255
+EA60  20 21 EB  jsr $EB21                       A:20 X:00 Y:00 P:25 SP:FB CYC: 36 SL:255
+EB21  E6 25     inc $25 = 19                    A:20 X:00 Y:00 P:25 SP:F9 CYC: 54 SL:255
+--
+EA63  85 28     sta $28 = 00                    A:06 X:00 Y:00 P:25 SP:FB CYC:117 SL:255
+EA65  20 21 EB  jsr $EB21                       A:06 X:00 Y:00 P:25 SP:FB CYC:126 SL:255
+EB21  E6 25     inc $25 = 1A                    A:06 X:00 Y:00 P:25 SP:F9 CYC:144 SL:255
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:26 SP:F8 CYC:208 SL:256
+002B  0E F0 EA  asl $EAF0 = 28                  A:00 X:00 Y:00 P:26 SP:F6 CYC:226 SL:256
+002E  60        rts                             A:00 X:00 Y:00 P:24 SP:F6 CYC:244 SL:256
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 61 SL:242
+0027  0E 06 20  asl $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 79 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:24 SP:F7 CYC: 97 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 12 SL:246
+002B  0E F0 EA  asl $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 30 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:24 SP:F6 CYC: 48 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 67 SL:242
+0027  0E 06 20  asl $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EA57  85 27     sta $27 = 0E                    A:2E X:02 Y:00 P:25 SP:FB CYC:166 SL:256
+EA59  85 2B     sta $2B = 0E                    A:2E X:02 Y:00 P:25 SP:FB CYC:175 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:2E X:02 Y:00 P:25 SP:FB CYC:184 SL:256
+EB21  E6 25     inc $25 = 21                    A:2E X:02 Y:00 P:25 SP:F9 CYC:202 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:02 Y:00 P:25 SP:FB CYC:265 SL:256
+EA60  20 21 EB  jsr $EB21                       A:20 X:02 Y:00 P:25 SP:FB CYC:274 SL:256
+EB21  E6 25     inc $25 = 22                    A:20 X:02 Y:00 P:25 SP:F9 CYC:292 SL:256
+--
+EA63  85 28     sta $28 = 06                    A:06 X:02 Y:00 P:25 SP:FB CYC: 14 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:02 Y:00 P:25 SP:FB CYC: 23 SL:257
+EB21  E6 25     inc $25 = 23                    A:06 X:02 Y:00 P:25 SP:F9 CYC: 41 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:26 SP:F8 CYC:105 SL:258
+002B  2E F0 EA  rol $EAF0 = 28                  A:00 X:02 Y:00 P:26 SP:F6 CYC:123 SL:258
+002E  60        rts                             A:00 X:02 Y:00 P:24 SP:F6 CYC:141 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 73 SL:242
+0027  2E 06 20  rol $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 91 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:24 SP:F7 CYC:109 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  3 SL:246
+002B  2E F0 EA  rol $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 21 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:24 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  2E 06 20  rol $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:24 SP:F7 CYC: 94 SL:242
+--
+EA57  85 27     sta $27 = 2E                    A:4E X:04 Y:00 P:25 SP:FB CYC:287 SL:257
+EA59  85 2B     sta $2B = 2E                    A:4E X:04 Y:00 P:25 SP:FB CYC:296 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:4E X:04 Y:00 P:25 SP:FB CYC:305 SL:257
+EB21  E6 25     inc $25 = 2A                    A:4E X:04 Y:00 P:25 SP:F9 CYC:323 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:04 Y:00 P:25 SP:FB CYC: 45 SL:258
+EA60  20 21 EB  jsr $EB21                       A:20 X:04 Y:00 P:25 SP:FB CYC: 54 SL:258
+EB21  E6 25     inc $25 = 2B                    A:20 X:04 Y:00 P:25 SP:F9 CYC: 72 SL:258
+--
+EA63  85 28     sta $28 = 06                    A:06 X:04 Y:00 P:25 SP:FB CYC:135 SL:258
+EA65  20 21 EB  jsr $EB21                       A:06 X:04 Y:00 P:25 SP:FB CYC:144 SL:258
+EB21  E6 25     inc $25 = 2C                    A:06 X:04 Y:00 P:25 SP:F9 CYC:162 SL:258
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:04 Y:00 P:26 SP:F8 CYC:226 SL:259
+002B  4E F0 EA  lsr $EAF0 = 28                  A:00 X:04 Y:00 P:26 SP:F6 CYC:244 SL:259
+002E  60        rts                             A:00 X:04 Y:00 P:24 SP:F6 CYC:262 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 73 SL:242
+0027  4E 06 20  lsr $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 91 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC:109 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  3 SL:246
+002B  4E F0 EA  lsr $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 21 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:24 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  4E 06 20  lsr $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC: 94 SL:242
+--
+EA57  85 27     sta $27 = 4E                    A:6E X:06 Y:00 P:25 SP:FB CYC:268 SL:256
+EA59  85 2B     sta $2B = 4E                    A:6E X:06 Y:00 P:25 SP:FB CYC:277 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:6E X:06 Y:00 P:25 SP:FB CYC:286 SL:256
+EB21  E6 25     inc $25 = 33                    A:6E X:06 Y:00 P:25 SP:F9 CYC:304 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:06 Y:00 P:25 SP:FB CYC: 26 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:06 Y:00 P:25 SP:FB CYC: 35 SL:257
+EB21  E6 25     inc $25 = 34                    A:20 X:06 Y:00 P:25 SP:F9 CYC: 53 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:06 Y:00 P:25 SP:FB CYC:116 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:06 Y:00 P:25 SP:FB CYC:125 SL:257
+EB21  E6 25     inc $25 = 35                    A:06 X:06 Y:00 P:25 SP:F9 CYC:143 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:06 Y:00 P:26 SP:F8 CYC:207 SL:258
+002B  6E F0 EA  ror $EAF0 = 28                  A:00 X:06 Y:00 P:26 SP:F6 CYC:225 SL:258
+002E  60        rts                             A:00 X:06 Y:00 P:24 SP:F6 CYC:243 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 70 SL:242
+0027  6E 06 20  ror $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 88 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC:106 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  0 SL:246
+002B  6E F0 EA  ror $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 18 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:A4 SP:F6 CYC: 36 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  6E 06 20  ror $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:A5 SP:F7 CYC:104 SL:242
+--
+EA57  85 27     sta $27 = 6E                    A:CE X:08 Y:00 P:A5 SP:FB CYC: 97 SL:257
+EA59  85 2B     sta $2B = 6E                    A:CE X:08 Y:00 P:A5 SP:FB CYC:106 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:CE X:08 Y:00 P:A5 SP:FB CYC:115 SL:257
+EB21  E6 25     inc $25 = 3C                    A:CE X:08 Y:00 P:A5 SP:F9 CYC:133 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:08 Y:00 P:25 SP:FB CYC:196 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:08 Y:00 P:25 SP:FB CYC:205 SL:257
+EB21  E6 25     inc $25 = 3D                    A:20 X:08 Y:00 P:25 SP:F9 CYC:223 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:08 Y:00 P:25 SP:FB CYC:286 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:08 Y:00 P:25 SP:FB CYC:295 SL:257
+EB21  E6 25     inc $25 = 3E                    A:06 X:08 Y:00 P:25 SP:F9 CYC:313 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:08 Y:00 P:26 SP:F8 CYC: 36 SL:259
+002B  CE F0 EA  dec $EAF0 = 28                  A:00 X:08 Y:00 P:26 SP:F6 CYC: 54 SL:259
+002E  60        rts                             A:00 X:08 Y:00 P:24 SP:F6 CYC: 72 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 71 SL:242
+0027  CE 06 20  dec $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 89 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:24 SP:F7 CYC:107 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  2 SL:246
+002B  CE F0 EA  dec $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 20 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:25 SP:F6 CYC: 38 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 56 SL:242
+0027  CE 06 20  dec $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 74 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC: 92 SL:242
+--
+EA57  85 27     sta $27 = CE                    A:EE X:0A Y:00 P:A5 SP:FB CYC:180 SL:256
+EA59  85 2B     sta $2B = CE                    A:EE X:0A Y:00 P:A5 SP:FB CYC:189 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:EE X:0A Y:00 P:A5 SP:FB CYC:198 SL:256
+EB21  E6 25     inc $25 = 45                    A:EE X:0A Y:00 P:A5 SP:F9 CYC:216 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0A Y:00 P:25 SP:FB CYC:279 SL:256
+EA60  20 21 EB  jsr $EB21                       A:20 X:0A Y:00 P:25 SP:FB CYC:288 SL:256
+EB21  E6 25     inc $25 = 46                    A:20 X:0A Y:00 P:25 SP:F9 CYC:306 SL:256
+--
+EA63  85 28     sta $28 = 06                    A:06 X:0A Y:00 P:25 SP:FB CYC: 28 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:0A Y:00 P:25 SP:FB CYC: 37 SL:257
+EB21  E6 25     inc $25 = 47                    A:06 X:0A Y:00 P:25 SP:F9 CYC: 55 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0A Y:00 P:26 SP:F8 CYC:119 SL:258
+002B  EE F0 EA  inc $EAF0 = 28                  A:00 X:0A Y:00 P:26 SP:F6 CYC:137 SL:258
+002E  60        rts                             A:00 X:0A Y:00 P:24 SP:F6 CYC:155 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 65 SL:242
+0027  EE 06 20  inc $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 83 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:24 SP:F7 CYC:101 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  9 SL:246
+002B  EE F0 EA  inc $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 27 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:25 SP:F6 CYC: 45 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 64 SL:242
+0027  EE 06 20  inc $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 82 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC:100 SL:242
+--
+EA57  85 27     sta $27 = EE                    A:1E X:0D Y:00 P:25 SP:FB CYC:248 SL:260
+EA59  85 2B     sta $2B = EE                    A:1E X:0D Y:00 P:25 SP:FB CYC:257 SL:260
+EA5B  20 21 EB  jsr $EB21                       A:1E X:0D Y:00 P:25 SP:FB CYC:266 SL:260
+EB21  E6 25     inc $25 = 4F                    A:1E X:0D Y:00 P:25 SP:F9 CYC:284 SL:260
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0D Y:00 P:25 SP:FB CYC:  6 SL:-1
+EA60  20 21 EB  jsr $EB21                       A:20 X:0D Y:00 P:25 SP:FB CYC: 15 SL:-1
+EB21  E6 25     inc $25 = 50                    A:20 X:0D Y:00 P:25 SP:F9 CYC: 33 SL:-1
+--
+EA63  85 28     sta $28 = 06                    A:05 X:0D Y:00 P:25 SP:FB CYC: 96 SL:-1
+EA65  20 21 EB  jsr $EB21                       A:05 X:0D Y:00 P:25 SP:FB CYC:105 SL:-1
+EB21  E6 25     inc $25 = 51                    A:05 X:0D Y:00 P:25 SP:F9 CYC:123 SL:-1
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0D Y:00 P:26 SP:F8 CYC:188 SL:0
+002B  1E F0 EA  asl $EAF0,x @ EAFD = 20         A:00 X:0D Y:00 P:26 SP:F6 CYC:206 SL:0
+002E  60        rts                             A:00 X:0D Y:00 P:24 SP:F6 CYC:227 SL:0
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:01 Y:00 P:26 SP:F9 CYC: 73 SL:242
+0027  1E 05 20  asl $2005,x @ 2006 = FF         A:26 X:01 Y:00 P:26 SP:F7 CYC: 91 SL:242
+002A  60        rts                             A:26 X:01 Y:00 P:24 SP:F7 CYC:112 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:01 Y:00 P:27 SP:F8 CYC:  6 SL:246
+002B  1E F0 EA  asl $EAF0,x @ EAF1 = AD         A:00 X:01 Y:00 P:27 SP:F6 CYC: 24 SL:246
+002E  60        rts                             A:00 X:01 Y:00 P:25 SP:F6 CYC: 45 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:01 Y:00 P:27 SP:F9 CYC: 64 SL:242
+0027  1E 05 20  asl $2005,x @ 2006 = FF         A:26 X:01 Y:00 P:27 SP:F7 CYC: 82 SL:242
+002A  60        rts                             A:26 X:01 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EA57  85 27     sta $27 = 1E                    A:3E X:0F Y:00 P:25 SP:FB CYC:  5 SL:257
+EA59  85 2B     sta $2B = 1E                    A:3E X:0F Y:00 P:25 SP:FB CYC: 14 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:3E X:0F Y:00 P:25 SP:FB CYC: 23 SL:257
+EB21  E6 25     inc $25 = 58                    A:3E X:0F Y:00 P:25 SP:F9 CYC: 41 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0F Y:00 P:25 SP:FB CYC:104 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:0F Y:00 P:25 SP:FB CYC:113 SL:257
+EB21  E6 25     inc $25 = 59                    A:20 X:0F Y:00 P:25 SP:F9 CYC:131 SL:257
+--
+EA63  85 28     sta $28 = 05                    A:01 X:0F Y:00 P:25 SP:FB CYC:194 SL:257
+EA65  20 21 EB  jsr $EB21                       A:01 X:0F Y:00 P:25 SP:FB CYC:203 SL:257
+EB21  E6 25     inc $25 = 5A                    A:01 X:0F Y:00 P:25 SP:F9 CYC:221 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0F Y:00 P:26 SP:F8 CYC:285 SL:258
+002B  3E F0 EA  rol $EAF0,x @ EAFF = 32         A:00 X:0F Y:00 P:26 SP:F6 CYC:303 SL:258
+002E  60        rts                             A:00 X:0F Y:00 P:24 SP:F6 CYC:324 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:05 Y:00 P:26 SP:F9 CYC: 67 SL:242
+0027  3E 01 20  rol $2001,x @ 2006 = FF         A:26 X:05 Y:00 P:26 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:26 X:05 Y:00 P:24 SP:F7 CYC:106 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:05 Y:00 P:27 SP:F8 CYC:  0 SL:246
+002B  3E F0 EA  rol $EAF0,x @ EAF5 = 30         A:00 X:05 Y:00 P:27 SP:F6 CYC: 18 SL:246
+002E  60        rts                             A:00 X:05 Y:00 P:24 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:05 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  3E 01 20  rol $2001,x @ 2006 = FF         A:26 X:05 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:26 X:05 Y:00 P:24 SP:F7 CYC: 97 SL:242
+--
+EA57  85 27     sta $27 = 3E                    A:5E X:11 Y:00 P:25 SP:FB CYC:290 SL:257
+EA59  85 2B     sta $2B = 3E                    A:5E X:11 Y:00 P:25 SP:FB CYC:299 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:5E X:11 Y:00 P:25 SP:FB CYC:308 SL:257
+EB21  E6 25     inc $25 = 61                    A:5E X:11 Y:00 P:25 SP:F9 CYC:326 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:11 Y:00 P:25 SP:FB CYC: 48 SL:258
+EA60  20 21 EB  jsr $EB21                       A:20 X:11 Y:00 P:25 SP:FB CYC: 57 SL:258
+EB21  E6 25     inc $25 = 62                    A:20 X:11 Y:00 P:25 SP:F9 CYC: 75 SL:258
+--
+EA63  85 28     sta $28 = 01                    A:04 X:11 Y:00 P:25 SP:FB CYC:138 SL:258
+EA65  20 21 EB  jsr $EB21                       A:04 X:11 Y:00 P:25 SP:FB CYC:147 SL:258
+EB21  E6 25     inc $25 = 63                    A:04 X:11 Y:00 P:25 SP:F9 CYC:165 SL:258
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:11 Y:00 P:26 SP:F8 CYC:229 SL:259
+002B  5E F0 EA  lsr $EAF0,x @ EB01 = 05         A:00 X:11 Y:00 P:26 SP:F6 CYC:247 SL:259
+002E  60        rts                             A:00 X:11 Y:00 P:25 SP:F6 CYC:268 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:26 SP:F9 CYC: 58 SL:242
+0027  5E 04 20  lsr $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:26 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:26 X:02 Y:00 P:24 SP:F7 CYC: 97 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:27 SP:F8 CYC: 12 SL:246
+002B  5E F0 EA  lsr $EAF0,x @ EAF2 = 02         A:00 X:02 Y:00 P:27 SP:F6 CYC: 30 SL:246
+002E  60        rts                             A:00 X:02 Y:00 P:24 SP:F6 CYC: 51 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:27 SP:F9 CYC: 70 SL:242
+0027  5E 04 20  lsr $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:27 SP:F7 CYC: 88 SL:242
+002A  60        rts                             A:26 X:02 Y:00 P:24 SP:F7 CYC:109 SL:242
+--
+EA57  85 27     sta $27 = 5E                    A:7E X:13 Y:00 P:25 SP:FB CYC:262 SL:256
+EA59  85 2B     sta $2B = 5E                    A:7E X:13 Y:00 P:25 SP:FB CYC:271 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:7E X:13 Y:00 P:25 SP:FB CYC:280 SL:256
+EB21  E6 25     inc $25 = 6A                    A:7E X:13 Y:00 P:25 SP:F9 CYC:298 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:13 Y:00 P:25 SP:FB CYC: 20 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:13 Y:00 P:25 SP:FB CYC: 29 SL:257
+EB21  E6 25     inc $25 = 6B                    A:20 X:13 Y:00 P:25 SP:F9 CYC: 47 SL:257
+--
+EA63  85 28     sta $28 = 04                    A:02 X:13 Y:00 P:25 SP:FB CYC:110 SL:257
+EA65  20 21 EB  jsr $EB21                       A:02 X:13 Y:00 P:25 SP:FB CYC:119 SL:257
+EB21  E6 25     inc $25 = 6C                    A:02 X:13 Y:00 P:25 SP:F9 CYC:137 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:13 Y:00 P:26 SP:F8 CYC:201 SL:258
+002B  7E F0 EA  ror $EAF0,x @ EB03 = 8D         A:00 X:13 Y:00 P:26 SP:F6 CYC:219 SL:258
+002E  60        rts                             A:00 X:13 Y:00 P:25 SP:F6 CYC:240 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:04 Y:00 P:26 SP:F9 CYC: 67 SL:242
+0027  7E 02 20  ror $2002,x @ 2006 = FF         A:26 X:04 Y:00 P:26 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:26 X:04 Y:00 P:24 SP:F7 CYC:106 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:04 Y:00 P:27 SP:F8 CYC:  0 SL:246
+002B  7E F0 EA  ror $EAF0,x @ EAF4 = A5         A:00 X:04 Y:00 P:27 SP:F6 CYC: 18 SL:246
+002E  60        rts                             A:00 X:04 Y:00 P:A5 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:04 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  7E 02 20  ror $2002,x @ 2006 = FF         A:26 X:04 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:26 X:04 Y:00 P:A4 SP:F7 CYC: 97 SL:242
+--
+EA57  85 27     sta $27 = 7E                    A:DE X:15 Y:00 P:A5 SP:FB CYC:283 SL:256
+EA59  85 2B     sta $2B = 7E                    A:DE X:15 Y:00 P:A5 SP:FB CYC:292 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:DE X:15 Y:00 P:A5 SP:FB CYC:301 SL:256
+EB21  E6 25     inc $25 = 73                    A:DE X:15 Y:00 P:A5 SP:F9 CYC:319 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:15 Y:00 P:25 SP:FB CYC: 41 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:15 Y:00 P:25 SP:FB CYC: 50 SL:257
+EB21  E6 25     inc $25 = 74                    A:20 X:15 Y:00 P:25 SP:F9 CYC: 68 SL:257
+--
+EA63  85 28     sta $28 = 02                    A:04 X:15 Y:00 P:25 SP:FB CYC:131 SL:257
+EA65  20 21 EB  jsr $EB21                       A:04 X:15 Y:00 P:25 SP:FB CYC:140 SL:257
+EB21  E6 25     inc $25 = 75                    A:04 X:15 Y:00 P:25 SP:F9 CYC:158 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:15 Y:00 P:26 SP:F8 CYC:222 SL:258
+002B  DE F0 EA  dec $EAF0,x @ EB05 = 20         A:00 X:15 Y:00 P:26 SP:F6 CYC:240 SL:258
+002E  60        rts                             A:00 X:15 Y:00 P:24 SP:F6 CYC:261 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:26 SP:F9 CYC: 67 SL:242
+0027  DE 04 20  dec $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:26 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:26 X:02 Y:00 P:24 SP:F7 CYC:106 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:27 SP:F8 CYC:  0 SL:246
+002B  DE F0 EA  dec $EAF0,x @ EAF2 = 02         A:00 X:02 Y:00 P:27 SP:F6 CYC: 18 SL:246
+002E  60        rts                             A:00 X:02 Y:00 P:25 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  DE 04 20  dec $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:26 X:02 Y:00 P:25 SP:F7 CYC: 97 SL:242
+--
+EA57  85 27     sta $27 = DE                    A:FE X:17 Y:00 P:A5 SP:FB CYC: 23 SL:257
+EA59  85 2B     sta $2B = DE                    A:FE X:17 Y:00 P:A5 SP:FB CYC: 32 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:FE X:17 Y:00 P:A5 SP:FB CYC: 41 SL:257
+EB21  E6 25     inc $25 = 7C                    A:FE X:17 Y:00 P:A5 SP:F9 CYC: 59 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:17 Y:00 P:25 SP:FB CYC:122 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:17 Y:00 P:25 SP:FB CYC:131 SL:257
+EB21  E6 25     inc $25 = 7D                    A:20 X:17 Y:00 P:25 SP:F9 CYC:149 SL:257
+--
+EA63  85 28     sta $28 = 04                    A:03 X:17 Y:00 P:25 SP:FB CYC:212 SL:257
+EA65  20 21 EB  jsr $EB21                       A:03 X:17 Y:00 P:25 SP:FB CYC:221 SL:257
+EB21  E6 25     inc $25 = 7E                    A:03 X:17 Y:00 P:25 SP:F9 CYC:239 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:17 Y:00 P:26 SP:F8 CYC:303 SL:258
+002B  FE F0 EA  inc $EAF0,x @ EB07 = 33         A:00 X:17 Y:00 P:26 SP:F6 CYC:321 SL:258
+002E  60        rts                             A:00 X:17 Y:00 P:24 SP:F6 CYC:  1 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:03 Y:00 P:26 SP:F9 CYC: 64 SL:242
+0027  FE 03 20  inc $2003,x @ 2006 = FF         A:26 X:03 Y:00 P:26 SP:F7 CYC: 82 SL:242
+002A  60        rts                             A:26 X:03 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:03 Y:00 P:27 SP:F8 CYC:338 SL:245
+002B  FE F0 EA  inc $EAF0,x @ EAF3 = 20         A:00 X:03 Y:00 P:27 SP:F6 CYC: 15 SL:246
+002E  60        rts                             A:00 X:03 Y:00 P:25 SP:F6 CYC: 36 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:03 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  FE 03 20  inc $2003,x @ 2006 = FF         A:26 X:03 Y:00 P:27 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:26 X:03 Y:00 P:25 SP:F7 CYC:107 SL:242
+--
+EA57  85 27     sta $27 = FE                    A:0F X:00 Y:00 P:25 SP:FB CYC:286 SL:253
+EA59  85 2B     sta $2B = FE                    A:0F X:00 Y:00 P:25 SP:FB CYC:295 SL:253
+EA5B  20 21 EB  jsr $EB21                       A:0F X:00 Y:00 P:25 SP:FB CYC:304 SL:253
+EB21  E6 25     inc $25 = 86                    A:0F X:00 Y:00 P:25 SP:F9 CYC:322 SL:253
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:00 Y:00 P:25 SP:FB CYC: 44 SL:254
+EA60  20 21 EB  jsr $EB21                       A:20 X:00 Y:00 P:25 SP:FB CYC: 53 SL:254
+EB21  E6 25     inc $25 = 87                    A:20 X:00 Y:00 P:25 SP:F9 CYC: 71 SL:254
+--
+EA63  85 28     sta $28 = 03                    A:06 X:00 Y:00 P:25 SP:FB CYC:134 SL:254
+EA65  20 21 EB  jsr $EB21                       A:06 X:00 Y:00 P:25 SP:FB CYC:143 SL:254
+EB21  E6 25     inc $25 = 88                    A:06 X:00 Y:00 P:25 SP:F9 CYC:161 SL:254
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:26 SP:F8 CYC:225 SL:255
+002B  0F F0 EA *slo $EAF0 = 28                  A:00 X:00 Y:00 P:26 SP:F6 CYC:243 SL:255
+002E  60        rts                             A:50 X:00 Y:00 P:24 SP:F6 CYC:261 SL:255
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 73 SL:242
+0027  0F 06 20 *slo $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 91 SL:242
+002A  60        rts                             A:6F X:00 Y:00 P:24 SP:F7 CYC:109 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  3 SL:246
+002B  0F F0 EA *slo $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 21 SL:246
+002E  60        rts                             A:50 X:00 Y:00 P:24 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  0F 06 20 *slo $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:6F X:00 Y:00 P:24 SP:F7 CYC: 94 SL:242
+--
+EA57  85 27     sta $27 = 0F                    A:2F X:02 Y:00 P:25 SP:FB CYC: 17 SL:257
+EA59  85 2B     sta $2B = 0F                    A:2F X:02 Y:00 P:25 SP:FB CYC: 26 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:2F X:02 Y:00 P:25 SP:FB CYC: 35 SL:257
+EB21  E6 25     inc $25 = 8F                    A:2F X:02 Y:00 P:25 SP:F9 CYC: 53 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:02 Y:00 P:25 SP:FB CYC:116 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:02 Y:00 P:25 SP:FB CYC:125 SL:257
+EB21  E6 25     inc $25 = 90                    A:20 X:02 Y:00 P:25 SP:F9 CYC:143 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:02 Y:00 P:25 SP:FB CYC:206 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:02 Y:00 P:25 SP:FB CYC:215 SL:257
+EB21  E6 25     inc $25 = 91                    A:06 X:02 Y:00 P:25 SP:F9 CYC:233 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:26 SP:F8 CYC:297 SL:258
+002B  2F F0 EA *rla $EAF0 = 28                  A:00 X:02 Y:00 P:26 SP:F6 CYC:315 SL:258
+002E  60        rts                             A:00 X:02 Y:00 P:26 SP:F6 CYC:333 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 68 SL:242
+0027  2F 06 20 *rla $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:00 X:00 Y:00 P:26 SP:F7 CYC:104 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:340 SL:245
+002B  2F F0 EA *rla $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 17 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 35 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 74 SL:242
+0027  2F 06 20 *rla $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 92 SL:242
+002A  60        rts                             A:01 X:00 Y:00 P:24 SP:F7 CYC:110 SL:242
+--
+EA57  85 27     sta $27 = 2F                    A:4F X:04 Y:00 P:25 SP:FB CYC:264 SL:256
+EA59  85 2B     sta $2B = 2F                    A:4F X:04 Y:00 P:25 SP:FB CYC:273 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:4F X:04 Y:00 P:25 SP:FB CYC:282 SL:256
+EB21  E6 25     inc $25 = 98                    A:4F X:04 Y:00 P:25 SP:F9 CYC:300 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:04 Y:00 P:25 SP:FB CYC: 22 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:04 Y:00 P:25 SP:FB CYC: 31 SL:257
+EB21  E6 25     inc $25 = 99                    A:20 X:04 Y:00 P:25 SP:F9 CYC: 49 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:04 Y:00 P:25 SP:FB CYC:112 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:04 Y:00 P:25 SP:FB CYC:121 SL:257
+EB21  E6 25     inc $25 = 9A                    A:06 X:04 Y:00 P:25 SP:F9 CYC:139 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:04 Y:00 P:26 SP:F8 CYC:203 SL:258
+002B  4F F0 EA *sre $EAF0 = 28                  A:00 X:04 Y:00 P:26 SP:F6 CYC:221 SL:258
+002E  60        rts                             A:14 X:04 Y:00 P:24 SP:F6 CYC:239 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 65 SL:242
+0027  4F 06 20 *sre $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 83 SL:242
+002A  60        rts                             A:37 X:00 Y:00 P:25 SP:F7 CYC:101 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  9 SL:246
+002B  4F F0 EA *sre $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 27 SL:246
+002E  60        rts                             A:14 X:00 Y:00 P:24 SP:F6 CYC: 45 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 64 SL:242
+0027  4F 06 20 *sre $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 82 SL:242
+002A  60        rts                             A:37 X:00 Y:00 P:25 SP:F7 CYC:100 SL:242
+--
+EA57  85 27     sta $27 = 4F                    A:6F X:06 Y:00 P:25 SP:FB CYC:113 SL:257
+EA59  85 2B     sta $2B = 4F                    A:6F X:06 Y:00 P:25 SP:FB CYC:122 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:6F X:06 Y:00 P:25 SP:FB CYC:131 SL:257
+EB21  E6 25     inc $25 = A1                    A:6F X:06 Y:00 P:25 SP:F9 CYC:149 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:06 Y:00 P:25 SP:FB CYC:212 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:06 Y:00 P:25 SP:FB CYC:221 SL:257
+EB21  E6 25     inc $25 = A2                    A:20 X:06 Y:00 P:25 SP:F9 CYC:239 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:06 Y:00 P:25 SP:FB CYC:302 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:06 Y:00 P:25 SP:FB CYC:311 SL:257
+EB21  E6 25     inc $25 = A3                    A:06 X:06 Y:00 P:25 SP:F9 CYC:329 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:06 Y:00 P:26 SP:F8 CYC: 52 SL:259
+002B  6F F0 EA *rra $EAF0 = 28                  A:00 X:06 Y:00 P:26 SP:F6 CYC: 70 SL:259
+002E  60        rts                             A:14 X:06 Y:00 P:24 SP:F6 CYC: 88 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 67 SL:242
+0027  6F 06 20 *rra $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:38 X:00 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:338 SL:245
+002B  6F F0 EA *rra $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 15 SL:246
+002E  60        rts                             A:94 X:00 Y:00 P:A4 SP:F6 CYC: 33 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 73 SL:242
+0027  6F 06 20 *rra $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 91 SL:242
+002A  60        rts                             A:B8 X:00 Y:00 P:A4 SP:F7 CYC:109 SL:242
+--
+EA57  85 27     sta $27 = 6F                    A:CF X:08 Y:00 P:A5 SP:FB CYC: 82 SL:256
+EA59  85 2B     sta $2B = 6F                    A:CF X:08 Y:00 P:A5 SP:FB CYC: 91 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:CF X:08 Y:00 P:A5 SP:FB CYC:100 SL:256
+EB21  E6 25     inc $25 = AA                    A:CF X:08 Y:00 P:A5 SP:F9 CYC:118 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:08 Y:00 P:25 SP:FB CYC:181 SL:256
+EA60  20 21 EB  jsr $EB21                       A:20 X:08 Y:00 P:25 SP:FB CYC:190 SL:256
+EB21  E6 25     inc $25 = AB                    A:20 X:08 Y:00 P:25 SP:F9 CYC:208 SL:256
+--
+EA63  85 28     sta $28 = 06                    A:06 X:08 Y:00 P:25 SP:FB CYC:271 SL:256
+EA65  20 21 EB  jsr $EB21                       A:06 X:08 Y:00 P:25 SP:FB CYC:280 SL:256
+EB21  E6 25     inc $25 = AC                    A:06 X:08 Y:00 P:25 SP:F9 CYC:298 SL:256
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:08 Y:00 P:26 SP:F8 CYC: 21 SL:258
+002B  CF F0 EA *dcp $EAF0 = 28                  A:00 X:08 Y:00 P:26 SP:F6 CYC: 39 SL:258
+002E  60        rts                             A:00 X:08 Y:00 P:A4 SP:F6 CYC: 57 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 73 SL:242
+0027  CF 06 20 *dcp $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 91 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC:109 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  3 SL:246
+002B  CF F0 EA *dcp $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 21 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:A4 SP:F6 CYC: 39 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  CF 06 20 *dcp $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC: 94 SL:242
+--
+EA57  85 27     sta $27 = CF                    A:EF X:0A Y:00 P:A5 SP:FB CYC: 91 SL:256
+EA59  85 2B     sta $2B = CF                    A:EF X:0A Y:00 P:A5 SP:FB CYC:100 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:EF X:0A Y:00 P:A5 SP:FB CYC:109 SL:256
+EB21  E6 25     inc $25 = B3                    A:EF X:0A Y:00 P:A5 SP:F9 CYC:127 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0A Y:00 P:25 SP:FB CYC:190 SL:256
+EA60  20 21 EB  jsr $EB21                       A:20 X:0A Y:00 P:25 SP:FB CYC:199 SL:256
+EB21  E6 25     inc $25 = B4                    A:20 X:0A Y:00 P:25 SP:F9 CYC:217 SL:256
+--
+EA63  85 28     sta $28 = 06                    A:06 X:0A Y:00 P:25 SP:FB CYC:280 SL:256
+EA65  20 21 EB  jsr $EB21                       A:06 X:0A Y:00 P:25 SP:FB CYC:289 SL:256
+EB21  E6 25     inc $25 = B5                    A:06 X:0A Y:00 P:25 SP:F9 CYC:307 SL:256
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0A Y:00 P:26 SP:F8 CYC: 30 SL:258
+002B  EF F0 EA *isb $EAF0 = 28                  A:00 X:0A Y:00 P:26 SP:F6 CYC: 48 SL:258
+002E  60        rts                             A:D6 X:0A Y:00 P:A4 SP:F6 CYC: 66 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 61 SL:242
+0027  EF 06 20 *isb $2006 = FF                  A:25 X:00 Y:00 P:26 SP:F7 CYC: 79 SL:242
+002A  60        rts                             A:FE X:00 Y:00 P:A4 SP:F7 CYC: 97 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 12 SL:246
+002B  EF F0 EA *isb $EAF0 = 28                  A:00 X:00 Y:00 P:27 SP:F6 CYC: 30 SL:246
+002E  60        rts                             A:D7 X:00 Y:00 P:A4 SP:F6 CYC: 48 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 67 SL:242
+0027  EF 06 20 *isb $2006 = FF                  A:25 X:00 Y:00 P:27 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:FF X:00 Y:00 P:A4 SP:F7 CYC:103 SL:242
+--
+EA57  85 27     sta $27 = EF                    A:1F X:0D Y:00 P:25 SP:FB CYC:339 SL:-1
+EA59  85 2B     sta $2B = EF                    A:1F X:0D Y:00 P:25 SP:FB CYC:  8 SL:0
+EA5B  20 21 EB  jsr $EB21                       A:1F X:0D Y:00 P:25 SP:FB CYC: 17 SL:0
+EB21  E6 25     inc $25 = BD                    A:1F X:0D Y:00 P:25 SP:F9 CYC: 35 SL:0
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0D Y:00 P:25 SP:FB CYC: 98 SL:0
+EA60  20 21 EB  jsr $EB21                       A:20 X:0D Y:00 P:25 SP:FB CYC:107 SL:0
+EB21  E6 25     inc $25 = BE                    A:20 X:0D Y:00 P:25 SP:F9 CYC:125 SL:0
+--
+EA63  85 28     sta $28 = 06                    A:05 X:0D Y:00 P:25 SP:FB CYC:188 SL:0
+EA65  20 21 EB  jsr $EB21                       A:05 X:0D Y:00 P:25 SP:FB CYC:197 SL:0
+EB21  E6 25     inc $25 = BF                    A:05 X:0D Y:00 P:25 SP:F9 CYC:215 SL:0
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0D Y:00 P:26 SP:F8 CYC:279 SL:1
+002B  1F F0 EA *slo $EAF0,x @ EAFD = 20         A:00 X:0D Y:00 P:26 SP:F6 CYC:297 SL:1
+002E  60        rts                             A:40 X:0D Y:00 P:24 SP:F6 CYC:318 SL:1
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:01 Y:00 P:26 SP:F9 CYC: 64 SL:242
+0027  1F 05 20 *slo $2005,x @ 2006 = FF         A:26 X:01 Y:00 P:26 SP:F7 CYC: 82 SL:242
+002A  60        rts                             A:6E X:01 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:01 Y:00 P:27 SP:F8 CYC:338 SL:245
+002B  1F F0 EA *slo $EAF0,x @ EAF1 = AD         A:00 X:01 Y:00 P:27 SP:F6 CYC: 15 SL:246
+002E  60        rts                             A:5A X:01 Y:00 P:25 SP:F6 CYC: 36 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:01 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  1F 05 20 *slo $2005,x @ 2006 = FF         A:26 X:01 Y:00 P:27 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:6E X:01 Y:00 P:24 SP:F7 CYC:107 SL:242
+--
+EA57  85 27     sta $27 = 1F                    A:3F X:0F Y:00 P:25 SP:FB CYC:100 SL:257
+EA59  85 2B     sta $2B = 1F                    A:3F X:0F Y:00 P:25 SP:FB CYC:109 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:3F X:0F Y:00 P:25 SP:FB CYC:118 SL:257
+EB21  E6 25     inc $25 = C6                    A:3F X:0F Y:00 P:25 SP:F9 CYC:136 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0F Y:00 P:25 SP:FB CYC:199 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:0F Y:00 P:25 SP:FB CYC:208 SL:257
+EB21  E6 25     inc $25 = C7                    A:20 X:0F Y:00 P:25 SP:F9 CYC:226 SL:257
+--
+EA63  85 28     sta $28 = 05                    A:01 X:0F Y:00 P:25 SP:FB CYC:289 SL:257
+EA65  20 21 EB  jsr $EB21                       A:01 X:0F Y:00 P:25 SP:FB CYC:298 SL:257
+EB21  E6 25     inc $25 = C8                    A:01 X:0F Y:00 P:25 SP:F9 CYC:316 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0F Y:00 P:26 SP:F8 CYC: 39 SL:259
+002B  3F F0 EA *rla $EAF0,x @ EAFF = 32         A:00 X:0F Y:00 P:26 SP:F6 CYC: 57 SL:259
+002E  60        rts                             A:00 X:0F Y:00 P:26 SP:F6 CYC: 78 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:05 Y:00 P:26 SP:F9 CYC: 56 SL:242
+0027  3F 01 20 *rla $2001,x @ 2006 = FF         A:26 X:05 Y:00 P:26 SP:F7 CYC: 74 SL:242
+002A  60        rts                             A:04 X:05 Y:00 P:24 SP:F7 CYC: 95 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:05 Y:00 P:27 SP:F8 CYC: 11 SL:246
+002B  3F F0 EA *rla $EAF0,x @ EAF5 = 30         A:00 X:05 Y:00 P:27 SP:F6 CYC: 29 SL:246
+002E  60        rts                             A:00 X:05 Y:00 P:26 SP:F6 CYC: 50 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:05 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  3F 01 20 *rla $2001,x @ 2006 = FF         A:26 X:05 Y:00 P:27 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:04 X:05 Y:00 P:24 SP:F7 CYC:107 SL:242
+--
+EA57  85 27     sta $27 = 3F                    A:5F X:11 Y:00 P:25 SP:FB CYC:190 SL:257
+EA59  85 2B     sta $2B = 3F                    A:5F X:11 Y:00 P:25 SP:FB CYC:199 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:5F X:11 Y:00 P:25 SP:FB CYC:208 SL:257
+EB21  E6 25     inc $25 = CF                    A:5F X:11 Y:00 P:25 SP:F9 CYC:226 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:11 Y:00 P:25 SP:FB CYC:289 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:11 Y:00 P:25 SP:FB CYC:298 SL:257
+EB21  E6 25     inc $25 = D0                    A:20 X:11 Y:00 P:25 SP:F9 CYC:316 SL:257
+--
+EA63  85 28     sta $28 = 01                    A:04 X:11 Y:00 P:25 SP:FB CYC: 38 SL:258
+EA65  20 21 EB  jsr $EB21                       A:04 X:11 Y:00 P:25 SP:FB CYC: 47 SL:258
+EB21  E6 25     inc $25 = D1                    A:04 X:11 Y:00 P:25 SP:F9 CYC: 65 SL:258
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:11 Y:00 P:26 SP:F8 CYC:129 SL:259
+002B  5F F0 EA *sre $EAF0,x @ EB01 = 05         A:00 X:11 Y:00 P:26 SP:F6 CYC:147 SL:259
+002E  60        rts                             A:02 X:11 Y:00 P:25 SP:F6 CYC:168 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:26 SP:F9 CYC: 62 SL:242
+0027  5F 04 20 *sre $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:26 SP:F7 CYC: 80 SL:242
+002A  60        rts                             A:35 X:02 Y:00 P:24 SP:F7 CYC:101 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:27 SP:F8 CYC:  9 SL:246
+002B  5F F0 EA *sre $EAF0,x @ EAF2 = 02         A:00 X:02 Y:00 P:27 SP:F6 CYC: 27 SL:246
+002E  60        rts                             A:01 X:02 Y:00 P:24 SP:F6 CYC: 48 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:27 SP:F9 CYC: 67 SL:242
+0027  5F 04 20 *sre $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:27 SP:F7 CYC: 85 SL:242
+002A  60        rts                             A:35 X:02 Y:00 P:24 SP:F7 CYC:106 SL:242
+--
+EA57  85 27     sta $27 = 5F                    A:7F X:13 Y:00 P:25 SP:FB CYC:259 SL:256
+EA59  85 2B     sta $2B = 5F                    A:7F X:13 Y:00 P:25 SP:FB CYC:268 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:7F X:13 Y:00 P:25 SP:FB CYC:277 SL:256
+EB21  E6 25     inc $25 = D8                    A:7F X:13 Y:00 P:25 SP:F9 CYC:295 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:13 Y:00 P:25 SP:FB CYC: 17 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:13 Y:00 P:25 SP:FB CYC: 26 SL:257
+EB21  E6 25     inc $25 = D9                    A:20 X:13 Y:00 P:25 SP:F9 CYC: 44 SL:257
+--
+EA63  85 28     sta $28 = 04                    A:02 X:13 Y:00 P:25 SP:FB CYC:107 SL:257
+EA65  20 21 EB  jsr $EB21                       A:02 X:13 Y:00 P:25 SP:FB CYC:116 SL:257
+EB21  E6 25     inc $25 = DA                    A:02 X:13 Y:00 P:25 SP:F9 CYC:134 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:13 Y:00 P:26 SP:F8 CYC:198 SL:258
+002B  7F F0 EA *rra $EAF0,x @ EB03 = 8D         A:00 X:13 Y:00 P:26 SP:F6 CYC:216 SL:258
+002E  60        rts                             A:47 X:13 Y:00 P:24 SP:F6 CYC:237 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:04 Y:00 P:26 SP:F9 CYC: 64 SL:242
+0027  7F 02 20 *rra $2002,x @ 2006 = FF         A:26 X:04 Y:00 P:26 SP:F7 CYC: 82 SL:242
+002A  60        rts                             A:39 X:04 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:04 Y:00 P:27 SP:F8 CYC:338 SL:245
+002B  7F F0 EA *rra $EAF0,x @ EAF4 = A5         A:00 X:04 Y:00 P:27 SP:F6 CYC: 15 SL:246
+002E  60        rts                             A:D3 X:04 Y:00 P:A4 SP:F6 CYC: 36 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:04 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  7F 02 20 *rra $2002,x @ 2006 = FF         A:26 X:04 Y:00 P:27 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:B9 X:04 Y:00 P:A4 SP:F7 CYC:107 SL:242
+--
+EA57  85 27     sta $27 = 7F                    A:DF X:15 Y:00 P:A5 SP:FB CYC:100 SL:257
+EA59  85 2B     sta $2B = 7F                    A:DF X:15 Y:00 P:A5 SP:FB CYC:109 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:DF X:15 Y:00 P:A5 SP:FB CYC:118 SL:257
+EB21  E6 25     inc $25 = E1                    A:DF X:15 Y:00 P:A5 SP:F9 CYC:136 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:15 Y:00 P:25 SP:FB CYC:199 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:15 Y:00 P:25 SP:FB CYC:208 SL:257
+EB21  E6 25     inc $25 = E2                    A:20 X:15 Y:00 P:25 SP:F9 CYC:226 SL:257
+--
+EA63  85 28     sta $28 = 02                    A:04 X:15 Y:00 P:25 SP:FB CYC:289 SL:257
+EA65  20 21 EB  jsr $EB21                       A:04 X:15 Y:00 P:25 SP:FB CYC:298 SL:257
+EB21  E6 25     inc $25 = E3                    A:04 X:15 Y:00 P:25 SP:F9 CYC:316 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:15 Y:00 P:26 SP:F8 CYC: 39 SL:259
+002B  DF F0 EA *dcp $EAF0,x @ EB05 = 20         A:00 X:15 Y:00 P:26 SP:F6 CYC: 57 SL:259
+002E  60        rts                             A:00 X:15 Y:00 P:A4 SP:F6 CYC: 78 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:26 SP:F9 CYC: 56 SL:242
+0027  DF 04 20 *dcp $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:26 SP:F7 CYC: 74 SL:242
+002A  60        rts                             A:26 X:02 Y:00 P:25 SP:F7 CYC: 95 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:27 SP:F8 CYC: 11 SL:246
+002B  DF F0 EA *dcp $EAF0,x @ EAF2 = 02         A:00 X:02 Y:00 P:27 SP:F6 CYC: 29 SL:246
+002E  60        rts                             A:00 X:02 Y:00 P:A4 SP:F6 CYC: 50 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:02 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  DF 04 20 *dcp $2004,x @ 2006 = FF         A:26 X:02 Y:00 P:27 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:26 X:02 Y:00 P:25 SP:F7 CYC:107 SL:242
+--
+EA57  85 27     sta $27 = DF                    A:FF X:17 Y:00 P:A5 SP:FB CYC:264 SL:256
+EA59  85 2B     sta $2B = DF                    A:FF X:17 Y:00 P:A5 SP:FB CYC:273 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:FF X:17 Y:00 P:A5 SP:FB CYC:282 SL:256
+EB21  E6 25     inc $25 = EA                    A:FF X:17 Y:00 P:A5 SP:F9 CYC:300 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:17 Y:00 P:25 SP:FB CYC: 22 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:17 Y:00 P:25 SP:FB CYC: 31 SL:257
+EB21  E6 25     inc $25 = EB                    A:20 X:17 Y:00 P:25 SP:F9 CYC: 49 SL:257
+--
+EA63  85 28     sta $28 = 04                    A:03 X:17 Y:00 P:25 SP:FB CYC:112 SL:257
+EA65  20 21 EB  jsr $EB21                       A:03 X:17 Y:00 P:25 SP:FB CYC:121 SL:257
+EB21  E6 25     inc $25 = EC                    A:03 X:17 Y:00 P:25 SP:F9 CYC:139 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:17 Y:00 P:26 SP:F8 CYC:203 SL:258
+002B  FF F0 EA *isb $EAF0,x @ EB07 = 33         A:00 X:17 Y:00 P:26 SP:F6 CYC:221 SL:258
+002E  60        rts                             A:CB X:17 Y:00 P:A4 SP:F6 CYC:242 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:03 Y:00 P:26 SP:F9 CYC: 68 SL:242
+0027  FF 03 20 *isb $2003,x @ 2006 = FF         A:26 X:03 Y:00 P:26 SP:F7 CYC: 86 SL:242
+002A  60        rts                             A:FE X:03 Y:00 P:A4 SP:F7 CYC:107 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:03 Y:00 P:27 SP:F8 CYC:  2 SL:246
+002B  FF F0 EA *isb $EAF0,x @ EAF3 = 20         A:00 X:03 Y:00 P:27 SP:F6 CYC: 20 SL:246
+002E  60        rts                             A:DF X:03 Y:00 P:A4 SP:F6 CYC: 41 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:03 Y:00 P:27 SP:F9 CYC: 59 SL:242
+0027  FF 03 20 *isb $2003,x @ 2006 = FF         A:26 X:03 Y:00 P:27 SP:F7 CYC: 77 SL:242
+002A  60        rts                             A:FF X:03 Y:00 P:A4 SP:F7 CYC: 98 SL:242
+--
+EA57  85 27     sta $27 = FF                    A:03 X:00 Y:00 P:25 SP:FB CYC:304 SL:253
+EA59  85 2B     sta $2B = FF                    A:03 X:00 Y:00 P:25 SP:FB CYC:313 SL:253
+EA5B  20 21 EB  jsr $EB21                       A:03 X:00 Y:00 P:25 SP:FB CYC:322 SL:253
+EB21  E6 25     inc $25 = F4                    A:03 X:00 Y:00 P:25 SP:F9 CYC:340 SL:253
+--
+EA5E  85 29     sta $29 = 20                    A:EA X:00 Y:00 P:A5 SP:FB CYC: 62 SL:254
+EA60  20 21 EB  jsr $EB21                       A:EA X:00 Y:00 P:A5 SP:FB CYC: 71 SL:254
+EB21  E6 25     inc $25 = F5                    A:EA X:00 Y:00 P:A5 SP:F9 CYC: 89 SL:254
+--
+EA63  85 28     sta $28 = 03                    A:35 X:00 Y:00 P:25 SP:FB CYC:152 SL:254
+EA65  20 21 EB  jsr $EB21                       A:35 X:00 Y:00 P:25 SP:FB CYC:161 SL:254
+EB21  E6 25     inc $25 = F6                    A:35 X:00 Y:00 P:25 SP:F9 CYC:179 SL:254
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:26 SP:F8 CYC:243 SL:255
+002B  03 F0    *slo ($F0,x) @ F0 = 0000 = 00    A:00 X:00 Y:00 P:26 SP:F6 CYC:261 SL:255
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC:285 SL:255
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 61 SL:242
+0027  03 35    *slo ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:26 SP:F7 CYC: 79 SL:242
+0029  EA        nop                             A:6F X:00 Y:00 P:24 SP:F7 CYC:103 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  3 SL:246
+002B  03 F0    *slo ($F0,x) @ F0 = 0000 = 00    A:00 X:00 Y:00 P:27 SP:F6 CYC: 21 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 45 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 70 SL:242
+0027  03 35    *slo ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:27 SP:F7 CYC: 88 SL:242
+0029  EA        nop                             A:6F X:00 Y:00 P:24 SP:F7 CYC:112 SL:242
+--
+EA57  85 27     sta $27 = 03                    A:23 X:02 Y:00 P:25 SP:FB CYC:339 SL:255
+EA59  85 2B     sta $2B = 03                    A:23 X:02 Y:00 P:25 SP:FB CYC:  7 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:23 X:02 Y:00 P:25 SP:FB CYC: 16 SL:256
+EB21  E6 25     inc $25 = FD                    A:23 X:02 Y:00 P:25 SP:F9 CYC: 34 SL:256
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:02 Y:00 P:A5 SP:FB CYC: 97 SL:256
+EA60  20 21 EB  jsr $EB21                       A:EA X:02 Y:00 P:A5 SP:FB CYC:106 SL:256
+EB21  E6 25     inc $25 = FE                    A:EA X:02 Y:00 P:A5 SP:F9 CYC:124 SL:256
+--
+EA63  85 28     sta $28 = 35                    A:35 X:02 Y:00 P:25 SP:FB CYC:187 SL:256
+EA65  20 21 EB  jsr $EB21                       A:35 X:02 Y:00 P:25 SP:FB CYC:196 SL:256
+EB21  E6 25     inc $25 = FF                    A:35 X:02 Y:00 P:25 SP:F9 CYC:214 SL:256
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:26 SP:F8 CYC:290 SL:257
+002B  23 F0    *rla ($F0,x) @ F2 = 0000 = 00    A:00 X:02 Y:00 P:26 SP:F6 CYC:308 SL:257
+002D  EA        nop                             A:00 X:02 Y:00 P:26 SP:F6 CYC:332 SL:257
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 68 SL:242
+0027  23 35    *rla ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:26 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:00 X:00 Y:00 P:26 SP:F7 CYC:110 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 11 SL:246
+002B  23 F0    *rla ($F0,x) @ F0 = 0000 = 00    A:00 X:00 Y:00 P:27 SP:F6 CYC: 29 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 53 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 56 SL:242
+0027  23 35    *rla ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:27 SP:F7 CYC: 74 SL:242
+0029  EA        nop                             A:01 X:00 Y:00 P:24 SP:F7 CYC: 98 SL:242
+--
+EA57  85 27     sta $27 = 23                    A:43 X:04 Y:00 P:25 SP:FB CYC:  4 SL:257
+EA59  85 2B     sta $2B = 23                    A:43 X:04 Y:00 P:25 SP:FB CYC: 13 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:43 X:04 Y:00 P:25 SP:FB CYC: 22 SL:257
+EB21  E6 25     inc $25 = 06                    A:43 X:04 Y:00 P:25 SP:F9 CYC: 40 SL:257
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:04 Y:00 P:A5 SP:FB CYC:103 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:04 Y:00 P:A5 SP:FB CYC:112 SL:257
+EB21  E6 25     inc $25 = 07                    A:EA X:04 Y:00 P:A5 SP:F9 CYC:130 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:04 Y:00 P:25 SP:FB CYC:193 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:04 Y:00 P:25 SP:FB CYC:202 SL:257
+EB21  E6 25     inc $25 = 08                    A:35 X:04 Y:00 P:25 SP:F9 CYC:220 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:04 Y:00 P:26 SP:F8 CYC:284 SL:258
+002B  43 F0    *sre ($F0,x) @ F4 = 0000 = 01    A:00 X:04 Y:00 P:26 SP:F6 CYC:302 SL:258
+002D  EA        nop                             A:00 X:04 Y:00 P:27 SP:F6 CYC:326 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 74 SL:242
+0027  43 35    *sre ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:26 SP:F7 CYC: 92 SL:242
+0029  EA        nop                             A:37 X:00 Y:00 P:25 SP:F7 CYC:116 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  9 SL:246
+002B  43 F0    *sre ($F0,x) @ F0 = 0000 = 00    A:00 X:00 Y:00 P:27 SP:F6 CYC: 27 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 51 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  43 35    *sre ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:27 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:37 X:00 Y:00 P:25 SP:F7 CYC:110 SL:242
+--
+EA57  85 27     sta $27 = 43                    A:63 X:06 Y:00 P:25 SP:FB CYC:267 SL:256
+EA59  85 2B     sta $2B = 43                    A:63 X:06 Y:00 P:25 SP:FB CYC:276 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:63 X:06 Y:00 P:25 SP:FB CYC:285 SL:256
+EB21  E6 25     inc $25 = 0F                    A:63 X:06 Y:00 P:25 SP:F9 CYC:303 SL:256
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:06 Y:00 P:A5 SP:FB CYC: 25 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:06 Y:00 P:A5 SP:FB CYC: 34 SL:257
+EB21  E6 25     inc $25 = 10                    A:EA X:06 Y:00 P:A5 SP:F9 CYC: 52 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:06 Y:00 P:25 SP:FB CYC:115 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:06 Y:00 P:25 SP:FB CYC:124 SL:257
+EB21  E6 25     inc $25 = 11                    A:35 X:06 Y:00 P:25 SP:F9 CYC:142 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:06 Y:00 P:26 SP:F8 CYC:206 SL:258
+002B  63 F0    *rra ($F0,x) @ F6 = 0000 = 00    A:00 X:06 Y:00 P:26 SP:F6 CYC:224 SL:258
+002D  EA        nop                             A:00 X:06 Y:00 P:26 SP:F6 CYC:248 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 59 SL:242
+0027  63 35    *rra ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:26 SP:F7 CYC: 77 SL:242
+0029  EA        nop                             A:38 X:00 Y:00 P:24 SP:F7 CYC:101 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  2 SL:246
+002B  63 F0    *rra ($F0,x) @ F0 = 0000 = 00    A:00 X:00 Y:00 P:27 SP:F6 CYC: 20 SL:246
+002D  EA        nop                             A:80 X:00 Y:00 P:A4 SP:F6 CYC: 44 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  63 35    *rra ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:27 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:B8 X:00 Y:00 P:A4 SP:F7 CYC:110 SL:242
+--
+EA57  85 27     sta $27 = 63                    A:C3 X:08 Y:00 P:A5 SP:FB CYC:267 SL:256
+EA59  85 2B     sta $2B = 63                    A:C3 X:08 Y:00 P:A5 SP:FB CYC:276 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:C3 X:08 Y:00 P:A5 SP:FB CYC:285 SL:256
+EB21  E6 25     inc $25 = 18                    A:C3 X:08 Y:00 P:A5 SP:F9 CYC:303 SL:256
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:08 Y:00 P:A5 SP:FB CYC: 25 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:08 Y:00 P:A5 SP:FB CYC: 34 SL:257
+EB21  E6 25     inc $25 = 19                    A:EA X:08 Y:00 P:A5 SP:F9 CYC: 52 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:08 Y:00 P:25 SP:FB CYC:115 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:08 Y:00 P:25 SP:FB CYC:124 SL:257
+EB21  E6 25     inc $25 = 1A                    A:35 X:08 Y:00 P:25 SP:F9 CYC:142 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:08 Y:00 P:26 SP:F8 CYC:206 SL:258
+002B  C3 F0    *dcp ($F0,x) @ F8 = 0000 = 80    A:00 X:08 Y:00 P:26 SP:F6 CYC:224 SL:258
+002D  EA        nop                             A:00 X:08 Y:00 P:A4 SP:F6 CYC:248 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 59 SL:242
+0027  C3 35    *dcp ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:26 SP:F7 CYC: 77 SL:242
+0029  EA        nop                             A:25 X:00 Y:00 P:25 SP:F7 CYC:101 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  2 SL:246
+002B  C3 F0    *dcp ($F0,x) @ F0 = 0000 = 7F    A:00 X:00 Y:00 P:27 SP:F6 CYC: 20 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:A4 SP:F6 CYC: 44 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  C3 35    *dcp ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:27 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:25 X:00 Y:00 P:25 SP:F7 CYC:110 SL:242
+--
+EA57  85 27     sta $27 = C3                    A:E3 X:0A Y:00 P:A5 SP:FB CYC: 19 SL:257
+EA59  85 2B     sta $2B = C3                    A:E3 X:0A Y:00 P:A5 SP:FB CYC: 28 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:E3 X:0A Y:00 P:A5 SP:FB CYC: 37 SL:257
+EB21  E6 25     inc $25 = 21                    A:E3 X:0A Y:00 P:A5 SP:F9 CYC: 55 SL:257
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:0A Y:00 P:A5 SP:FB CYC:118 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:0A Y:00 P:A5 SP:FB CYC:127 SL:257
+EB21  E6 25     inc $25 = 22                    A:EA X:0A Y:00 P:A5 SP:F9 CYC:145 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:0A Y:00 P:25 SP:FB CYC:208 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:0A Y:00 P:25 SP:FB CYC:217 SL:257
+EB21  E6 25     inc $25 = 23                    A:35 X:0A Y:00 P:25 SP:F9 CYC:235 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0A Y:00 P:26 SP:F8 CYC:299 SL:258
+002B  E3 F0    *isb ($F0,x) @ FA = 0000 = 7E    A:00 X:0A Y:00 P:26 SP:F6 CYC:317 SL:258
+002D  EA        nop                             A:80 X:0A Y:00 P:A4 SP:F6 CYC:  0 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 68 SL:242
+0027  E3 35    *isb ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:26 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:FE X:00 Y:00 P:A4 SP:F7 CYC:110 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 11 SL:246
+002B  E3 F0    *isb ($F0,x) @ F0 = 0000 = 7F    A:00 X:00 Y:00 P:27 SP:F6 CYC: 29 SL:246
+002D  EA        nop                             A:80 X:00 Y:00 P:E4 SP:F6 CYC: 53 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 56 SL:242
+0027  E3 35    *isb ($35,x) @ 35 = 2006 = FF    A:25 X:00 Y:00 P:27 SP:F7 CYC: 74 SL:242
+0029  EA        nop                             A:FF X:00 Y:00 P:A4 SP:F7 CYC: 98 SL:242
+--
+EA57  85 27     sta $27 = E3                    A:13 X:0D Y:00 P:25 SP:FB CYC: 68 SL:-1
+EA59  85 2B     sta $2B = E3                    A:13 X:0D Y:00 P:25 SP:FB CYC: 77 SL:-1
+EA5B  20 21 EB  jsr $EB21                       A:13 X:0D Y:00 P:25 SP:FB CYC: 86 SL:-1
+EB21  E6 25     inc $25 = 2B                    A:13 X:0D Y:00 P:25 SP:F9 CYC:104 SL:-1
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:0D Y:00 P:A5 SP:FB CYC:167 SL:-1
+EA60  20 21 EB  jsr $EB21                       A:EA X:0D Y:00 P:A5 SP:FB CYC:176 SL:-1
+EB21  E6 25     inc $25 = 2C                    A:EA X:0D Y:00 P:A5 SP:F9 CYC:194 SL:-1
+--
+EA63  85 28     sta $28 = 35                    A:35 X:0D Y:00 P:25 SP:FB CYC:257 SL:-1
+EA65  20 21 EB  jsr $EB21                       A:35 X:0D Y:00 P:25 SP:FB CYC:266 SL:-1
+EB21  E6 25     inc $25 = 2D                    A:35 X:0D Y:00 P:25 SP:F9 CYC:284 SL:-1
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0D Y:00 P:26 SP:F8 CYC:  7 SL:1
+002B  13 F0    *slo ($F0),y = 0000 @ 0000 = 80  A:00 X:0D Y:00 P:26 SP:F6 CYC: 25 SL:1
+002D  EA        nop                             A:00 X:0D Y:00 P:27 SP:F6 CYC: 49 SL:1
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:26 SP:F9 CYC: 74 SL:242
+0027  13 35    *slo ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:26 SP:F7 CYC: 92 SL:242
+0029  EA        nop                             A:6E X:00 Y:00 P:24 SP:F7 CYC:116 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  9 SL:246
+002B  13 F0    *slo ($F0),y = 0000 @ 0000 = 00  A:00 X:00 Y:00 P:27 SP:F6 CYC: 27 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 51 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  13 35    *slo ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:27 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:6E X:00 Y:00 P:24 SP:F7 CYC:110 SL:242
+--
+EA57  85 27     sta $27 = 13                    A:33 X:0F Y:00 P:25 SP:FB CYC: 87 SL:256
+EA59  85 2B     sta $2B = 13                    A:33 X:0F Y:00 P:25 SP:FB CYC: 96 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:33 X:0F Y:00 P:25 SP:FB CYC:105 SL:256
+EB21  E6 25     inc $25 = 34                    A:33 X:0F Y:00 P:25 SP:F9 CYC:123 SL:256
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:0F Y:00 P:A5 SP:FB CYC:186 SL:256
+EA60  20 21 EB  jsr $EB21                       A:EA X:0F Y:00 P:A5 SP:FB CYC:195 SL:256
+EB21  E6 25     inc $25 = 35                    A:EA X:0F Y:00 P:A5 SP:F9 CYC:213 SL:256
+--
+EA63  85 28     sta $28 = 35                    A:35 X:0F Y:00 P:25 SP:FB CYC:276 SL:256
+EA65  20 21 EB  jsr $EB21                       A:35 X:0F Y:00 P:25 SP:FB CYC:285 SL:256
+EB21  E6 25     inc $25 = 36                    A:35 X:0F Y:00 P:25 SP:F9 CYC:303 SL:256
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0F Y:00 P:26 SP:F8 CYC: 26 SL:258
+002B  33 F0    *rla ($F0),y = 0000 @ 0000 = 00  A:00 X:0F Y:00 P:26 SP:F6 CYC: 44 SL:258
+002D  EA        nop                             A:00 X:0F Y:00 P:26 SP:F6 CYC: 68 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:26 SP:F9 CYC: 68 SL:242
+0027  33 35    *rla ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:26 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:04 X:00 Y:00 P:24 SP:F7 CYC:110 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 11 SL:246
+002B  33 F0    *rla ($F0),y = 0000 @ 0000 = 00  A:00 X:00 Y:00 P:27 SP:F6 CYC: 29 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 53 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:27 SP:F9 CYC: 56 SL:242
+0027  33 35    *rla ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:27 SP:F7 CYC: 74 SL:242
+0029  EA        nop                             A:04 X:00 Y:00 P:24 SP:F7 CYC: 98 SL:242
+--
+EA57  85 27     sta $27 = 33                    A:53 X:11 Y:00 P:25 SP:FB CYC:  4 SL:257
+EA59  85 2B     sta $2B = 33                    A:53 X:11 Y:00 P:25 SP:FB CYC: 13 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:53 X:11 Y:00 P:25 SP:FB CYC: 22 SL:257
+EB21  E6 25     inc $25 = 3D                    A:53 X:11 Y:00 P:25 SP:F9 CYC: 40 SL:257
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:11 Y:00 P:A5 SP:FB CYC:103 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:11 Y:00 P:A5 SP:FB CYC:112 SL:257
+EB21  E6 25     inc $25 = 3E                    A:EA X:11 Y:00 P:A5 SP:F9 CYC:130 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:11 Y:00 P:25 SP:FB CYC:193 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:11 Y:00 P:25 SP:FB CYC:202 SL:257
+EB21  E6 25     inc $25 = 3F                    A:35 X:11 Y:00 P:25 SP:F9 CYC:220 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:11 Y:00 P:26 SP:F8 CYC:284 SL:258
+002B  53 F0    *sre ($F0),y = 0000 @ 0000 = 01  A:00 X:11 Y:00 P:26 SP:F6 CYC:302 SL:258
+002D  EA        nop                             A:00 X:11 Y:00 P:27 SP:F6 CYC:326 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:26 SP:F9 CYC: 74 SL:242
+0027  53 35    *sre ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:26 SP:F7 CYC: 92 SL:242
+0029  EA        nop                             A:35 X:00 Y:00 P:24 SP:F7 CYC:116 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  9 SL:246
+002B  53 F0    *sre ($F0),y = 0000 @ 0000 = 00  A:00 X:00 Y:00 P:27 SP:F6 CYC: 27 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 51 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:27 SP:F9 CYC: 68 SL:242
+0027  53 35    *sre ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:27 SP:F7 CYC: 86 SL:242
+0029  EA        nop                             A:35 X:00 Y:00 P:24 SP:F7 CYC:110 SL:242
+--
+EA57  85 27     sta $27 = 53                    A:73 X:13 Y:00 P:25 SP:FB CYC: 16 SL:257
+EA59  85 2B     sta $2B = 53                    A:73 X:13 Y:00 P:25 SP:FB CYC: 25 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:73 X:13 Y:00 P:25 SP:FB CYC: 34 SL:257
+EB21  E6 25     inc $25 = 46                    A:73 X:13 Y:00 P:25 SP:F9 CYC: 52 SL:257
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:13 Y:00 P:A5 SP:FB CYC:115 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:13 Y:00 P:A5 SP:FB CYC:124 SL:257
+EB21  E6 25     inc $25 = 47                    A:EA X:13 Y:00 P:A5 SP:F9 CYC:142 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:13 Y:00 P:25 SP:FB CYC:205 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:13 Y:00 P:25 SP:FB CYC:214 SL:257
+EB21  E6 25     inc $25 = 48                    A:35 X:13 Y:00 P:25 SP:F9 CYC:232 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:13 Y:00 P:26 SP:F8 CYC:296 SL:258
+002B  73 F0    *rra ($F0),y = 0000 @ 0000 = 00  A:00 X:13 Y:00 P:26 SP:F6 CYC:314 SL:258
+002D  EA        nop                             A:00 X:13 Y:00 P:26 SP:F6 CYC:338 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:26 SP:F9 CYC: 65 SL:242
+0027  73 35    *rra ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:26 SP:F7 CYC: 83 SL:242
+0029  EA        nop                             A:39 X:00 Y:00 P:24 SP:F7 CYC:107 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  8 SL:246
+002B  73 F0    *rra ($F0),y = 0000 @ 0000 = 00  A:00 X:00 Y:00 P:27 SP:F6 CYC: 26 SL:246
+002D  EA        nop                             A:80 X:00 Y:00 P:A4 SP:F6 CYC: 50 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:27 SP:F9 CYC: 74 SL:242
+0027  73 35    *rra ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:27 SP:F7 CYC: 92 SL:242
+0029  EA        nop                             A:B9 X:00 Y:00 P:A4 SP:F7 CYC:116 SL:242
+--
+EA57  85 27     sta $27 = 73                    A:D3 X:15 Y:00 P:A5 SP:FB CYC:104 SL:257
+EA59  85 2B     sta $2B = 73                    A:D3 X:15 Y:00 P:A5 SP:FB CYC:113 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:D3 X:15 Y:00 P:A5 SP:FB CYC:122 SL:257
+EB21  E6 25     inc $25 = 4F                    A:D3 X:15 Y:00 P:A5 SP:F9 CYC:140 SL:257
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:15 Y:00 P:A5 SP:FB CYC:203 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:15 Y:00 P:A5 SP:FB CYC:212 SL:257
+EB21  E6 25     inc $25 = 50                    A:EA X:15 Y:00 P:A5 SP:F9 CYC:230 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:15 Y:00 P:25 SP:FB CYC:293 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:15 Y:00 P:25 SP:FB CYC:302 SL:257
+EB21  E6 25     inc $25 = 51                    A:35 X:15 Y:00 P:25 SP:F9 CYC:320 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:15 Y:00 P:26 SP:F8 CYC: 43 SL:259
+002B  D3 F0    *dcp ($F0),y = 0000 @ 0000 = 80  A:00 X:15 Y:00 P:26 SP:F6 CYC: 61 SL:259
+002D  EA        nop                             A:00 X:15 Y:00 P:A4 SP:F6 CYC: 85 SL:259
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:26 SP:F9 CYC: 70 SL:242
+0027  D3 35    *dcp ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:26 SP:F7 CYC: 88 SL:242
+0029  EA        nop                             A:26 X:00 Y:00 P:25 SP:F7 CYC:112 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 12 SL:246
+002B  D3 F0    *dcp ($F0),y = 0000 @ 0000 = 7F  A:00 X:00 Y:00 P:27 SP:F6 CYC: 30 SL:246
+002D  EA        nop                             A:00 X:00 Y:00 P:A4 SP:F6 CYC: 54 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:27 SP:F9 CYC: 58 SL:242
+0027  D3 35    *dcp ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:27 SP:F7 CYC: 76 SL:242
+0029  EA        nop                             A:26 X:00 Y:00 P:25 SP:F7 CYC:100 SL:242
+--
+EA57  85 27     sta $27 = D3                    A:F3 X:17 Y:00 P:A5 SP:FB CYC:259 SL:256
+EA59  85 2B     sta $2B = D3                    A:F3 X:17 Y:00 P:A5 SP:FB CYC:268 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:F3 X:17 Y:00 P:A5 SP:FB CYC:277 SL:256
+EB21  E6 25     inc $25 = 58                    A:F3 X:17 Y:00 P:A5 SP:F9 CYC:295 SL:256
+--
+EA5E  85 29     sta $29 = EA                    A:EA X:17 Y:00 P:A5 SP:FB CYC: 17 SL:257
+EA60  20 21 EB  jsr $EB21                       A:EA X:17 Y:00 P:A5 SP:FB CYC: 26 SL:257
+EB21  E6 25     inc $25 = 59                    A:EA X:17 Y:00 P:A5 SP:F9 CYC: 44 SL:257
+--
+EA63  85 28     sta $28 = 35                    A:35 X:17 Y:00 P:25 SP:FB CYC:107 SL:257
+EA65  20 21 EB  jsr $EB21                       A:35 X:17 Y:00 P:25 SP:FB CYC:116 SL:257
+EB21  E6 25     inc $25 = 5A                    A:35 X:17 Y:00 P:25 SP:F9 CYC:134 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:17 Y:00 P:26 SP:F8 CYC:198 SL:258
+002B  F3 F0    *isb ($F0),y = 0000 @ 0000 = 7E  A:00 X:17 Y:00 P:26 SP:F6 CYC:216 SL:258
+002D  EA        nop                             A:80 X:17 Y:00 P:A4 SP:F6 CYC:240 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:26 SP:F9 CYC: 73 SL:242
+0027  F3 35    *isb ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:26 SP:F7 CYC: 91 SL:242
+0029  EA        nop                             A:FE X:00 Y:00 P:A4 SP:F7 CYC:115 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 15 SL:246
+002B  F3 F0    *isb ($F0),y = 0000 @ 0000 = 7F  A:00 X:00 Y:00 P:27 SP:F6 CYC: 33 SL:246
+002D  EA        nop                             A:80 X:00 Y:00 P:E4 SP:F6 CYC: 57 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:26 X:00 Y:00 P:27 SP:F9 CYC: 61 SL:242
+0027  F3 35    *isb ($35),y = 2006 @ 2006 = FF  A:26 X:00 Y:00 P:27 SP:F7 CYC: 79 SL:242
+0029  EA        nop                             A:FF X:00 Y:00 P:A4 SP:F7 CYC:103 SL:242
+--
+EA57  85 27     sta $27 = F3                    A:1B X:00 Y:00 P:25 SP:FB CYC:297 SL:253
+EA59  85 2B     sta $2B = F3                    A:1B X:00 Y:00 P:25 SP:FB CYC:306 SL:253
+EA5B  20 21 EB  jsr $EB21                       A:1B X:00 Y:00 P:25 SP:FB CYC:315 SL:253
+EB21  E6 25     inc $25 = 62                    A:1B X:00 Y:00 P:25 SP:F9 CYC:333 SL:253
+--
+EA5E  85 29     sta $29 = EA                    A:20 X:00 Y:00 P:25 SP:FB CYC: 55 SL:254
+EA60  20 21 EB  jsr $EB21                       A:20 X:00 Y:00 P:25 SP:FB CYC: 64 SL:254
+EB21  E6 25     inc $25 = 63                    A:20 X:00 Y:00 P:25 SP:F9 CYC: 82 SL:254
+--
+EA63  85 28     sta $28 = 35                    A:06 X:00 Y:00 P:25 SP:FB CYC:145 SL:254
+EA65  20 21 EB  jsr $EB21                       A:06 X:00 Y:00 P:25 SP:FB CYC:154 SL:254
+EB21  E6 25     inc $25 = 64                    A:06 X:00 Y:00 P:25 SP:F9 CYC:172 SL:254
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:26 SP:F8 CYC:236 SL:255
+002B  1B F0 EA *slo $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:26 SP:F6 CYC:254 SL:255
+002E  60        rts                             A:50 X:00 Y:00 P:24 SP:F6 CYC:275 SL:255
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 65 SL:242
+0027  1B 06 20 *slo $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:26 SP:F7 CYC: 83 SL:242
+002A  60        rts                             A:6F X:00 Y:00 P:24 SP:F7 CYC:104 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:340 SL:245
+002B  1B F0 EA *slo $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:27 SP:F6 CYC: 17 SL:246
+002E  60        rts                             A:50 X:00 Y:00 P:24 SP:F6 CYC: 38 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 56 SL:242
+0027  1B 06 20 *slo $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:27 SP:F7 CYC: 74 SL:242
+002A  60        rts                             A:6F X:00 Y:00 P:24 SP:F7 CYC: 95 SL:242
+--
+EA57  85 27     sta $27 = 1B                    A:3B X:02 Y:00 P:25 SP:FB CYC:282 SL:256
+EA59  85 2B     sta $2B = 1B                    A:3B X:02 Y:00 P:25 SP:FB CYC:291 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:3B X:02 Y:00 P:25 SP:FB CYC:300 SL:256
+EB21  E6 25     inc $25 = 6B                    A:3B X:02 Y:00 P:25 SP:F9 CYC:318 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:02 Y:00 P:25 SP:FB CYC: 40 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:02 Y:00 P:25 SP:FB CYC: 49 SL:257
+EB21  E6 25     inc $25 = 6C                    A:20 X:02 Y:00 P:25 SP:F9 CYC: 67 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:02 Y:00 P:25 SP:FB CYC:130 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:02 Y:00 P:25 SP:FB CYC:139 SL:257
+EB21  E6 25     inc $25 = 6D                    A:06 X:02 Y:00 P:25 SP:F9 CYC:157 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:02 Y:00 P:26 SP:F8 CYC:221 SL:258
+002B  3B F0 EA *rla $EAF0,y @ EAF0 = 28         A:00 X:02 Y:00 P:26 SP:F6 CYC:239 SL:258
+002E  60        rts                             A:00 X:02 Y:00 P:26 SP:F6 CYC:260 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 65 SL:242
+0027  3B 06 20 *rla $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:26 SP:F7 CYC: 83 SL:242
+002A  60        rts                             A:00 X:00 Y:00 P:26 SP:F7 CYC:104 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:340 SL:245
+002B  3B F0 EA *rla $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:27 SP:F6 CYC: 17 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:26 SP:F6 CYC: 38 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 56 SL:242
+0027  3B 06 20 *rla $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:27 SP:F7 CYC: 74 SL:242
+002A  60        rts                             A:01 X:00 Y:00 P:24 SP:F7 CYC: 95 SL:242
+--
+EA57  85 27     sta $27 = 3B                    A:5B X:04 Y:00 P:25 SP:FB CYC:270 SL:256
+EA59  85 2B     sta $2B = 3B                    A:5B X:04 Y:00 P:25 SP:FB CYC:279 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:5B X:04 Y:00 P:25 SP:FB CYC:288 SL:256
+EB21  E6 25     inc $25 = 74                    A:5B X:04 Y:00 P:25 SP:F9 CYC:306 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:04 Y:00 P:25 SP:FB CYC: 28 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:04 Y:00 P:25 SP:FB CYC: 37 SL:257
+EB21  E6 25     inc $25 = 75                    A:20 X:04 Y:00 P:25 SP:F9 CYC: 55 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:04 Y:00 P:25 SP:FB CYC:118 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:04 Y:00 P:25 SP:FB CYC:127 SL:257
+EB21  E6 25     inc $25 = 76                    A:06 X:04 Y:00 P:25 SP:F9 CYC:145 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:04 Y:00 P:26 SP:F8 CYC:209 SL:258
+002B  5B F0 EA *sre $EAF0,y @ EAF0 = 28         A:00 X:04 Y:00 P:26 SP:F6 CYC:227 SL:258
+002E  60        rts                             A:14 X:04 Y:00 P:24 SP:F6 CYC:248 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 74 SL:242
+0027  5B 06 20 *sre $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:26 SP:F7 CYC: 92 SL:242
+002A  60        rts                             A:37 X:00 Y:00 P:25 SP:F7 CYC:113 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  8 SL:246
+002B  5B F0 EA *sre $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:27 SP:F6 CYC: 26 SL:246
+002E  60        rts                             A:14 X:00 Y:00 P:24 SP:F6 CYC: 47 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 65 SL:242
+0027  5B 06 20 *sre $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:27 SP:F7 CYC: 83 SL:242
+002A  60        rts                             A:37 X:00 Y:00 P:25 SP:F7 CYC:104 SL:242
+--
+EA57  85 27     sta $27 = 5B                    A:7B X:06 Y:00 P:25 SP:FB CYC: 78 SL:256
+EA59  85 2B     sta $2B = 5B                    A:7B X:06 Y:00 P:25 SP:FB CYC: 87 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:7B X:06 Y:00 P:25 SP:FB CYC: 96 SL:256
+EB21  E6 25     inc $25 = 7D                    A:7B X:06 Y:00 P:25 SP:F9 CYC:114 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:06 Y:00 P:25 SP:FB CYC:177 SL:256
+EA60  20 21 EB  jsr $EB21                       A:20 X:06 Y:00 P:25 SP:FB CYC:186 SL:256
+EB21  E6 25     inc $25 = 7E                    A:20 X:06 Y:00 P:25 SP:F9 CYC:204 SL:256
+--
+EA63  85 28     sta $28 = 06                    A:06 X:06 Y:00 P:25 SP:FB CYC:267 SL:256
+EA65  20 21 EB  jsr $EB21                       A:06 X:06 Y:00 P:25 SP:FB CYC:276 SL:256
+EB21  E6 25     inc $25 = 7F                    A:06 X:06 Y:00 P:25 SP:F9 CYC:294 SL:256
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:06 Y:00 P:26 SP:F8 CYC: 17 SL:258
+002B  7B F0 EA *rra $EAF0,y @ EAF0 = 28         A:00 X:06 Y:00 P:26 SP:F6 CYC: 35 SL:258
+002E  60        rts                             A:14 X:06 Y:00 P:24 SP:F6 CYC: 56 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 71 SL:242
+0027  7B 06 20 *rra $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:26 SP:F7 CYC: 89 SL:242
+002A  60        rts                             A:38 X:00 Y:00 P:24 SP:F7 CYC:110 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC:  5 SL:246
+002B  7B F0 EA *rra $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:27 SP:F6 CYC: 23 SL:246
+002E  60        rts                             A:94 X:00 Y:00 P:A4 SP:F6 CYC: 44 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 62 SL:242
+0027  7B 06 20 *rra $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:27 SP:F7 CYC: 80 SL:242
+002A  60        rts                             A:B8 X:00 Y:00 P:A4 SP:F7 CYC:101 SL:242
+--
+EA57  85 27     sta $27 = 7B                    A:DB X:08 Y:00 P:A5 SP:FB CYC: 17 SL:257
+EA59  85 2B     sta $2B = 7B                    A:DB X:08 Y:00 P:A5 SP:FB CYC: 26 SL:257
+EA5B  20 21 EB  jsr $EB21                       A:DB X:08 Y:00 P:A5 SP:FB CYC: 35 SL:257
+EB21  E6 25     inc $25 = 86                    A:DB X:08 Y:00 P:A5 SP:F9 CYC: 53 SL:257
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:08 Y:00 P:25 SP:FB CYC:116 SL:257
+EA60  20 21 EB  jsr $EB21                       A:20 X:08 Y:00 P:25 SP:FB CYC:125 SL:257
+EB21  E6 25     inc $25 = 87                    A:20 X:08 Y:00 P:25 SP:F9 CYC:143 SL:257
+--
+EA63  85 28     sta $28 = 06                    A:06 X:08 Y:00 P:25 SP:FB CYC:206 SL:257
+EA65  20 21 EB  jsr $EB21                       A:06 X:08 Y:00 P:25 SP:FB CYC:215 SL:257
+EB21  E6 25     inc $25 = 88                    A:06 X:08 Y:00 P:25 SP:F9 CYC:233 SL:257
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:08 Y:00 P:26 SP:F8 CYC:297 SL:258
+002B  DB F0 EA *dcp $EAF0,y @ EAF0 = 28         A:00 X:08 Y:00 P:26 SP:F6 CYC:315 SL:258
+002E  60        rts                             A:00 X:08 Y:00 P:A4 SP:F6 CYC:336 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 58 SL:242
+0027  DB 06 20 *dcp $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:26 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC: 97 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 12 SL:246
+002B  DB F0 EA *dcp $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:27 SP:F6 CYC: 30 SL:246
+002E  60        rts                             A:00 X:00 Y:00 P:A4 SP:F6 CYC: 51 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 70 SL:242
+0027  DB 06 20 *dcp $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:27 SP:F7 CYC: 88 SL:242
+002A  60        rts                             A:25 X:00 Y:00 P:25 SP:F7 CYC:109 SL:242
+--
+EA57  85 27     sta $27 = DB                    A:FB X:0A Y:00 P:A5 SP:FB CYC: 85 SL:256
+EA59  85 2B     sta $2B = DB                    A:FB X:0A Y:00 P:A5 SP:FB CYC: 94 SL:256
+EA5B  20 21 EB  jsr $EB21                       A:FB X:0A Y:00 P:A5 SP:FB CYC:103 SL:256
+EB21  E6 25     inc $25 = 8F                    A:FB X:0A Y:00 P:A5 SP:F9 CYC:121 SL:256
+--
+EA5E  85 29     sta $29 = 20                    A:20 X:0A Y:00 P:25 SP:FB CYC:184 SL:256
+EA60  20 21 EB  jsr $EB21                       A:20 X:0A Y:00 P:25 SP:FB CYC:193 SL:256
+EB21  E6 25     inc $25 = 90                    A:20 X:0A Y:00 P:25 SP:F9 CYC:211 SL:256
+--
+EA63  85 28     sta $28 = 06                    A:06 X:0A Y:00 P:25 SP:FB CYC:274 SL:256
+EA65  20 21 EB  jsr $EB21                       A:06 X:0A Y:00 P:25 SP:FB CYC:283 SL:256
+EB21  E6 25     inc $25 = 91                    A:06 X:0A Y:00 P:25 SP:F9 CYC:301 SL:256
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:0A Y:00 P:26 SP:F8 CYC: 24 SL:258
+002B  FB F0 EA *isb $EAF0,y @ EAF0 = 28         A:00 X:0A Y:00 P:26 SP:F6 CYC: 42 SL:258
+002E  60        rts                             A:D6 X:0A Y:00 P:A4 SP:F6 CYC: 63 SL:258
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:26 SP:F9 CYC: 58 SL:242
+0027  FB 06 20 *isb $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:26 SP:F7 CYC: 76 SL:242
+002A  60        rts                             A:FE X:00 Y:00 P:A4 SP:F7 CYC: 97 SL:242
+--
+EAEA  20 2B 00  jsr $002B                       A:00 X:00 Y:00 P:27 SP:F8 CYC: 12 SL:246
+002B  FB F0 EA *isb $EAF0,y @ EAF0 = 28         A:00 X:00 Y:00 P:27 SP:F6 CYC: 30 SL:246
+002E  60        rts                             A:D7 X:00 Y:00 P:A4 SP:F6 CYC: 51 SL:246
+--
+EB0A  20 27 00  jsr $0027                       A:25 X:00 Y:00 P:27 SP:F9 CYC: 70 SL:242
+0027  FB 06 20 *isb $2006,y @ 2006 = FF         A:25 X:00 Y:00 P:27 SP:F7 CYC: 88 SL:242
+002A  60        rts                             A:FF X:00 Y:00 P:A4 SP:F7 CYC:109 SL:242
