@@ -61,7 +61,11 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
   frames:N             clockuj N klatek PPU (lub N wywołań play() dla .nsf)
   cycles:N             clockuj N cykli CPU
   reset                hard reset
-  screen               wypisz nametable 0 (32x30 znaków) na stdout (tylko .nes)
+  screen[:ascii]       wypisz nametable 0 (32x30) jako indeksy kafelków w hex
+                       (np. 24 24 0C 19...); dodaj :ascii, by renderować
+                       drukowalne kafelki jako znaki (tylko .nes)
+  pixels:X:Y:W:H       zrzuć wycinek framebuffera WxH od (X,Y) jako RGB w hex,
+                       jedna linia na rząd (np. FF0000 00FF00 0000FF; tylko .nes)
   mem:ADDR:LEN         dump LEN bajtów z magistrali CPU od ADDR (hex/dec/$hex/0xhex)
   info                 wypisz aktualny frame count i cycle count
   pad1=BTNS            ustaw stan pada 1 (BTNS = lista po przecinku, puste = wyzeruj)
@@ -105,7 +109,8 @@ PPU sub0, PPU sub1, CPU PHI1, PPU sub2 (z DMA suffix), CPU PHI2.
 Przykłady:
   nes_test mytest.asm frames:60 screen mem:0x00:16
   nes_test mytest.asm trace:cpu:on trace:dma:on frames:5
-  nes_test ROM.nes frames:120 pad1+START frames:1 pad1-START frames:600 screen
+  nes_test ROM.nes frames:120 pad1+START frames:1 pad1-START frames:600 screen:ascii
+  nes_test ROM.nes frames:120 pixels:0:0:16:8
   nes_test ROM.nes frames:600 reset frames:600 mem:0x6000:32
   nes_test song.nsf songinfo cycles:5000000 trace:cpu:on cycles:100000 info
 

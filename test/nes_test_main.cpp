@@ -19,7 +19,10 @@
 //   frames:N            tick N PPU frames (or N play() calls for .nsf)
 //   cycles:N            tick N CPU cycles
 //   reset               trigger hardware reset
-//   screen              dump nametable 0 to stdout (.nes only)
+//   screen[:ascii]      dump nametable 0 as hex tile indices (.nes only);
+//                       add :ascii to render printable tiles as characters
+//   pixels:X:Y:W:H      dump a framebuffer region as RGB hex, one row per line
+//                       (.nes only, e.g. FF0000 00FF00 0000FF)
 //   mem:ADDR:LEN        dump LEN bytes from CPU bus ADDR (hex/dec/$hex/0xhex)
 //   pad1=BTNS           set controller 1 state (BTNS = comma list, empty=clear)
 //   pad1+BTN[,BTN..]    press buttons on controller 1
@@ -183,7 +186,7 @@ int main(int argc, char* argv[]) {
         std::cerr <<
             "Usage: nes_test <rom-or-asm-or-nsf> [command]...\n"
             "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65; tmp build dir)\n"
-            "Commands: frames:N cycles:N reset screen mem:ADDR:LEN\n"
+            "Commands: frames:N cycles:N reset screen[:ascii] pixels:X:Y:W:H mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
             "          trace:cpu|ppu|dma:on|off  trace-file:PATH\n"
             "NSF only: song:N next prev songinfo\n"

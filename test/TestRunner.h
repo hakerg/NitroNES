@@ -170,7 +170,6 @@ private:
     // dispatch ---------------------------------------------------------------
     bool dispatch(const std::string& cmd) {
         if (cmd == "reset") { nes.reset(); return true; }
-        if (cmd == "screen"){ printScreen(); return true; }
 
         if (cmd.size() >= 5 && cmd.compare(0, 3, "pad") == 0
             && (cmd[3] == '1' || cmd[3] == '2'))
@@ -199,6 +198,15 @@ private:
         }
         if (head == "mem" && parts.size() == 3) {
             printMem((uint16_t)parseInt(parts[1]), parseInt(parts[2]));
+            return true;
+        }
+        if (head == "screen" && parts.size() <= 2) {
+            printScreen(parts.size() == 2 && parts[1] == "ascii");
+            return true;
+        }
+        if (head == "pixels" && parts.size() == 5) {
+            printPixels((int)parseInt(parts[1]), (int)parseInt(parts[2]),
+                        (int)parseInt(parts[3]), (int)parseInt(parts[4]));
             return true;
         }
         if (head == "song" && parts.size() == 2) {
@@ -250,26 +258,58 @@ private:
     }
 
     // memory / screen --------------------------------------------------------
-    void printScreen() {
+    void printScreen(bool ascii) {
         if constexpr (requires { nes.dumpNametable((uint8_t*)nullptr, 0); }) {
             uint8_t tiles[960]{};
             nes.dumpNametable(tiles, 0);
             std::cout << "---- screen (NT0) frame=" << nes.frameNo()
-                      << " cyc=" << nes.cycleNo() << " ----\n";
+                      << " cyc=" << nes.cycleNo()
+                      << (ascii ? " ascii" : " hex") << " ----\n";
             for (int row = 0; row < 30; ++row) {
                 std::string line;
                 for (int col = 0; col < 32; ++col) {
                     uint8_t t = tiles[row * 32 + col];
-                    line += (t >= 0x20 && t <= 0x7E) ? char(t) : ' ';
+                    if (ascii) {
+                        line += (t >= 0x20 && t <= 0x7E) ? char(t) : ' ';
+                    } else {
+                        char b[4]; std::snprintf(b, sizeof(b), "%02X", t);
+                        if (col) line += ' ';
+                        line += b;
+                    }
                 }
-                auto last = line.find_last_not_of(' ');
-                if (last != std::string::npos)
-                    std::cout << line.substr(0, last + 1) << "\n";
-                else
-                    std::cout << "\n";
+                if (ascii) {
+                    auto last = line.find_last_not_of(' ');
+                    line = (last != std::string::npos) ? line.substr(0, last + 1) : "";
+                }
+                std::cout << line << "\n";
             }
         } else {
             std::cerr << "[nes_test] screen: not supported for this core\n";
+        }
+    }
+
+    void printPixels(int x0, int y0, int w, int h) {
+        if constexpr (requires { nes.framebuffer(); }) {
+            const uint32_t* fb = nes.framebuffer();
+            if (!fb) { std::cerr << "[nes_test] pixels: no framebuffer\n"; return; }
+            std::cout << "---- pixels x=" << x0 << " y=" << y0
+                      << " w=" << w << " h=" << h
+                      << " frame=" << nes.frameNo() << " ----\n";
+            for (int y = y0; y < y0 + h; ++y) {
+                std::string line;
+                for (int x = x0; x < x0 + w; ++x) {
+                    if (y < 0 || y >= NES::SCREEN_HEIGHT
+                        || x < 0 || x >= NES::SCREEN_WIDTH)
+                        continue;
+                    uint32_t rgb = fb[y * NES::SCREEN_WIDTH + x] & 0x00FFFFFFu;
+                    char b[8]; std::snprintf(b, sizeof(b), "%06X", rgb);
+                    if (!line.empty()) line += ' ';
+                    line += b;
+                }
+                std::cout << line << "\n";
+            }
+        } else {
+            std::cerr << "[nes_test] pixels: not supported for this core\n";
         }
     }
 
