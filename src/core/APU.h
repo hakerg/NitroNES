@@ -431,15 +431,19 @@ struct DMCChannel {
     }
 };
 
+static constexpr uint32_t FRAME_COUNTER_STEPS_NTSC[5] = {
+    3728, 7456, 11185, 14914, 18640
+};
+
+static constexpr uint32_t FRAME_COUNTER_STEPS_PAL[5] = {
+    4156, 8313, 12469, 16626, 20782
+};
+
 class APU {
 public:
     APU(AudioSettings& settings) : pulse1(settings), pulse2(settings),
         triangle(settings), noise(settings) {
         initMixerTables();
-        frameCounter = 0;
-        frameMode = 0;
-        frameIRQInhibit = false;
-        frameIRQPending = false;
     }
 
     void reset() {
@@ -452,6 +456,7 @@ public:
 
         frameIRQPending = false;
         frame4015ClearPending = false;
+        frameCounter = 0;
         delay4017 = -1;
     }
 
@@ -560,11 +565,9 @@ public:
         // before the sequencer can update the flag this cycle.
         frameIRQLine = frameIRQPending && !frameIRQInhibit;
         dmc.tickDMADelay();
-        frameCounter++;
-        serviceFrameCounterWrite();
         triangle.clockTimer();
         if (isAPUCycle) clockChannelTimers();
-        clockFrameSequencer();
+        clockFrameSequencer(isAPUCycle);
     }
 
     float getOutputSample() const {
@@ -601,39 +604,25 @@ private:
         delay4017--;
     }
 
-    void clockFrameSequencer() {
-        // TODO: PAL/DENDY
-        const uint32_t step1 = false ? 8313  : 7457;
-        const uint32_t step2 = false ? 16627 : 14913;
-        const uint32_t step3 = false ? 24939 : 22371;
-        const uint32_t step4 = false ? 33253 : 29829;
-        const uint32_t step5 = false ? 41565 : 37281;
+    void clockFrameSequencer(bool isAPUCycle) {
+        if (!isAPUCycle) frameCounter++;
+        serviceFrameCounterWrite();
 
-        if (frameMode == 0) {
-            if (frameCounter == step1) { clockQuarterFrame(); }
-            else if (frameCounter == step2) { clockQuarterFrame(); clockHalfFrame(); }
-            else if (frameCounter == step3) { clockQuarterFrame(); }
-            else if (frameCounter == step4 - 1) {
-                frameIRQPending = true;
+        const uint32_t* s = FRAME_COUNTER_STEPS_NTSC;
+
+        if (isAPUCycle) {
+            if      (frameCounter == s[0]) { clockQuarterFrame(); }
+            else if (frameCounter == s[1]) { clockQuarterFrame(); clockHalfFrame(); }
+            else if (frameCounter == s[2]) { clockQuarterFrame(); }
+            else if (frameCounter == s[3] && frameMode == 0) { clockQuarterFrame(); clockHalfFrame(); frameIRQPending = true; }
+            else if (frameCounter == s[4] && frameMode != 0) { clockQuarterFrame(); clockHalfFrame(); }
+        } else {
+            if (frameMode == 0) {
+                if      (frameCounter == s[3])  { frameIRQPending = true; }
+                else if (frameCounter == s[3] + 1) { frameIRQPending = !frameIRQInhibit; frameCounter = 0; }
+            } else {
+                if      (frameCounter == s[4] + 1) { frameCounter = 0; }
             }
-            else if (frameCounter == step4) {
-                clockQuarterFrame();
-                clockHalfFrame();
-                frameIRQPending = true;
-            }
-            else if (frameCounter == step4 + 1) {
-                if (frameIRQInhibit) frameIRQPending = false;
-                else                 frameIRQPending = true;
-                frameCounter = 0;
-            }
-        }
-        else {
-            if      (frameCounter == step1) { clockQuarterFrame(); }
-            else if (frameCounter == step2) { clockQuarterFrame(); clockHalfFrame(); }
-            else if (frameCounter == step3) { clockQuarterFrame(); }
-            // step4 (29829/33253): brak akcji
-            else if (frameCounter == step5) { clockQuarterFrame(); clockHalfFrame(); }
-            else if (frameCounter == step5 + 1) { frameCounter = 0; }
         }
     }
 
