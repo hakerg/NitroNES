@@ -28,13 +28,24 @@ public:
         if (paused) return;
         int frames = getCompletedFramesCount();
         do { clockOneCycle(); } while (getCompletedFramesCount() == frames);
+        onFrameCompleted();
     }
 
     template <typename ConditionFunc>
     void tickWhile(ConditionFunc condition) {
         if (paused) return;
-        while (condition()) clockOneCycle();
+        int prevFrames = getCompletedFramesCount();
+        while (condition()) {
+            clockOneCycle();
+            int newFrames = getCompletedFramesCount();
+            if (newFrames != prevFrames) {
+                onFrameCompleted();
+                prevFrames = newFrames;
+            }
+        }
     }
+
+    virtual void onFrameCompleted() {}
 
     virtual void reset() {}
     virtual int  getCompletedFramesCount() = 0;

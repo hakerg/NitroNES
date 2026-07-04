@@ -18,6 +18,10 @@ public:
     NESCoreBase& getCore() override { return *this; }
 
 protected:
+    void onFrameCompleted() override {
+        input.tickFrame();
+    }
+
     uint8_t readController(int port) override {
         return input.readController(port);
     }

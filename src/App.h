@@ -29,10 +29,7 @@ public:
 
             double baseSpeed = calcSpeed();
             if (session) {
-                int before = session->getCore().getCompletedFramesCount();
                 session->clockCore(baseSpeed);
-                if (session->getCore().getCompletedFramesCount() != before)
-                    input.tickFrame();
             }
             window.presentNESFrame(session.get());
 

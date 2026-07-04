@@ -560,9 +560,7 @@ public:
             frameIRQPending = false;
             frame4015ClearPending = false;
         }
-        // The frame interrupt flag drives the CPU's IRQ line one CPU cycle after it
-        // is set (the level detector is sampled the following cycle), so snapshot it
-        // before the sequencer can update the flag this cycle.
+
         frameIRQLine = frameIRQPending && !frameIRQInhibit;
         dmc.tickDMADelay();
         triangle.clockTimer();
