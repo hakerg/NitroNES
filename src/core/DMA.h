@@ -36,8 +36,6 @@ public:
 
         if (dmcPhase == DMCPhase::Idle && idma.isDMCSampleNeeded()) {
             dmcPhase = DMCPhase::Halt;
-            // Capture the phase this DMC DMA must halt on: load DMAs halt on a get
-            // cycle (3 cycles total), reload DMAs halt on a put cycle (4 cycles).
             dmcHaltOnPut = idma.dmcDMAHaltOnPut();
             dmcHaltArmed = false;
         }
@@ -46,34 +44,18 @@ public:
             case DMCPhase::Idle:
                 break;
             case DMCPhase::Halt:
-                // The first halt attempt is scheduled for a specific phase (get
-                // for load, put for reload). Once that scheduled cycle is reached
-                // the halt is attempted every CPU cycle and only fails on write
-                // cycles, retrying on the next cycle (nes_specs/dma.txt, dma forum.txt).
-                // So a write on the scheduled cycle delays the halt to the next
-                // (opposite-phase) read, which skips the alignment cycle and makes
-                // the DMA take 3 cycles instead of 4.
                 if (!dmcHaltArmed && (isPutCycle == dmcHaltOnPut))
                     dmcHaltArmed = true;
                 if (dmcHaltArmed && cpuRead)
                     dmcPhase = DMCPhase::Dummy;
                 else if (!idma.isDMCSampleNeeded())
-                    // Playback was stopped before the DMA could halt: with the halt
-                    // delayed by a write cycle, the aborted DMA does not occur at all.
                     dmcPhase = DMCPhase::Idle;
                 break;
             case DMCPhase::Dummy:
-                if (!idma.isDMCSampleNeeded())
-                    // Playback was stopped after the halt cycle: the DMA is aborted
-                    // after that single cycle (nes_specs/dma.txt "Bugs").
-                    dmcPhase = DMCPhase::Idle;
-                else
-                    dmcPhase = DMCPhase::Read;
+                dmcPhase = DMCPhase::Read;
                 break;
             case DMCPhase::Read:
-                if (!idma.isDMCSampleNeeded())
-                    dmcPhase = DMCPhase::Idle;
-                else if (getCycle)
+                if (getCycle)
                     action = Action::DMCGet;
                 break;
         }

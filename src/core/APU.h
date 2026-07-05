@@ -456,7 +456,9 @@ public:
 
         frameIRQPending = false;
         frame4015ClearPending = false;
+        frameMode = 0;
         frameCounter = 0;
+        val4017 = 0x00;
         delay4017 = -1;
     }
 

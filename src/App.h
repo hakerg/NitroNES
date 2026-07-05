@@ -177,10 +177,10 @@ private:
 
     double calcSpeed() const {
         if (settings.keys.speedUp.active() || padFast)
-            return 4.0;
+            return settings.speed1;
         if (settings.keys.speedDown.active() || padSlow)
-            return 0.5;
-        return 1.0;
+            return settings.speed2;
+        return settings.speed;
     }
 
     IWindow &window;

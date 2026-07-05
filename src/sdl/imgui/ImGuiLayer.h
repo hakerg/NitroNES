@@ -437,13 +437,10 @@ private:
             return;
         }
 
-        if (settings->syncMode != 2) {
-            if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
-                SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
-            }
-
-            spacing();
-        }
+        ImGui::SliderFloat(tr("settings.speed"), &settings->speed, 0.1f, 8.0f, "%.1f");
+        ImGui::SliderFloat(tr("settings.speed1"), &settings->speed1, 0.1f, 8.0f, "%.1f");
+        ImGui::SliderFloat(tr("settings.speed2"), &settings->speed2, 0.1f, 8.0f, "%.1f");
+        spacing();
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
 
@@ -471,6 +468,13 @@ private:
             ImGui::TextUnformatted(
                 std::format("{}: {:.2f}%", tr("settings.current_speed"),
                             speed * 100.0).c_str());
+        }
+
+        if (settings->syncMode != 2) {
+            spacing();
+            if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
+                SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
+            }
         }
 
         ImGui::End();

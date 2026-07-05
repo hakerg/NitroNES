@@ -26,8 +26,11 @@ struct AppSettings {
     int syncMode = 2;
     int scanlineBufferMs = 8;
     std::string language = "en";
-    AudioSettings audioSettings;
     bool adjustPitch = true;
+    float speed = 1.0f;
+    float speed1 = 4.0f;
+    float speed2 = 0.5f;
+    AudioSettings audioSettings;
     ControllerSettings controllers[2] = {ControllerSettings::player1(),
                                          ControllerSettings::player2()};
     AppKeyBindings keys;
@@ -87,6 +90,9 @@ private:
         f("audio.filter14k", audioSettings.useFilter14k);
         f("audio.reduceClicks", audioSettings.reduceClicks);
         f("audio.adjustPitch", adjustPitch);
+        f("speed", speed);
+        f("speed1", speed1);
+        f("speed2", speed2);
         for (int p = 0; p < 2; p++) {
             auto &c = controllers[p];
             std::string pre = "pad" + std::to_string(p) + ".";
