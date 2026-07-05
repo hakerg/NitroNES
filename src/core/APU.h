@@ -41,6 +41,10 @@ struct PulseChannel {
     bool     constVolume    = false;
     uint8_t  volume         = 0;
 
+    bool     nextLengthHalt         = false;
+    int      haltDelay              = 0;
+    bool     skipNextLengthClock    = false;
+
     bool     sweepEnabled   = false;
     uint8_t  sweepPeriod    = 0;
     bool     sweepNegate    = false;
@@ -65,10 +69,20 @@ struct PulseChannel {
     PulseChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
-        duty        = (data >> 6) & 0x03;
-        lengthHalt  = (data >> 5) & 0x01;
-        constVolume = (data >> 4) & 0x01;
-        volume      = data & 0x0F;
+        duty           = (data >> 6) & 0x03;
+        nextLengthHalt = (data >> 5) & 0x01;
+        haltDelay      = 2;
+        constVolume    = (data >> 4) & 0x01;
+        volume         = data & 0x0F;
+    }
+
+    void tickHaltDelay() {
+        if (haltDelay > 0) {
+            haltDelay--;
+            if (haltDelay == 0) lengthHalt = nextLengthHalt;
+        } else {
+            lengthHalt = nextLengthHalt;
+        }
     }
 
     void writeR1(uint8_t data) {
@@ -83,9 +97,18 @@ struct PulseChannel {
         timerPeriod = (timerPeriod & 0x0700) | data;
     }
 
-    void writeR3(uint8_t data) {
+    void writeR3(uint8_t data, bool isDuringTick) {
         timerPeriod = (timerPeriod & 0x00FF) | ((uint16_t)(data & 0x07) << 8);
-        if (enabled) lengthCounter = LENGTH_TABLE[data >> 3];
+
+        if (enabled) {
+            if (!isDuringTick || lengthCounter <= 0) {
+                lengthCounter = LENGTH_TABLE[data >> 3];
+                if (isDuringTick) {
+                    skipNextLengthClock = true;
+                }
+            }
+        }
+
         if (!settings.reduceClicks) dutyPos = 0;
         envStart = true;
     }
@@ -117,8 +140,11 @@ struct PulseChannel {
     }
 
     void clockLengthAndSweep() {
-        if (!lengthHalt && lengthCounter > 0)
+        if (skipNextLengthClock) {
+            skipNextLengthClock = false;
+        } else if (!lengthHalt && lengthCounter > 0) {
             lengthCounter--;
+        }
 
         if (sweepDivider == 0) {
             uint16_t target = sweepTarget();
@@ -163,6 +189,10 @@ struct TriangleChannel {
     uint8_t  lengthCounter     = 0;
     bool     enabled           = false;
 
+    bool     nextLengthHalt         = false;
+    int      haltDelay              = 0;
+    bool     skipNextLengthClock    = false;
+
     uint8_t  seqPos            = 0;
     float    timerCounter      = 0;
     uint8_t  linearCounter     = 0;
@@ -173,17 +203,35 @@ struct TriangleChannel {
     TriangleChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
-        lengthHalt        = (data >> 7) & 0x01;
+        nextLengthHalt    = (data >> 7) & 0x01;
+        haltDelay         = 2;
         linearCounterLoad = data & 0x7F;
+    }
+
+    void tickHaltDelay() {
+        if (haltDelay > 0) {
+            haltDelay--;
+            if (haltDelay == 0) lengthHalt = nextLengthHalt;
+        } else {
+            lengthHalt = nextLengthHalt;
+        }
     }
 
     void writeR2(uint8_t data) {
         timerPeriod = (timerPeriod & 0x0700) | data;
     }
 
-    void writeR3(uint8_t data) {
-        timerPeriod          = (timerPeriod & 0x00FF) | ((uint16_t)(data & 0x07) << 8);
-        if (enabled) lengthCounter = LENGTH_TABLE[data >> 3];
+    void writeR3(uint8_t data, bool isDuringTick) {
+        timerPeriod = (timerPeriod & 0x00FF) | ((uint16_t)(data & 0x07) << 8);
+
+        if (enabled) {
+            if (!isDuringTick || lengthCounter <= 0) {
+                lengthCounter = LENGTH_TABLE[data >> 3];
+                if (isDuringTick) {
+                    skipNextLengthClock = true;
+                }
+            }
+        }
         linearCounterReload  = true;
     }
 
@@ -207,8 +255,11 @@ struct TriangleChannel {
     }
 
     void clockLengthCounter() {
-        if (!lengthHalt && lengthCounter > 0)
+        if (skipNextLengthClock) {
+            skipNextLengthClock = false;
+        } else if (!lengthHalt && lengthCounter > 0) {
             lengthCounter--;
+        }
     }
 
     uint8_t output() const {
@@ -235,6 +286,10 @@ struct NoiseChannel {
     uint8_t  lengthCounter = 0;
     bool     enabled       = false;
 
+    bool     nextLengthHalt         = false;
+    int      haltDelay              = 0;
+    bool     skipNextLengthClock    = false;
+
     float    timerCounter = 0;
     uint16_t shiftReg     = 1;
 
@@ -247,9 +302,19 @@ struct NoiseChannel {
     NoiseChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
-        lengthHalt  = (data >> 5) & 0x01;
-        constVolume = (data >> 4) & 0x01;
-        volume      = data & 0x0F;
+        nextLengthHalt = (data >> 5) & 0x01;
+        haltDelay      = 2;
+        constVolume    = (data >> 4) & 0x01;
+        volume         = data & 0x0F;
+    }
+
+    void tickHaltDelay() {
+        if (haltDelay > 0) {
+            haltDelay--;
+            if (haltDelay == 0) lengthHalt = nextLengthHalt;
+        } else {
+            lengthHalt = nextLengthHalt;
+        }
     }
 
     void writeR2(uint8_t data) {
@@ -257,8 +322,15 @@ struct NoiseChannel {
         periodIndex = data & 0x0F;
     }
 
-    void writeR3(uint8_t data) {
-        if (enabled) lengthCounter = LENGTH_TABLE[data >> 3];
+    void writeR3(uint8_t data, bool isDuringTick) {
+        if (enabled) {
+            if (!isDuringTick || lengthCounter <= 0) {
+                lengthCounter = LENGTH_TABLE[data >> 3];
+                if (isDuringTick) {
+                    skipNextLengthClock = true;
+                }
+            }
+        }
         envStart = true;
     }
 
@@ -293,8 +365,11 @@ struct NoiseChannel {
     }
 
     void clockLengthCounter() {
-        if (!lengthHalt && lengthCounter > 0)
+        if (skipNextLengthClock) {
+            skipNextLengthClock = false;
+        } else if (!lengthHalt && lengthCounter > 0) {
             lengthCounter--;
+        }
     }
 
     uint8_t output() const {
@@ -333,10 +408,6 @@ struct DMCChannel {
     bool     silenceFlag   = true;
     bool     irqPending    = false;
     uint8_t  dmaDelay      = 0;
-    // Per nes_specs/dma.txt: a "load" DMC DMA (after $4015 D4 set with empty buffer)
-    // attempts to halt the CPU on a get cycle (3 cycles), while a "reload" DMC DMA
-    // (buffer emptied during playback) attempts to halt on a put cycle (4 cycles).
-    // false => halt on get (load), true => halt on put (reload).
     bool     dmaHaltOnPut  = false;
 
     void writeR0(uint8_t data) {
@@ -361,9 +432,6 @@ struct DMCChannel {
     void restart() {
         currentAddr   = sampleAddr;
         bytesRemaining = sampleLength;
-        // Note: this only reloads the address/length. Whether the next fetch is a
-        // "load" or "reload" DMA depends on what triggered the restart, not on the
-        // restart itself: see dmaHaltOnPut assignments at the two call sites below.
     }
 
     void tickDMADelay() {
@@ -381,10 +449,6 @@ struct DMCChannel {
         bytesRemaining--;
         if (bytesRemaining == 0) {
             if (loopFlag)
-                // Looping restart: this is still a continuation of playback, not a
-                // fresh (re)start, so it must not downgrade a pending reload DMA to
-                // a load DMA. The next buffer-empty event (clockTimer) sets
-                // dmaHaltOnPut on its own, as usual.
                 restart();
             else if (irqEnabled)
                 irqPending = true;
@@ -413,11 +477,6 @@ struct DMCChannel {
                     silenceFlag       = false;
                     shiftReg          = sampleBuffer;
                     sampleBufferEmpty = true;
-                    // Buffer emptied during playback => the next fetch is a "reload"
-                    // DMC DMA, which attempts to halt the CPU on a put cycle. But if a
-                    // load DMA is already pending (dmaDelay > 0, from a very recent
-                    // $4015 enable), don't downgrade it to reload -- this emptying
-                    // belongs to stale output-unit state predating that (re)start.
                     if (dmaDelay == 0) dmaHaltOnPut = true;
                 }
             }
@@ -441,16 +500,16 @@ static constexpr uint32_t FRAME_COUNTER_STEPS_PAL[5] = {
 
 class APU {
 public:
-    APU(AudioSettings& settings) : pulse1(settings), pulse2(settings),
+    explicit APU(AudioSettings& settings) : pulse1(settings), pulse2(settings),
         triangle(settings), noise(settings) {
         initMixerTables();
     }
 
     void reset() {
-        pulse1.enabled  = false;  pulse1.lengthCounter  = 0;
-        pulse2.enabled  = false;  pulse2.lengthCounter  = 0;
-        triangle.enabled = false; triangle.lengthCounter = 0;
-        noise.enabled   = false;  noise.lengthCounter   = 0;
+        pulse1.enabled  = false;  pulse1.lengthCounter  = 0; pulse1.skipNextLengthClock = false;
+        pulse2.enabled  = false;  pulse2.lengthCounter  = 0; pulse2.skipNextLengthClock = false;
+        triangle.enabled = false; triangle.lengthCounter = 0; triangle.skipNextLengthClock = false;
+        noise.enabled   = false;  noise.lengthCounter   = 0; noise.skipNextLengthClock = false;
         dmc.bytesRemaining   = 0;
         dmc.irqPending       = false;
 
@@ -484,22 +543,32 @@ public:
     bool frameIRQLine = false;
     bool dmcIRQPending() const { return dmc.irqPending; }
 
+    bool isHalfFrameTickNextCycle(bool isAPUPutCycle) const {
+        const uint32_t* s = FRAME_COUNTER_STEPS_NTSC;
+        bool isHalfFrameStep = (frameCounter == s[1]) ||
+                               (frameCounter == s[3] && frameMode == 0) ||
+                               (frameCounter == s[4] && frameMode != 0);
+        return isHalfFrameStep && !isAPUPutCycle;
+    }
+
     void writeData(uint16_t addr, uint8_t data, bool isAPUPutCycle) {
+        bool isDuringTick = isHalfFrameTickNextCycle(isAPUPutCycle);
+
         switch (addr) {
             case 0x4000: pulse1.writeR0(data); break;
             case 0x4001: pulse1.writeR1(data); break;
             case 0x4002: pulse1.writeR2(data); break;
-            case 0x4003: pulse1.writeR3(data); break;
+            case 0x4003: pulse1.writeR3(data, isDuringTick); break;
             case 0x4004: pulse2.writeR0(data); break;
             case 0x4005: pulse2.writeR1(data); break;
             case 0x4006: pulse2.writeR2(data); break;
-            case 0x4007: pulse2.writeR3(data); break;
+            case 0x4007: pulse2.writeR3(data, isDuringTick); break;
             case 0x4008: triangle.writeR0(data); break;
             case 0x400A: triangle.writeR2(data); break;
-            case 0x400B: triangle.writeR3(data); break;
+            case 0x400B: triangle.writeR3(data, isDuringTick); break;
             case 0x400C: noise.writeR0(data); break;
             case 0x400E: noise.writeR2(data); break;
-            case 0x400F: noise.writeR3(data); break;
+            case 0x400F: noise.writeR3(data, isDuringTick); break;
             case 0x4010: dmc.writeR0(data); break;
             case 0x4011: dmc.writeR1(data); break;
             case 0x4012: dmc.writeR2(data); break;
@@ -518,13 +587,7 @@ public:
                     dmc.bytesRemaining = 0;
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
-                    // A fetch caused directly by this (re)start is a "load" DMA: halt
-                    // on get, unlike the "reload" DMAs triggered by buffer-empty
-                    // events during ordinary (e.g. looping) playback.
                     dmc.dmaHaltOnPut = false;
-                    // The load DMA after a $4015 enable is scheduled to halt on a get
-                    // cycle during the 2nd APU cycle after the write (nes_specs/dma.txt),
-                    // so its request is delayed a couple of CPU cycles.
                     dmc.dmaDelay = 3;
                 }
 
@@ -534,6 +597,7 @@ public:
                 val4017 = data;
                 frameIRQInhibit = (data >> 6) & 0x01;
                 if (frameIRQInhibit) frameIRQPending = false;
+
                 delay4017 = isAPUPutCycle ? 2 : 3;
                 break;
             default:
@@ -558,6 +622,11 @@ public:
     }
 
     void clock(bool isAPUCycle) {
+        pulse1.tickHaltDelay();
+        pulse2.tickHaltDelay();
+        triangle.tickHaltDelay();
+        noise.tickHaltDelay();
+
         if (!isAPUCycle && frame4015ClearPending) {
             frameIRQPending = false;
             frame4015ClearPending = false;
@@ -605,7 +674,10 @@ private:
     }
 
     void clockFrameSequencer(bool isAPUCycle) {
-        if (!isAPUCycle) frameCounter++;
+        if (!isAPUCycle) {
+            frameCounter++;
+        }
+
         serviceFrameCounterWrite();
 
         const uint32_t* s = FRAME_COUNTER_STEPS_NTSC;

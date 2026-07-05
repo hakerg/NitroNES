@@ -105,6 +105,7 @@ static fs::path makeBuildDir(const fs::path& srcAbs) {
                        / std::to_string(std::hash<std::string>{}(srcAbs.string()))
                        / srcAbs.stem();
     std::error_code ec;
+    fs::remove_all(buildDir, ec);
     fs::create_directories(buildDir, ec);
     return buildDir;
 }
