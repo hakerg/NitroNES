@@ -1,5 +1,6 @@
 #pragma once
 #include "AudioSettings.h"
+#include "DelayedPin.h"
 #include <cstdint>
 
 static constexpr uint8_t LENGTH_TABLE[32] = {
@@ -36,13 +37,11 @@ static void initMixerTables() {
 
 template <bool IsPulse1>
 struct PulseChannel {
-    uint8_t  duty           = 0;
-    bool     lengthHalt     = false;
-    bool     constVolume    = false;
-    uint8_t  volume         = 0;
+    uint8_t          duty           = 0;
+    DelayedPin<bool> lengthHalt{false};
+    bool             constVolume    = false;
+    uint8_t          volume         = 0;
 
-    bool     nextLengthHalt         = false;
-    int      haltDelay              = 0;
     bool     skipNextLengthClock    = false;
 
     bool     sweepEnabled   = false;
@@ -70,19 +69,13 @@ struct PulseChannel {
 
     void writeR0(uint8_t data) {
         duty           = (data >> 6) & 0x03;
-        nextLengthHalt = (data >> 5) & 0x01;
-        haltDelay      = 2;
+        lengthHalt.set((data >> 5) & 0x01, 2);
         constVolume    = (data >> 4) & 0x01;
         volume         = data & 0x0F;
     }
 
     void tickHaltDelay() {
-        if (haltDelay > 0) {
-            haltDelay--;
-            if (haltDelay == 0) lengthHalt = nextLengthHalt;
-        } else {
-            lengthHalt = nextLengthHalt;
-        }
+        lengthHalt.tick();
     }
 
     void writeR1(uint8_t data) {
@@ -131,7 +124,7 @@ struct PulseChannel {
                 envDivider = volume;
                 if (envDecay > 0)
                     envDecay--;
-                else if (lengthHalt)
+                else if (lengthHalt.get())
                     envDecay = 15;
             } else {
                 envDivider--;
@@ -142,7 +135,7 @@ struct PulseChannel {
     void clockLengthAndSweep() {
         if (skipNextLengthClock) {
             skipNextLengthClock = false;
-        } else if (!lengthHalt && lengthCounter > 0) {
+        } else if (!lengthHalt.get() && lengthCounter > 0) {
             lengthCounter--;
         }
 
@@ -183,14 +176,12 @@ struct PulseChannel {
 };
 
 struct TriangleChannel {
-    bool     lengthHalt        = false;
+    DelayedPin<bool> lengthHalt{false};
     uint8_t  linearCounterLoad = 0;
     uint16_t timerPeriod       = 0;
     uint8_t  lengthCounter     = 0;
     bool     enabled           = false;
 
-    bool     nextLengthHalt         = false;
-    int      haltDelay              = 0;
     bool     skipNextLengthClock    = false;
 
     uint8_t  seqPos            = 0;
@@ -203,18 +194,12 @@ struct TriangleChannel {
     TriangleChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
-        nextLengthHalt    = (data >> 7) & 0x01;
-        haltDelay         = 2;
+        lengthHalt.set((data >> 7) & 0x01, 2);
         linearCounterLoad = data & 0x7F;
     }
 
     void tickHaltDelay() {
-        if (haltDelay > 0) {
-            haltDelay--;
-            if (haltDelay == 0) lengthHalt = nextLengthHalt;
-        } else {
-            lengthHalt = nextLengthHalt;
-        }
+        lengthHalt.tick();
     }
 
     void writeR2(uint8_t data) {
@@ -250,14 +235,14 @@ struct TriangleChannel {
         else if (linearCounter > 0)
             linearCounter--;
 
-        if (!lengthHalt)
+        if (!lengthHalt.get())
             linearCounterReload = false;
     }
 
     void clockLengthCounter() {
         if (skipNextLengthClock) {
             skipNextLengthClock = false;
-        } else if (!lengthHalt && lengthCounter > 0) {
+        } else if (!lengthHalt.get() && lengthCounter > 0) {
             lengthCounter--;
         }
     }
@@ -278,7 +263,7 @@ static constexpr uint16_t NOISE_PERIOD_TABLE_PAL[16] = {
 };
 
 struct NoiseChannel {
-    bool     lengthHalt  = false;
+    DelayedPin<bool> lengthHalt{false};
     bool     constVolume = false;
     uint8_t  volume      = 0;
     bool     modeFlag    = false;
@@ -286,8 +271,6 @@ struct NoiseChannel {
     uint8_t  lengthCounter = 0;
     bool     enabled       = false;
 
-    bool     nextLengthHalt         = false;
-    int      haltDelay              = 0;
     bool     skipNextLengthClock    = false;
 
     float    timerCounter = 0;
@@ -302,19 +285,13 @@ struct NoiseChannel {
     NoiseChannel(AudioSettings& settings) : settings(settings) {}
 
     void writeR0(uint8_t data) {
-        nextLengthHalt = (data >> 5) & 0x01;
-        haltDelay      = 2;
+        lengthHalt.set((data >> 5) & 0x01, 2);
         constVolume    = (data >> 4) & 0x01;
         volume         = data & 0x0F;
     }
 
     void tickHaltDelay() {
-        if (haltDelay > 0) {
-            haltDelay--;
-            if (haltDelay == 0) lengthHalt = nextLengthHalt;
-        } else {
-            lengthHalt = nextLengthHalt;
-        }
+        lengthHalt.tick();
     }
 
     void writeR2(uint8_t data) {
@@ -356,7 +333,7 @@ struct NoiseChannel {
                 envDivider = volume;
                 if (envDecay > 0)
                     envDecay--;
-                else if (lengthHalt)
+                else if (lengthHalt.get())
                     envDecay = 15;
             } else {
                 envDivider--;
@@ -367,7 +344,7 @@ struct NoiseChannel {
     void clockLengthCounter() {
         if (skipNextLengthClock) {
             skipNextLengthClock = false;
-        } else if (!lengthHalt && lengthCounter > 0) {
+        } else if (!lengthHalt.get() && lengthCounter > 0) {
             lengthCounter--;
         }
     }
@@ -407,7 +384,7 @@ struct DMCChannel {
     bool     sampleBufferEmpty = true;
     bool     silenceFlag   = true;
     bool     irqPending    = false;
-    uint8_t  dmaDelay      = 0;
+    DelayedPin<bool> dmaDelay{false};
     bool     dmaHaltOnPut  = false;
 
     void writeR0(uint8_t data) {
@@ -435,11 +412,11 @@ struct DMCChannel {
     }
 
     void tickDMADelay() {
-        if (dmaDelay > 0) dmaDelay--;
+        dmaDelay.tick();
     }
 
     bool needsDMAFetch() const {
-        return sampleBufferEmpty && bytesRemaining > 0 && dmaDelay == 0;
+        return sampleBufferEmpty && bytesRemaining > 0 && !dmaDelay.get();
     }
 
     void loadSampleBuffer(uint8_t data) {
@@ -477,7 +454,7 @@ struct DMCChannel {
                     silenceFlag       = false;
                     shiftReg          = sampleBuffer;
                     sampleBufferEmpty = true;
-                    if (dmaDelay == 0) dmaHaltOnPut = true;
+                    if (!dmaDelay.get()) dmaHaltOnPut = true;
                 }
             }
         } else {
@@ -510,6 +487,14 @@ public:
         pulse2.enabled  = false;  pulse2.lengthCounter  = 0; pulse2.skipNextLengthClock = false;
         triangle.enabled = false; triangle.lengthCounter = 0; triangle.skipNextLengthClock = false;
         noise.enabled   = false;  noise.lengthCounter   = 0; noise.skipNextLengthClock = false;
+
+        pulse1.lengthHalt.force(false);
+        pulse2.lengthHalt.force(false);
+        triangle.lengthHalt.force(false);
+        noise.lengthHalt.force(false);
+        dmc.dmaDelay.force(false);
+        val4017.force(0);
+
         dmc.bytesRemaining   = 0;
         dmc.irqPending       = false;
 
@@ -517,8 +502,6 @@ public:
         frame4015ClearPending = false;
         frameMode = 0;
         frameCounter = 0;
-        val4017 = 0x00;
-        delay4017 = -1;
     }
 
     bool irqAsserted() const { return frameIRQLine || dmc.irqPending; }
@@ -588,17 +571,17 @@ public:
                 } else if (dmc.bytesRemaining == 0) {
                     dmc.restart();
                     dmc.dmaHaltOnPut = false;
-                    dmc.dmaDelay = 3;
+                    dmc.dmaDelay.force(true);
+                    dmc.dmaDelay.set(false, 3);
                 }
 
                 dmc.irqPending = false;
                 break;
             case 0x4017:
-                val4017 = data;
                 frameIRQInhibit = (data >> 6) & 0x01;
                 if (frameIRQInhibit) frameIRQPending = false;
 
-                delay4017 = isAPUPutCycle ? 2 : 3;
+                val4017.set(data, isAPUPutCycle ? 3 : 4);
                 break;
             default:
                 break;
@@ -661,16 +644,14 @@ private:
     }
 
     void serviceFrameCounterWrite() {
-        if (delay4017 < 0) return;
-        if (delay4017 == 0) {
-            frameMode = (val4017 >> 7) & 0x01;
+        if (val4017.tick()) {
+            frameMode = (val4017.get() >> 7) & 0x01;
             frameCounter = 0;
             if (frameMode == 1) {
                 clockQuarterFrame();
                 clockHalfFrame();
             }
         }
-        delay4017--;
     }
 
     void clockFrameSequencer(bool isAPUCycle) {
@@ -701,9 +682,7 @@ private:
     uint32_t frameCounter   = 0;
     uint8_t  frameMode      = 0;
     bool     frameIRQInhibit = false;
-
-    int delay4017 = -1;
-    uint8_t val4017 = 0;
+    DelayedPin<uint8_t> val4017{0};
 
     void clockQuarterFrame() {
         pulse1.clockEnvelope();

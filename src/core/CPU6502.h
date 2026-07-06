@@ -1,4 +1,5 @@
 #pragma once
+#include "DelayedPin.h"
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -32,7 +33,7 @@ public:
     void reset() {
         P |= FLAG_I;
 
-        nmiPending = false;
+        nmiSignal.force(false);
         interruptPending = false;
         currentInt = IntKind::None;
 
@@ -42,9 +43,6 @@ public:
         skipNextPoll = false;
 
         irqInhibitSnapshot = true;
-
-        nmiEdgeDetected = false;
-        nmiPollSignal   = false;
         irqDetected = false;
 
         cycle = 0;
@@ -61,8 +59,7 @@ public:
 
     void clockPhi1() {
         rdyLevel = bus.pollRDY();
-        nmiPollSignal   = nmiEdgeDetected;
-        nmiEdgeDetected = nmiPending;
+        nmiSignal.tick();
         irqDetected = !irqLevel;
 
         const RegSnap pre{ PC, A, X, Y, S, P };
@@ -86,7 +83,9 @@ public:
 
         bool currentNMILevel = bus.pollNMI();
         if (!currentNMILevel && nmiLevel) {
-            nmiPending = true;
+            if (!nmiSignal.getTarget()) {
+                nmiSignal.set(true, 2);
+            }
         }
         nmiLevel = currentNMILevel;
         irqLevel = bus.pollIRQ();
@@ -161,12 +160,10 @@ private:
     bool pageCross = false;
     bool nmiLevel = false;
     bool irqLevel = false;
-    bool nmiPending = false;
+    DelayedPin<bool> nmiSignal{false};
     bool interruptPending = false;
     bool irqInhibitSnapshot = true;
     IntKind currentInt = IntKind::None;
-    bool nmiEdgeDetected = false;
-    bool nmiPollSignal = false;
     bool irqDetected = false;
     bool rdyLevel = false;
     bool skipNextPoll = false;
@@ -192,7 +189,7 @@ private:
     bool isStalled() const { return !rdyLevel && currentStep.isRead; }
 
     void pollInterrupts() {
-        if (nmiPollSignal) interruptPending = true;
+        if (nmiSignal.get()) interruptPending = true;
         else if (irqDetected && !irqInhibitSnapshot) interruptPending = true;
     }
 
@@ -206,8 +203,8 @@ private:
 
         if (interruptPending) {
             interruptPending = false;
-            if (nmiPending) {
-                nmiPending = false;
+            if (nmiSignal.getTarget()) {
+                nmiSignal.force(false);
                 currentInt = IntKind::NMI;
             } else {
                 currentInt = IntKind::IRQ;
@@ -554,10 +551,7 @@ inline CPU6502::Step CPU6502::am_izy_4_fixup() { return afterAddressing_ReadWrit
 inline CPU6502::Step CPU6502::am_rel_1() {
     branchOffset = fetched;
     if (!branchTaken) return opFetch();
-    uint8_t oldL = PC & 0xFF;
-    uint8_t newL = oldL + branchOffset;
-    bool wouldCross = ((int8_t)branchOffset < 0) ? (newL > oldL) : (newL < oldL);
-    if (wouldCross) pollInterrupts();
+    pollInterrupts();
     return emitRead(&CPU6502::am_rel_2_taken, PC);
 }
 inline CPU6502::Step CPU6502::am_rel_2_taken() {
@@ -594,8 +588,8 @@ inline CPU6502::Step CPU6502::intHw_dummy2() { return emitRead(&CPU6502::int1_du
 inline CPU6502::Step CPU6502::int2_pushPCH() { return emitWrite(&CPU6502::int3_pushPCL, 0x0100 | S--, PC & 0xFF); }
 inline CPU6502::Step CPU6502::int3_pushPCL() {
     bool wasBRK = (currentInt == IntKind::SoftwareBRK);
-    if (currentInt != IntKind::NMI && nmiEdgeDetected) {
-        nmiPending = false;
+    if (currentInt != IntKind::NMI && nmiSignal.getTap(1)) {
+        nmiSignal.force(false);
         currentInt = IntKind::NMI;
     } else if (currentInt == IntKind::SoftwareBRK && irqDetected && !irqInhibitSnapshot) {
         currentInt = IntKind::IRQ;
@@ -660,7 +654,7 @@ inline CPU6502::Step CPU6502::decodeAndDispatch() {
     auto setRead  = [&](ExecKind k, MicroOp am1) { execKind = k; accessMode = AccessMode::READ;  return emitRead(am1, PC++); };
     auto setWrite = [&](StoreKind k, MicroOp am1){ storeKind = k; accessMode = AccessMode::WRITE; return emitRead(am1, PC++); };
     auto setRmw   = [&](RmwKind k, MicroOp am1)  { rmwKind = k;  accessMode = AccessMode::RMW;   return emitRead(am1, PC++); };
-    auto branch   = [&](bool cond)               { branchTaken = cond; return emitRead(&CPU6502::am_rel_1, PC++); };
+    auto branch   = [&](bool cond)               { branchTaken = cond; pollInterrupts(); return emitRead(&CPU6502::am_rel_1, PC++); };
     auto implied  = [&](ExecKind k)              { execKind = k; return emitRead(&CPU6502::am_imp_exec, PC); };
 
     switch (opcode) {
@@ -988,5 +982,3 @@ inline const char* CPU6502::currentStepName() const {
     #undef CPU_STEP
     return "?";
 }
-
-
