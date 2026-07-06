@@ -88,7 +88,7 @@ dodaje prefix `F=… CYC=…` i otwiera plik.
     W=… CTRL=… MASK=… STAT=… OAMA=… SPR=… NMI=… [ODD]`
       * PHASE = `PRE` / `IDLE` / `BG-FETCH` / `SPR-FETCH` / `BG-PREFTCH` /
         `NT-DUMMY` / `POST` / `VBLANK`
-      * V/T = loopy `vram_addr`/`tram_addr`, fX = fine X, W = write latch
+      * V/T = loopy `vramAddr`/`tramAddr`, fX = fine X, W = write latch
       * SPR = sprite count po evaluacji, ODD = marker klatki nieparzystej
   - `cpu` (2 linie na cykl CPU):
       * `F=… CYC=… PHI1 PC=… A=… X=… Y=… S=… P=<flagi> R/W $XXXX[=DD][(nazwa)]
