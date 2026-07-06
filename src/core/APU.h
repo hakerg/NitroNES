@@ -1,7 +1,9 @@
 #pragma once
 #include "AudioSettings.h"
 #include "DelayedPin.h"
+#include "Tracer.h"
 #include <cstdint>
+#include <cstdio>
 
 static constexpr uint8_t LENGTH_TABLE[32] = {
     10, 254, 20,  2, 40,  4, 80,  6, 160,  8, 60, 10, 14, 12, 26, 14,
@@ -515,6 +517,25 @@ public:
     uint16_t dmcSampleAddress() const { return dmc.currentAddr; }
     bool dmcDMAHaltOnPut() const { return dmc.dmaHaltOnPut; }
 
+    void setTracer(Tracer* t) { tracer = t; }
+
+    void emitTrace() {
+        if (!tracer || !tracer->apu) return;
+        char buf[128];
+        std::snprintf(buf, sizeof(buf),
+            "APU:DMC bytes=%u buf=%c halt=%c addr=%04X shift=%02X bits=%u tmr=%u sil=%c irq=%c",
+            (unsigned)dmc.bytesRemaining,
+            dmc.sampleBufferEmpty ? 'E' : 'F',
+            dmc.dmaHaltOnPut ? 'P' : 'G',
+            (unsigned)dmc.currentAddr,
+            (unsigned)dmc.shiftReg,
+            (unsigned)dmc.bitsRemaining,
+            (unsigned)dmc.timerCounter,
+            dmc.silenceFlag ? 'S' : 's',
+            dmc.irqPending ? 'I' : 'i');
+        tracer->appendApu(buf);
+    }
+
     void loadDMCSample(uint8_t data) {
         if (dmc.bytesRemaining == 0) return;
         dmc.loadSampleBuffer(data);
@@ -523,7 +544,6 @@ public:
     bool frameIRQPending = false;
     bool frame4015ClearPending = false;
     bool frameIRQLine = false;
-    bool dmcIRQPending() const { return dmc.irqPending; }
 
     bool isHalfFrameTickNextCycle(bool isAPUPutCycle) const {
         const uint32_t* s = FRAME_COUNTER_STEPS_NTSC;
@@ -682,6 +702,7 @@ private:
     uint8_t  frameMode      = 0;
     bool     frameIRQInhibit = false;
     DelayedPin<uint8_t> val4017{0};
+    Tracer*  tracer = nullptr;
 
     void clockQuarterFrame() {
         pulse1.clockEnvelope();

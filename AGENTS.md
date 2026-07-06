@@ -23,7 +23,7 @@ Emulator NES robiony pod kątem zgodności z fizycznym sprzętem. Cel: zaliczeni
 Gdy test accuracy_coin nie przechodzi:
 1. Przeczytaj opis błędu i kod źródłowy testu w `nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.asm`
 2. Napisz minimalny plik .asm odtwarzający konkretne scenario (szablon: `test/nes_template.asm`)
-3. Uruchom `nes_test` z odpowiednimi komendami, włącz trace cpu/ppu/dma — zapis trafi do `trace.log`
+3. Uruchom `nes_test` z odpowiednimi komendami, włącz trace cpu/ppu/dma/apu — zapis trafi do `trace.log`
 4. Przeanalizuj trace, symbole z `.fns` pojawiają się automatycznie
 5. Porównaj z oczekiwanym zachowaniem ze specyfikacji w `nes_specs/`
 6. Możesz też odpalać inne ROM-y testowe przez `nes_test`, aby pozyskać więcej informacji
@@ -72,7 +72,7 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
   pad1+BTN[,BTN..]     naciśnij wskazane przyciski (set bit)
   pad1-BTN[,BTN..]     puść wskazane przyciski (clear bit)
   pad2=... +... -...   to samo dla pada 2
-  trace:CHAN:STATE     włącz/wyłącz kanał trace (CHAN=cpu|ppu|dma, STATE=on|off)
+  trace:CHAN:STATE     włącz/wyłącz kanał trace (CHAN=cpu|ppu|dma|apu, STATE=on|off)
   trace-file:PATH      zmień plik wyjściowy trace (domyślnie: trace.log)
   song:N               (tylko .nsf) initSong(N)
   next / prev          (tylko .nsf) przełącz na następny/poprzedni utwór
@@ -81,7 +81,7 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
 Przyciski: A, B, SELECT, START, UP, DOWN, LEFT, RIGHT
 
 Trace zapisuje do `trace.log` jedną linię na clock. Każdy komponent (CPU,
-PPU, DMA) sam generuje swój wiersz w trakcie clockowania — TestRunner tylko
+PPU, DMA, APU) sam generuje swój wiersz w trakcie clockowania — TestRunner tylko
 dodaje prefix `F=… CYC=…` i otwiera plik.
 
   - `ppu` (3 linie na cykl CPU): `F=… CYC=… PPU[SL=…,CY=…] PHASE V=… T=… fX=…
@@ -98,17 +98,35 @@ dodaje prefix `F=… CYC=…` i otwiera plik.
         pobrane/zapisane na magistrali w fazie 2.
       * P: wielkie litery = bit ustawiony, małe = wyczyszczony
       * Anotacja `(nazwa)` dla rejestrów I/O i symboli z `.fns`/`.lbl`
-  - `dma` (dopisywane na końcu linii PPU bezpośrednio po phi1, gdzie DMA
-    podejmuje decyzję): `DMA:<OAMphase>/<DMCphase> <action> @<addr>` —
-    generowane przez sam DMA w `clockPhi2`, doklejane do ostatniej linii.
+  - `apu` (dopisywane na końcu linii CPU PHI1, zaraz po dekodowaniu instrukcji):
+    `APU:DMC bytes=N buf=E/F halt=P/G addr=XXXX shift=XX bits=N tmr=N sil=S/s irq=I/i`
+      * generowane przez `APU::emitTrace()`, wywoływane z `A2A03::clockPhi1()`
+        zaraz po `dma.clockPhi1()` — pokazuje stan kanału DMC PO decyzjach DMA
+        podjętych w tym cyklu
+      * bytes = `dmc.bytesRemaining`, buf = czy sample buffer jest pusty
+        (E=empty/F=full), halt = czy najbliższy DMA-halt wypadnie na cyklu put
+        (P) czy get (G) — czyli `dmaHaltOnPut`
+      * addr = `currentAddr` (adres następnego odczytu próbki), shift/bits =
+        rejestr przesuwny wyjścia i liczba pozostałych bitów do przesunięcia
+      * tmr = licznik okresu wyjścia (`timerCounter`), sil = silenceFlag
+        (S=cisza, s=gra), irq = `irqPending` (I=ustawiony, i=brak)
+  - `dma` (dopisywane na końcu linii PPU sub2, czyli PPU-klocku bezpośrednio
+    po CPU PHI1, gdzie DMA podejmuje decyzję w `clockPhi2`):
+    `DMA:<OAMphase>/<DMCphase> <action> @<addr> hb=0/1[->target(delay)]`
+      * generowane przez sam DMA w `clockPhi2`, doklejane do ostatniej linii
+      * hb = `hadBytesRecently.get()` — opóźniony (DelayedPin, 4 cykle) widok
+        „próbka miała jeszcze bajty do odtworzenia w tej klatce” używany do
+        wykrywania abortu DMA (explicit i implicit stop to ten sam mechanizm,
+        patrz `nes_specs/dma.txt` sekcja Bugs); `->target(delay)` pojawia się
+        tylko gdy pin ma zaplanowaną, jeszcze nie zakończoną zmianę
 
-Łącznie z włączonym ppu+cpu+dma: 5 linii na cykl CPU (3 PPU + PHI1 + PHI2),
+Łącznie z włączonym ppu+cpu+dma+apu: 5 linii na cykl CPU (3 PPU + PHI1 + PHI2),
 wszystkie z tym samym `CYC=N`. Kolejność odzwierciedla faktyczne taktowanie:
-PPU sub0, PPU sub1, CPU PHI1, PPU sub2 (z DMA suffix), CPU PHI2.
+PPU sub0, PPU sub1, CPU PHI1 (z APU suffix), PPU sub2 (z DMA suffix), CPU PHI2.
 
 Przykłady:
   nes_test mytest.asm frames:60 screen mem:0x00:16
-  nes_test mytest.asm trace:cpu:on trace:dma:on frames:5
+  nes_test mytest.asm trace:cpu:on trace:dma:on trace:apu:on frames:5
   nes_test ROM.nes frames:120 pad1+START frames:1 pad1-START frames:600 screen:ascii
   nes_test ROM.nes frames:120 pixels:0:0:16:8
   nes_test ROM.nes frames:600 reset frames:600 mem:0x6000:32
@@ -123,9 +141,9 @@ nie zmieni). Żeby złapać w trace zdarzenie, które występuje dopiero po
 dłuższym czasie (np. utknięcie po kilku minutach grania):
 1. Przewiń bez trace: `cycles:<duże_N>` (szybkie, bez narzutu I/O)
 2. `info` — sprawdź frame/cycle count, bisekcją znajdź okolicę zdarzenia
-3. Włącz `trace:cpu:on` (`trace:dma:on` w razie potrzeby) dopiero blisko
-   interesującego miejsca, potem tylko kilkaset tysięcy cykli — inaczej plik
-   trace.log spuchnie do dziesiątek MB/GB
+3. Włącz `trace:cpu:on` (`trace:dma:on`/`trace:apu:on` w razie potrzeby) dopiero
+   blisko interesującego miejsca, potem tylko kilkaset tysięcy cykli — inaczej
+   plik trace.log spuchnie do dziesiątek MB/GB
 4. Analizuj `trace.log`/plik z `trace-file:PATH` pod kątem adresu PC, na
    którym coś poszło nie tak
 
@@ -161,7 +179,7 @@ nes_test AccuracyCoin.asm frames:60 \
    ... \
    pad1+DOWN  frames:20 pad1-DOWN  frames:20  ; powtórzyć 6× = wiersz 6
    ... \
-   trace:cpu:on trace:dma:on \
+   trace:cpu:on trace:dma:on trace:apu:on \
    pad1+A frames:20 pad1-A frames:60
 ```
 
@@ -169,6 +187,10 @@ Co da analiza takiego trace:
 - pełna sekwencja zapisów do APU/PPU robiona przez konkretny test
 - odpowiada na pytania "jaki bajt poszedł do $4012", "kiedy DMC wystartował
   DMA", "jaki PC był aktywny w momencie failu" itd.
+- kanał `apu` pokazuje wewnętrzny stan kanału DMC (bytesRemaining, sample
+  buffer, shift register, timer, silence/IRQ flag) cykl po cyklu — przydatne
+  przy błędach zależnych od dokładnego momentu wyczerpania próbki (np. DMA
+  Abort, explicit/implicit stop) bez doklejania własnych printf-ów do APU.h
 - dzięki anotacjom `(DMC_START)`, `(PPUCTRL)`, `(symbol_z_fns)` nie trzeba
   ręcznie korelować adresów z dokumentacją
 - ułatwia napisanie minimalnego reproducera (`test/nes_template.asm`) gdy okaże

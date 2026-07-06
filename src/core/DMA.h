@@ -30,22 +30,23 @@ public:
         dmcHaltOnPut = false;
         dmcHaltArmed = false;
         dmcAbortPending = false;
-        dmcEnabledRecently.force(false);
-    }
-
-    void notifyDMCEnable(bool enabled) {
-        if (enabled) dmcEnabledRecently.force(true);
-        else if (dmcEnabledRecently.getTarget()) dmcEnabledRecently.set(false, 4);
+        hadBytesRecently.force(false);
     }
 
     void clockPhi1(bool isPutCycle) {
         action = Action::None;
         const bool cpuRead = idma.pollIsRead();
         const bool getCycle = !isPutCycle;
-        dmcEnabledRecently.tick();
+
+        if (idma.dmcHasBytesRemaining()) {
+            hadBytesRecently.force(true);
+        } else if (hadBytesRecently.getTarget()) {
+            hadBytesRecently.set(false, 4);
+        }
+        hadBytesRecently.tick();
 
         if (dmcPhase == DMCPhase::Idle) {
-            if (dmcEnabledRecently.get() && idma.dmcReadyForFetch()) {
+            if (hadBytesRecently.get() && idma.dmcReadyForFetch()) {
                 dmcPhase = DMCPhase::Halt;
                 dmcHaltOnPut = idma.dmcDMAHaltOnPut();
                 dmcHaltArmed = false;
@@ -53,8 +54,9 @@ public:
             }
         } else if (dmcAbortPending) {
             dmcAbortPending = false;
-            if (!dmcEnabledRecently.getTap(1))
+            if (!hadBytesRecently.getTap(1)) {
                 dmcPhase = DMCPhase::Idle;
+            }
         }
 
         switch (dmcPhase) {
@@ -104,8 +106,6 @@ public:
                 break;
             case Action::DMCGet:
                 idma.loadDMCSample(idma.dmaReadData());
-                if (!idma.dmcHasBytesRemaining())
-                    dmcEnabledRecently.force(false);
                 dmcPhase = DMCPhase::Idle;
                 break;
             case Action::OAMGet:
@@ -149,12 +149,16 @@ private:
         static const char* dmcPh[] = { "Idle", "Halt", "Dummy", "Read" };
         static const char* oamPh[] = { "Idle", "Halt", "Xfer" };
         static const char* acts[]  = { "None", "OAMGet", "OAMPut", "DMCGet" };
-        char buf[96];
-        std::snprintf(buf, sizeof(buf), "DMA:%s/%s %s @%04X",
+        char buf[160];
+        int n = std::snprintf(buf, sizeof(buf), "DMA:%s/%s %s @%04X hb=%d",
                       oamPh[(int)oamPhase & 3],
                       dmcPh[(int)dmcPhase & 3],
                       acts[(int)action    & 3],
-                      (unsigned)getAddr());
+                      (unsigned)getAddr(),
+                      (int)hadBytesRecently.get());
+        if (hadBytesRecently.isPending())
+            std::snprintf(buf + n, sizeof(buf) - n, "->%d(%d)",
+                          (int)hadBytesRecently.getTarget(), hadBytesRecently.getDelay());
         tracer->appendDma(buf);
     }
 
@@ -171,7 +175,7 @@ private:
     bool     dmcHaltOnPut = false;
     bool     dmcHaltArmed = false;
     bool     dmcAbortPending = false;
-    DelayedPin<bool> dmcEnabledRecently{false};
+    DelayedPin<bool> hadBytesRecently{false};
 
     Action action = Action::None;
 };

@@ -79,11 +79,8 @@ public:
         flushPending();
         beginLine(body);
     }
-    void appendDma(const char* body) override {
-        if (pending.empty()) return;
-        pending += "  ";
-        pending += body;
-    }
+    void appendDma(const char* body) override { appendToPending(body); }
+    void appendApu(const char* body) override { appendToPending(body); }
 
     std::string symbolExact(uint16_t addr) const override {
         if (const char* io = nesIoRegName(addr)) return io;
@@ -112,6 +109,12 @@ private:
     std::string pending;
 
     // helpers ----------------------------------------------------------------
+    void appendToPending(const char* body) {
+        if (pending.empty()) return;
+        pending += "  ";
+        pending += body;
+    }
+
     static void trim(std::string& s) {
         auto isSp = [](unsigned char c){ return std::isspace(c); };
         while (!s.empty() && isSp(s.front())) s.erase(s.begin());
@@ -237,6 +240,7 @@ private:
             if      (parts[1] == "cpu") cpu = on;
             else if (parts[1] == "ppu") ppu = on;
             else if (parts[1] == "dma") dma = on;
+            else if (parts[1] == "apu") apu = on;
             else return false;
             if (any() && !traceFp) openTrace();
             return true;

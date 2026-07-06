@@ -36,6 +36,7 @@ public:
         apu.clock(isAPUPutCycle);
         cpu.clockPhi1();
         dma.clockPhi1(isAPUPutCycle);
+        apu.emitTrace();
     }
 
     void clockPhi2() {
@@ -57,7 +58,7 @@ public:
     DMA& getDMA() { return dma; }
     uint8_t getBusData() { return busData; }
 
-    void setTracer(Tracer* t) { cpu.setTracer(t); dma.setTracer(t); }
+    void setTracer(Tracer* t) { cpu.setTracer(t); dma.setTracer(t); apu.setTracer(t); }
 
     uint8_t cpuReadData() override {
         if (dma.overridesAddr()) return busData;
@@ -146,7 +147,6 @@ public:
             dma.write4014(data);
         } else if (addr >= 0x4000 && addr <= 0x4017) {
             apu.writeData(addr, data, isAPUPutCycle);
-            if (addr == 0x4015) dma.notifyDMCEnable((data & 0x10) != 0);
         }
     }
 

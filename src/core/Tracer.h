@@ -6,12 +6,13 @@ class Tracer {
 public:
     virtual ~Tracer() = default;
 
-    bool cpu = false, ppu = false, dma = false;
-    bool any() const { return cpu || ppu || dma; }
+    bool cpu = false, ppu = false, dma = false, apu = false;
+    bool any() const { return cpu || ppu || dma || apu; }
 
     virtual void writeCpu(const char* body) = 0;
     virtual void writePpu(const char* body) = 0;
     virtual void appendDma(const char* body) = 0;
+    virtual void appendApu(const char* body) = 0;
 
     virtual std::string symbolNear(uint16_t pc) const { (void)pc; return {}; }
     virtual std::string symbolExact(uint16_t addr) const { (void)addr; return {}; }

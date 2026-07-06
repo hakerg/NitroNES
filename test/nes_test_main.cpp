@@ -28,7 +28,7 @@
 //   pad1+BTN[,BTN..]    press buttons on controller 1
 //   pad1-BTN[,BTN..]    release buttons on controller 1
 //   pad2=... +... -...  same for controller 2
-//   trace:CHAN:STATE    enable/disable trace channel (CHAN=cpu|ppu|dma, STATE=on|off)
+//   trace:CHAN:STATE    enable/disable trace channel (CHAN=cpu|ppu|dma|apu, STATE=on|off)
 //   trace-file:PATH     redirect trace output (default: trace.log)
 //   song:N              (.nsf only) initSong(N)
 //   next / prev         (.nsf only) switch to next/previous song
@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
             "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65; tmp build dir)\n"
             "Commands: frames:N cycles:N reset screen[:ascii] pixels:X:Y:W:H mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
-            "          trace:cpu|ppu|dma:on|off  trace-file:PATH\n"
+            "          trace:cpu|ppu|dma|apu:on|off  trace-file:PATH\n"
             "NSF only: song:N next prev songinfo\n"
             "Buttons:  A B SELECT START UP DOWN LEFT RIGHT\n";
         return 1;
