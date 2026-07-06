@@ -143,6 +143,7 @@ public:
         spriteCount = 0;
         spriteZeroHitPossible = false;
         spriteOverflowCycle = -1;
+        spriteZeroHitDelay.force(false);
         suppressVblThisFrame = false;
         nmiCycleLatch = false;
         nmiVbl = false;
@@ -308,6 +309,8 @@ private:
     ShiftPair<uint8_t> spritePattern[8]{};
     bool     spriteZeroHitPossible = false;
     int16_t  spriteOverflowCycle   = -1;
+
+    ShiftDelay<bool, 2> spriteZeroHitDelay{false};
 
     std::array<uint8_t, 32>          palScreen;
     std::array<uint32_t, 256 * 240>  buf;
@@ -627,14 +630,17 @@ private:
     void renderPixel() {
         const int x = cycle - 1;
         const int y = scanline;
-        if ((unsigned)x >= (unsigned)NES::SCREEN_WIDTH || (unsigned)y >= (unsigned)NES::SCREEN_HEIGHT)
+        if ((unsigned)x >= (unsigned)NES::SCREEN_WIDTH || (unsigned)y >= (unsigned)NES::SCREEN_HEIGHT) {
+            status.spriteZeroHit |= spriteZeroHitDelay.tick(false);
             return;
+        }
 
         Pixel bg = sampleBackground();
         bool spriteZero = false, fgPriority = false;
         Pixel sp = sampleSprite(spriteZero, fgPriority);
         const bool isSpriteZeroPixel = spriteZero && sp.nonzero;
 
+        bool hitNow = false;
         uint8_t pixel = 0, paletteIdx = 0;
         if (!bg.nonzero && sp.nonzero) {
             pixel = sp.color; paletteIdx = sp.palette;
@@ -646,9 +652,10 @@ private:
             if (spriteZeroHitPossible && isSpriteZeroPixel
                 && mask.renderBackground && mask.renderSprites) {
                 const int xLo = (mask.renderBackgroundLeft && mask.renderSpritesLeft) ? 2 : 9;
-                if (cycle >= xLo && cycle < 256) status.spriteZeroHit = 1;
+                if (cycle >= xLo && cycle < 256) hitNow = true;
             }
         }
+        status.spriteZeroHit |= spriteZeroHitDelay.tick(hitNow);
 
         uint8_t idx;
         if (!renderingEnabled() && (vramAddr.reg & 0x3F00) == 0x3F00)

@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 
 template <typename T>
 class DelayedPin {
@@ -63,4 +64,29 @@ private:
     T current;
     T target;
     int countdown;
+};
+
+// Rejestr przesuwny o stałej głębokości N: w odróżnieniu od DelayedPin (który
+// modeluje POJEDYNCZE zaplanowane przejście), opóźnia CIĄGŁY sygnał o dokładnie
+// N taktów, poprawnie nawet gdy wartość zmienia się co takt (np. impuls trwający
+// wiele kolejnych taktów). N jest parametrem szablonu, bo to stała sprzętowa
+// znana w czasie kompilacji — brak alokacji, brak osobnego licznika do pomylenia.
+template <typename T, int N>
+class ShiftDelay {
+public:
+    explicit ShiftDelay(T initial = T{}) { buf.fill(initial); }
+
+    // Wsuwa `value` na bieżący takt, zwraca wartość sprzed dokładnie N taktów.
+    T tick(T value) {
+        T out = buf[head];
+        buf[head] = value;
+        head = (head + 1) % N;
+        return out;
+    }
+
+    void force(T val) { buf.fill(val); }
+
+private:
+    std::array<T, N> buf{};
+    int head = 0;
 };
