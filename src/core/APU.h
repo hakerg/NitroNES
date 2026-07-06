@@ -415,8 +415,8 @@ struct DMCChannel {
         dmaDelay.tick();
     }
 
-    bool needsDMAFetch() const {
-        return sampleBufferEmpty && bytesRemaining > 0 && !dmaDelay.get();
+    bool readyForFetch() const {
+        return sampleBufferEmpty && !dmaDelay.get();
     }
 
     void loadSampleBuffer(uint8_t data) {
@@ -425,10 +425,8 @@ struct DMCChannel {
         currentAddr = ((currentAddr + 1) & 0xFFFF) | 0x8000;
         bytesRemaining--;
         if (bytesRemaining == 0) {
-            if (loopFlag)
-                restart();
-            else if (irqEnabled)
-                irqPending = true;
+            if (loopFlag) restart();
+            else if (irqEnabled) irqPending = true;
         }
     }
 
@@ -512,7 +510,8 @@ public:
     NoiseChannel    noise;
     DMCChannel      dmc;
 
-    bool dmcNeedsSample() const { return dmc.needsDMAFetch(); }
+    bool dmcReadyForFetch() const { return dmc.readyForFetch(); }
+    bool dmcHasBytesRemaining() const { return dmc.bytesRemaining > 0; }
     uint16_t dmcSampleAddress() const { return dmc.currentAddr; }
     bool dmcDMAHaltOnPut() const { return dmc.dmaHaltOnPut; }
 

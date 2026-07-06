@@ -9,8 +9,6 @@ public:
     virtual bool    pollNMI()                                    = 0;
     virtual bool    irqAsserted()                                = 0;
     virtual uint8_t a2a03ReadData(uint16_t addr)                 = 0;
-    // Reads the external bus without disturbing the controller-port clock
-    // tracking (used for the DMA value during a DMC register conflict).
     virtual uint8_t a2a03ReadDataExternal(uint16_t addr)         = 0;
     virtual void    a2a03WriteData(uint16_t addr, uint8_t data)  = 0;
     virtual void    latchControllers()                           {}
@@ -70,7 +68,8 @@ public:
     bool pollIRQ() override { return !(apu.irqAsserted() || core.irqAsserted()); }
     bool pollRDY() override { return dma.getRDYOut(); }
     bool isReadOverridden() override { return dma.overridesAddr(); }
-    bool isDMCSampleNeeded() override { return apu.dmcNeedsSample(); }
+    bool dmcReadyForFetch() override { return apu.dmcReadyForFetch(); }
+    bool dmcHasBytesRemaining() override { return apu.dmcHasBytesRemaining(); }
     bool dmcDMAHaltOnPut()   override { return apu.dmcDMAHaltOnPut(); }
     bool pollIsRead()        override { return cpu.isRead(); }
 
@@ -94,8 +93,6 @@ public:
         uint16_t addr = cpu.getAddr();
         if (addr >= 0x4000 && addr <= 0x4014) { internalBus = busData; return busData; }
         if (addr == 0x4015) {
-            // A $4015 read drives and reads only the internal data bus; the
-            // external (open) bus is left unchanged.
             internalBus = apu.readData(addr, internalBus);
             return internalBus;
         }
@@ -104,11 +101,6 @@ public:
         return busData;
     }
 
-    // A DMA unit drives the external address bus, but the 2A03's internal
-    // registers ($4000-$401F) are decoded from bits 4-0 of the 2A03 address bus
-    // (the DMA address) combined with bits 15-5 of the 6502 core address, and only
-    // activate when the 6502 core address is itself in $4000-$401F
-    // (nes_specs/dma.txt "Register conflicts").
     uint8_t readDMA() {
         const uint16_t dmaAddr  = dma.getAddr();
         const uint16_t coreAddr = cpu.getAddr();
@@ -116,11 +108,6 @@ public:
         const uint16_t reg = 0x4000 | (dmaAddr & 0x001F);
 
         if (regActive && (reg == 0x4016 || reg == 0x4017)) {
-            // The controller is decoded at the combined address ($4016/$4017), so it
-            // is a read of that port. Read it at the decoded address (which keeps it
-            // consecutive with the surrounding CPU reads of the same port), then
-            // fetch the external DMA value for the open-bus bits D5-D7 without
-            // disturbing the controller clock tracking.
             const uint8_t ctrl = core.a2a03ReadData(reg);
             const uint8_t ext  = core.a2a03ReadDataExternal(dmaAddr);
             busData = (ext & 0xE0) | (ctrl & 0x1F);
@@ -131,8 +118,6 @@ public:
         busData = readExternal(dmaAddr);
 
         if (regActive && reg == 0x4015) {
-            // The 2A03 reads $4015 internally: this updates only the internal data
-            // bus, while the external bus still carries the (ignored) DMA value.
             internalBus = apu.readData(0x4015, internalBus);
             return internalBus;
         }
@@ -161,6 +146,7 @@ public:
             dma.write4014(data);
         } else if (addr >= 0x4000 && addr <= 0x4017) {
             apu.writeData(addr, data, isAPUPutCycle);
+            if (addr == 0x4015) dma.notifyDMCEnable((data & 0x10) != 0);
         }
     }
 

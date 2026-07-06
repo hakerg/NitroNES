@@ -1,12 +1,14 @@
 #pragma once
 #include <cstdint>
 #include <cstdio>
+#include "DelayedPin.h"
 #include "Tracer.h"
 
 class IDMA {
 public:
     virtual ~IDMA() = default;
-    virtual bool isDMCSampleNeeded() = 0;
+    virtual bool dmcReadyForFetch() = 0;
+    virtual bool dmcHasBytesRemaining() = 0;
     virtual bool dmcDMAHaltOnPut() = 0;
     virtual bool pollIsRead() = 0;
     virtual uint8_t dmaReadData() = 0;
@@ -27,17 +29,32 @@ public:
         action = Action::None;
         dmcHaltOnPut = false;
         dmcHaltArmed = false;
+        dmcAbortPending = false;
+        dmcEnabledRecently.force(false);
+    }
+
+    void notifyDMCEnable(bool enabled) {
+        if (enabled) dmcEnabledRecently.force(true);
+        else if (dmcEnabledRecently.getTarget()) dmcEnabledRecently.set(false, 4);
     }
 
     void clockPhi1(bool isPutCycle) {
         action = Action::None;
         const bool cpuRead = idma.pollIsRead();
         const bool getCycle = !isPutCycle;
+        dmcEnabledRecently.tick();
 
-        if (dmcPhase == DMCPhase::Idle && idma.isDMCSampleNeeded()) {
-            dmcPhase = DMCPhase::Halt;
-            dmcHaltOnPut = idma.dmcDMAHaltOnPut();
-            dmcHaltArmed = false;
+        if (dmcPhase == DMCPhase::Idle) {
+            if (dmcEnabledRecently.get() && idma.dmcReadyForFetch()) {
+                dmcPhase = DMCPhase::Halt;
+                dmcHaltOnPut = idma.dmcDMAHaltOnPut();
+                dmcHaltArmed = false;
+                dmcAbortPending = true;
+            }
+        } else if (dmcAbortPending) {
+            dmcAbortPending = false;
+            if (!dmcEnabledRecently.getTap(1))
+                dmcPhase = DMCPhase::Idle;
         }
 
         switch (dmcPhase) {
@@ -48,8 +65,6 @@ public:
                     dmcHaltArmed = true;
                 if (dmcHaltArmed && cpuRead)
                     dmcPhase = DMCPhase::Dummy;
-                else if (!idma.isDMCSampleNeeded())
-                    dmcPhase = DMCPhase::Idle;
                 break;
             case DMCPhase::Dummy:
                 dmcPhase = DMCPhase::Read;
@@ -89,6 +104,8 @@ public:
                 break;
             case Action::DMCGet:
                 idma.loadDMCSample(idma.dmaReadData());
+                if (!idma.dmcHasBytesRemaining())
+                    dmcEnabledRecently.force(false);
                 dmcPhase = DMCPhase::Idle;
                 break;
             case Action::OAMGet:
@@ -119,10 +136,6 @@ public:
 
     bool overridesAddr() const { return action != Action::None; }
     bool getRDYOut()     const { return rdy; }
-
-    bool dmcIsActive()  const { return dmcPhase != DMCPhase::Idle; }
-    bool oamIsActive()  const { return oamPhase != OAMPhase::Idle; }
-    bool actionIsDMCGet() const { return action == Action::DMCGet; }
 
     void setTracer(Tracer* t) { tracer = t; }
 
@@ -157,6 +170,8 @@ private:
     DMCPhase dmcPhase = DMCPhase::Idle;
     bool     dmcHaltOnPut = false;
     bool     dmcHaltArmed = false;
+    bool     dmcAbortPending = false;
+    DelayedPin<bool> dmcEnabledRecently{false};
 
     Action action = Action::None;
 };
