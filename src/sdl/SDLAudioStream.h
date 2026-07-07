@@ -7,8 +7,6 @@
 
 class SDLAudioStream : public AppAudioStream {
 public:
-    static constexpr int BATCH_SIZE = 64;
-
     explicit SDLAudioStream(AppSettings &settings)
         : AppAudioStream(settings.audioSettings), settings(settings) {
         if (!open())
@@ -22,13 +20,13 @@ public:
 
     AudioBufferHealth getHealth() override {
         int queuedBytes = SDL_GetAudioStreamQueued(sdlStream);
-        float bytesPerMs = nativeSpec.freq * nativeSpec.channels * SDL_AUDIO_BYTESIZE(nativeSpec.format) * 0.001f;
-        float queuedMs = queuedBytes / bytesPerMs;
+        int bytesPerMs = nativeSpec.freq * nativeSpec.channels * SDL_AUDIO_BYTESIZE(nativeSpec.format) / 1000;
+        int queuedMs = queuedBytes / bytesPerMs;
 
-        if (queuedMs < 5.0f) {
+        if (queuedMs < settings.minAudioDelay) {
             return AudioBufferHealth::Underflow;
         }
-        if (queuedMs > 30.0f) {
+        if (queuedMs > settings.maxAudioDelay) {
             return AudioBufferHealth::Overflow;
         }
         return AudioBufferHealth::Healthy;
@@ -37,9 +35,9 @@ public:
 protected:
     void submitSample(float sample) override {
         outBuf.push_back(sample);
-        if (outBuf.size() >= BATCH_SIZE) {
+        if (outBuf.size() >= batchSize) {
             SDL_PutAudioStreamData(sdlStream, outBuf.data(),
-                                   (int)(outBuf.size() * sizeof(float)));
+                (int)(outBuf.size() * sizeof(float)));
             outBuf.clear();
         }
     }
@@ -100,6 +98,7 @@ private:
             return false;
         }
 
+        batchSize = nativeSpec.freq / 1000;
         init(nativeSpec.freq);
         return true;
     }
@@ -120,5 +119,6 @@ private:
     SDL_AudioStream* sdlStream = nullptr;
     std::vector<float> outBuf;
     SDL_AudioSpec nativeSpec{};
+    int batchSize = 1;
     AppSettings& settings;
 };

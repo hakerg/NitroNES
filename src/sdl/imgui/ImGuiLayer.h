@@ -495,6 +495,11 @@ private:
 
         spacing();
 
+        ImGui::SliderInt(tr("settings.min_audio_delay"), &settings->minAudioDelay, 0, settings->maxAudioDelay - 12, "%d");
+        ImGui::SliderInt(tr("settings.max_audio_delay"), &settings->maxAudioDelay, settings->minAudioDelay + 12, 100, "%d");
+
+        spacing();
+
         ImGui::Checkbox(tr("settings.audio.reduce_clicks"), &audioSettings.reduceClicks);
         ImGui::Checkbox(tr("settings.audio.adjust_pitch"), &settings->adjustPitch);
 

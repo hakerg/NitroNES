@@ -88,8 +88,8 @@ public:
         }
 
         double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
-        int n = static_cast<int>(std::round(ratio));
-        if (n < 1 || !isWithinDetuneTolerance(ratio / n)) {
+        if (int n = static_cast<int>(std::round(ratio));
+            n < 1 || !isWithinDetuneTolerance(ratio / n)) {
             return CanMatchRefreshRateResult::RefreshRateOutsideTolerance;
         }
 
@@ -111,8 +111,7 @@ public:
             return CanUseScanlineSyncResult::SystemError;
         }
 
-        CanMatchRefreshRateResult canMatchRefreshRateResult = canMatchRefreshRate(baseSpeed);
-        switch (canMatchRefreshRateResult) {
+        switch (canMatchRefreshRate(baseSpeed)) {
             case CanMatchRefreshRateResult::Disabled: return CanUseScanlineSyncResult::Disabled;
             case CanMatchRefreshRateResult::SystemError: return CanUseScanlineSyncResult::SystemError;
             case CanMatchRefreshRateResult::RefreshRateOutsideTolerance: return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
@@ -120,8 +119,8 @@ public:
         }
 
         double monitorHz = window.getRefreshHz();
-        double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
-        if (!isWithinDetuneTolerance(ratio)) {
+        if (double ratio = monitorHz / (getCore().getBaseFramerate() * baseSpeed);
+            !isWithinDetuneTolerance(ratio)) {
             return CanUseScanlineSyncResult::RefreshRateOutsideTolerance;
         }
 

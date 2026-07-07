@@ -85,6 +85,7 @@ public:
         case 2: return readStatus(readOnly);
         case 4: return readOAMData(readOnly);
         case 7: return readPPUData(readOnly);
+        default: break;
         }
         return ppuOpenBus;
     }
@@ -99,8 +100,7 @@ public:
             uint8_t v = palScreen[paletteIndex(addr)];
             return mask.greyscale ? (v & 0x30) : v;
         }
-        uint8_t ppuReadBuf = 0;
-        if (cart.ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
+        if (uint8_t ppuReadBuf = 0; cart.ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
         if (addr >= 0x2000 && addr <= 0x3EFF) {
             addr &= 0x0FFF;
             Mirroring m = cart.getMirroring();
@@ -155,10 +155,9 @@ public:
     uint32_t* getFramebuffer() { return buf.data(); }
 
     void clock() {
-        const bool visible   = (scanline >= 0 && scanline <= 239);
-        const bool prerender = (scanline == 261);
+        const bool visible = (scanline >= 0 && scanline <= 239);
 
-        if (visible || prerender) {
+        if (bool prerender = (scanline == 261); visible || prerender) {
             if (prerender && cycle == 1) {
                 status.verticalBlank  = 0;
                 status.spriteZeroHit  = 0;
@@ -361,8 +360,7 @@ private:
 
     uint8_t readPPUData(bool readOnly) {
         uint8_t data;
-        const uint16_t busAddr = vramAddr.reg & 0x3FFF;
-        if (busAddr >= 0x3F00) {
+        if (uint16_t busAddr = vramAddr.reg & 0x3FFF; busAddr >= 0x3F00) {
             uint8_t pal = ppuRead(busAddr) & 0x3F;
             data = (ppuOpenBus & 0xC0) | pal;
             ppuDataBuffer = ppuRead(busAddr & 0x2FFF);
@@ -505,12 +503,12 @@ private:
         for (int n = 0; n < 64; n++) {
             if (dot > 256) break;
             if (count < 8) {
-                const int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4];
-                if (diff >= 0 && diff < spriteH) { count++; dot += 8; }
+                if (int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4];
+                    diff >= 0 && diff < spriteH) { count++; dot += 8; }
                 else dot += 2;
             } else {
-                const int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4 + m];
-                if (diff >= 0 && diff < spriteH) return (int16_t)dot;
+                if (int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4 + m];
+                    diff >= 0 && diff < spriteH) return (int16_t)dot;
                 m = (m + 1) & 3;
                 dot += 2;
             }
@@ -527,8 +525,8 @@ private:
         const int spriteH = ctrl.spriteSize ? 16 : 8;
         uint8_t addr = oamAddr;
         for (int n = 0; n < 64; ++n, addr += 4) {
-            int16_t diff = scanline - (int16_t)OAM[addr];
-            if (diff < 0 || diff >= spriteH) continue;
+            if (int16_t diff = scanline - (int16_t)OAM[addr];
+                diff < 0 || diff >= spriteH) continue;
             if (spriteCount < 8) {
                 if (n == 0) spriteZeroHitPossible = true;
                 for (int k = 0; k < 4; k++) {
@@ -663,7 +661,7 @@ private:
         else
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         if (mask.greyscale) idx &= 0x30;
-        const auto emph = (uint8_t)((mask.enhanceBlue << 2) | (mask.enhanceGreen << 1) | mask.enhanceRed);
+        auto emph = (uint8_t)((mask.enhanceBlue << 2) | (mask.enhanceGreen << 1) | mask.enhanceRed);
         buf[y * NES::SCREEN_WIDTH + x] = emphasisLUT()[emph][idx & 0x3F];
     }
 
@@ -692,7 +690,7 @@ private:
     }
 
     static const std::array<uint32_t, 64>& palette() {
-        static const std::array lut = {
+        static constexpr std::array lut = {
             0xFF6A6D6A, 0xFF001380, 0xFF1E008A, 0xFF39007A,
             0xFF550056, 0xFF5A0018, 0xFF4F1000, 0xFF3D1C00,
             0xFF253200, 0xFF003D00, 0xFF004000, 0xFF003924,
