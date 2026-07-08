@@ -35,7 +35,7 @@ public:
             {"settings.sync.refresh_rate.tooltip", "Wymaga monitora o odświeżaniu bliskim 60Hz (NTSC) / 50Hz (PAL) lub ich wielokrotności."},
             {"settings.sync.scanline", "Minimalne opóźnienie obrazu"},
             {"settings.sync.scanline.tooltip", "Synchronizuje emulację z wiązką monitora, minimalizując opóźnienia.\nWymaga pełnego ekranu i kompatybilnej częstotliwości odświeżania.\nAutomatycznie wyłącza VSync."},
-            {"settings.current_speed", "Aktualna prędkość"},
+            {"settings.target_speed", "Docelowa prędkość"},
             {"settings.scanline.buffer", "Bufor [ms]"},
             {"settings.scanline.buffer.tooltip", "Bufor dla trybu 'Minimalne opóźnienie obrazu'.\nUWAGA: Przy zbyt niskiej wartości (np. 1ms) emulator będzie spóźniać się o całą klatkę.\nTo ZWIĘKSZA opóźnienie, choć obraz wygląda idealnie płynnie.\nJak ustawić: obniżaj wartość, aż zobaczysz rwanie obrazu, a następnie lekko ją podnieś, aż rwanie ustąpi."},
             {"settings.audio", "Dźwięk..."},

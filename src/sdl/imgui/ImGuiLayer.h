@@ -466,7 +466,7 @@ private:
         if (session) {
             double speed = session->getCore().speed;
             ImGui::TextUnformatted(
-                std::format("{}: {:.2f}%", tr("settings.current_speed"),
+                std::format("{}: {:.2f}%", tr("settings.target_speed"),
                             speed * 100.0).c_str());
         }
 

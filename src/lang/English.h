@@ -35,7 +35,7 @@ public:
             {"settings.sync.refresh_rate.tooltip", "Requires a monitor with a refresh rate close to 60Hz (NTSC) / 50Hz (PAL) or their multiples."},
             {"settings.sync.scanline", "Minimal video lag"},
             {"settings.sync.scanline.tooltip", "Synchronizes emulation with the monitor beam to minimize input lag.\nRequires fullscreen mode and a compatible monitor refresh rate.\nAutomatically disables VSync."},
-            {"settings.current_speed", "Current speed"},
+            {"settings.target_speed", "Target speed"},
             {"settings.scanline.buffer", "Buffer [ms]"},
             {"settings.scanline.buffer.tooltip", "Buffer for the 'Minimal video lag' mode.\nWARNING: If set too low (e.g., 1ms), the emulator falls a full frame behind.\nThis INCREASES lag while looking perfectly smooth.\nTo calibrate: lower the value until you see screen tearing, then increase it slightly until the tearing stops."},
             {"settings.audio", "Audio..."},

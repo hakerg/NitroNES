@@ -18,7 +18,7 @@ public:
         targetReg = 0;
         prgMode = false;
         chrInversion = false;
-        mirrorMode = Mirroring::HORIZONTAL;
+        mirrorMode = Mirroring::VERTICAL;
         irqActive = false;
         irqEnable = false;
         irqReloadFlag = false;
@@ -26,12 +26,7 @@ public:
         irqReload = 0;
         for (auto &r : pRegister)
             r = 0;
-        pCHRBank.fill(0);
-        // PRG: domy�lnie {R6,R7,-2,-1}
-        pPRGBank[0] = 0;
-        pPRGBank[1] = 0x2000;
-        pPRGBank[2] = (uint32_t)(prgBanks * 2 - 2) * 0x2000;
-        pPRGBank[3] = (uint32_t)(prgBanks * 2 - 1) * 0x2000;
+        updateBanks();
     }
 
     bool cpuMapRead(uint16_t addr, uint32_t &mapped, uint8_t &) override {
@@ -75,7 +70,7 @@ public:
                 mirrorMode =
                     (data & 0x01) ? Mirroring::HORIZONTAL : Mirroring::VERTICAL;
             } else {
-                // PRG-RAM protect � ignorujemy
+                // PRG-RAM protect ignorujemy
             }
         } else if (addr < 0xE000) {
             // $C000-$DFFF
@@ -180,7 +175,7 @@ protected:
     uint8_t targetReg = 0;
     bool prgMode = false;
     bool chrInversion = false;
-    Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    Mirroring mirrorMode = Mirroring::VERTICAL;
 
     bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
