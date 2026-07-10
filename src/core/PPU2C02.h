@@ -34,9 +34,15 @@ public:
                 && (cycle == 1 || cycle == 2 || cycle == 3))
                 nmiCycleLatch = false;
             break;
-        case 1:
+        case 1: {
+            const bool disableRendering = renderingEnabled() && !(data & 0x18);
+            if (disableRendering && (scanline == 261 || scanline <= 239)) {
+                oamCorruptionRow = ((cycle + 1) / 2) & 0x1F;
+                oamCorruptionPending = true;
+            }
             mask.reg = data;
             break;
+        }
         case 2: break;
         case 3: oamAddr = data; break;
         case 4:
@@ -137,6 +143,10 @@ public:
         status.reg = mask.reg = ctrl.reg = 0;
         vramAddr.reg = tramAddr.reg = 0;
         oamAddr = 0;
+        oamDataBuffer = oamEvalAddr = oamSecondaryIndex = 0;
+        oamEvalCopying = false;
+        oamCorruptionPending = false;
+        oamCorruptionRow = 0;
         frameOdd = false;
         oddFrameSkip.force(false);
         spriteCount = 0;
@@ -156,6 +166,11 @@ public:
     void clock() {
         cart.clockPpu();
         const bool visible = (scanline >= 0 && scanline <= 239);
+
+        if (oamCorruptionPending && renderingEnabled() && (visible || scanline == 261)) {
+            std::memcpy(OAM + oamCorruptionRow * 8, OAM, 8);
+            oamCorruptionPending = false;
+        }
 
         if (bool prerender = (scanline == 261); visible || prerender) {
             if (prerender && cycle == 1) {
@@ -181,6 +196,7 @@ public:
 
             if (visible && cycle == 64)
                 spriteOverflowCycle = renderingEnabled() ? computeSpriteOverflowCycle() : -1;
+            if (visible && renderingEnabled()) clockOAMEvaluation();
             if (visible && spriteOverflowCycle >= 65 && cycle == spriteOverflowCycle)
                 status.spriteOverflow = 1;
 
@@ -302,6 +318,12 @@ private:
 
     uint8_t  OAM[256]{};
     uint8_t  oamAddr = 0;
+    uint8_t  oamDataBuffer = 0;
+    uint8_t  oamEvalAddr = 0;
+    uint8_t  oamSecondaryIndex = 0;
+    bool     oamEvalCopying = false;
+    bool     oamCorruptionPending = false;
+    uint8_t  oamCorruptionRow = 0;
     uint8_t  spriteScanline[8 * 4]{};
     uint8_t  spriteCount = 0;
     ShiftPair<uint8_t> spritePattern[8]{};
@@ -346,15 +368,54 @@ private:
     }
 
     uint8_t readOAMData(bool readOnly) {
-        if (renderingEnabled() && scanline <= 239
-            && ((cycle >= 1 && cycle <= 64) || (cycle >= 257 && cycle <= 320))) {
-            if (!readOnly) refreshOpenBus(0xFF, 0xFF);
-            return 0xFF;
+        if (renderingEnabled() && scanline <= 239) {
+            if ((cycle >= 1 && cycle <= 64) || (cycle >= 257 && cycle <= 320)) {
+                if (!readOnly) refreshOpenBus(0xFF, 0xFF);
+                return 0xFF;
+            }
+            if (cycle >= 65 && cycle <= 256) {
+                if (!readOnly) refreshOpenBus(0xFF, oamDataBuffer);
+                return oamDataBuffer;
+            }
         }
         uint8_t data = OAM[oamAddr];
         if ((oamAddr & 0x03) == 0x02) data &= 0xE3;
         if (!readOnly) refreshOpenBus(0xFF, data);
         return data;
+    }
+
+    void clockOAMEvaluation() {
+        if (cycle <= 64) {
+            oamDataBuffer = 0xFF;
+            return;
+        }
+        if (cycle > 256) return;
+        if (cycle == 65) {
+            oamEvalAddr = oamAddr;
+            oamSecondaryIndex = 0;
+            oamEvalCopying = false;
+        }
+        if (cycle & 1) {
+            oamDataBuffer = OAM[oamEvalAddr];
+            if ((oamEvalAddr & 3) == 2) oamDataBuffer &= 0xE3;
+            return;
+        }
+        if (oamSecondaryIndex < 32) {
+            if (!oamEvalCopying) {
+                const int row = scanline - oamDataBuffer;
+                if (row < 0 || row >= (ctrl.spriteSize ? 16 : 8)) {
+                    oamEvalAddr = (oamEvalAddr + 4) & 0xFC;
+                    return;
+                }
+                oamEvalCopying = true;
+            }
+            oamSecondaryIndex++;
+            oamEvalAddr++;
+            if ((oamEvalAddr & 3) == 0) oamEvalCopying = false;
+            return;
+        }
+        const int row = scanline - oamDataBuffer;
+        oamEvalAddr += row >= 0 && row < (ctrl.spriteSize ? 16 : 8) ? 4 : 5;
     }
 
     uint8_t readPPUData(bool readOnly) {
