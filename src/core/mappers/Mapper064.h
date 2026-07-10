@@ -10,6 +10,7 @@ class Mapper064 : public Mapper {
 public:
     using Mapper::Mapper;
     void reset() override {
+        resetA12();
         bankSel = 0;
         chrMode = false;
         prgMode = false;
@@ -137,8 +138,8 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
-        if (!irqCpuMode && a12RisingEdge(addr, ppuCycle))
+    void ppuAddress(uint16_t addr) override {
+        if (!irqCpuMode && a12RisingEdge(addr))
             tickIrq();
     }
     void clock() override {

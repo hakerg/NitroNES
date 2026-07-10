@@ -19,6 +19,7 @@ public:
     using Mapper::Mapper;
 
     void reset() override {
+        resetA12();
         chr.fill(0);
         prg.fill(0);
         irqCounter = 0;
@@ -89,8 +90,8 @@ public:
         return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
     }
 
-    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
-        if (a12RisingEdge(addr, ppuCycle)) tickIrq();
+    void ppuAddress(uint16_t addr) override {
+        if (a12RisingEdge(addr)) tickIrq();
     }
     bool irqState() const override { return irqActive; }
     void irqClear() override { irqActive = false; }

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include "../AudioSettings.h"
+#include "../DelayedPin.h"
 
 enum class Mirroring {
     HORIZONTAL,
@@ -78,7 +79,8 @@ public:
     virtual bool irqState() const { return false; }
     virtual void irqClear() {}
 
-    virtual void clockA12(uint16_t /*addr*/, uint64_t /*ppuCycle*/) {}
+    virtual void ppuAddress(uint16_t /*addr*/) {}
+    virtual void clockPpu() { a12LowQualified.tick(); }
 
     virtual void clock() {}
 
@@ -89,22 +91,29 @@ public:
     virtual void setAudioSettings(AudioSettings& settings) {}
 
 protected:
-    bool a12RisingEdge(uint16_t addr, uint64_t ppuCycle) {
+    bool a12RisingEdge(uint16_t addr) {
         const bool a12High = (addr & 0x1000) != 0;
-        bool edge = false;
-        if (a12High) {
-            if (!a12Prev && (ppuCycle - a12FallCycle) >= 12) edge = true;
-        } else if (a12Prev) {
-            a12FallCycle = ppuCycle;
+        if (a12High == a12) return false;
+        a12 = a12High;
+        if (!a12) {
+            a12LowQualified.set(true, 12);
+            return false;
         }
-        a12Prev = a12High;
+        const bool edge = a12LowQualified.get();
+        a12LowQualified.force(false);
         return edge;
+    }
+
+    void resetA12() {
+        a12 = false;
+        a12LowQualified.force(false);
+        a12LowQualified.set(true, 12);
     }
 
     uint8_t prgBanks;
     uint8_t chrBanks;
 
 private:
-    bool a12Prev = false;
-    uint64_t a12FallCycle = 0;
+    bool a12 = false;
+    DelayedPin<bool> a12LowQualified{false};
 };

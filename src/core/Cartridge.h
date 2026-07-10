@@ -70,7 +70,8 @@ public:
 
     bool irqState() const { return pMapper->irqState(); }
     void irqClear()       { pMapper->irqClear(); }
-    void clockA12(uint16_t addr, uint64_t ppuCycle) { pMapper->clockA12(addr, ppuCycle); }
+    void ppuAddress(uint16_t addr) { pMapper->ppuAddress(addr); }
+    void clockPpu()        { pMapper->clockPpu(); }
     void clock()          { pMapper->clock(); }
 
     float audioOutput() const { return pMapper->audioOutput(); }

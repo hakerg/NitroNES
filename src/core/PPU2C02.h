@@ -64,14 +64,14 @@ public:
                 tramAddr.reg = (tramAddr.reg & 0xFF00) | data;
                 vramAddr.reg = tramAddr.reg;
                 addressLatch = 0;
-                clockMapperA12();
+                drivePpuAddress();
             }
             break;
         case 7:
             ppuWrite(vramAddr.reg, data);
-            clockMapperA12();
+            drivePpuAddress();
             incrementVramAddr();
-            clockMapperA12();
+            drivePpuAddress();
             break;
         default:
             break;
@@ -139,7 +139,6 @@ public:
         oamAddr = 0;
         frameOdd = false;
         oddFrameSkip.force(false);
-        totalPpuCycle = 0;
         spriteCount = 0;
         spriteZeroHitPossible = false;
         spriteOverflowCycle = -1;
@@ -155,6 +154,7 @@ public:
     uint32_t* getFramebuffer() { return buf.data(); }
 
     void clock() {
+        cart.clockPpu();
         const bool visible = (scanline >= 0 && scanline <= 239);
 
         if (bool prerender = (scanline == 261); visible || prerender) {
@@ -283,7 +283,6 @@ private:
     int16_t  cycle                = 0;
     bool     frameOdd             = false;
     bool     suppressVblThisFrame = false;
-    uint64_t totalPpuCycle        = 0; // TODO: can we get rid of it?
     DelayedPin<bool> oddFrameSkip{false};
     bool     nmiCycleLatch        = false;
     bool     nmiVbl               = false;
@@ -371,9 +370,9 @@ private:
             if (!readOnly) refreshOpenBus(0xFF, data);
         }
         if (!readOnly) {
-            clockMapperA12();
+            drivePpuAddress();
             incrementVramAddr();
-            clockMapperA12();
+            drivePpuAddress();
         }
         return data;
     }
@@ -671,7 +670,6 @@ private:
         oddFrameSkip.tick();
 
         cycle++;
-        totalPpuCycle++;
 
         if (scanline == 261 && cycle == 340 && oddFrameSkip.get()) {
             cycle    = 0;
@@ -747,12 +745,12 @@ private:
 
     uint8_t busRead(uint16_t addr) {
         addr &= 0x3FFF;
-        cart.clockA12(addr, totalPpuCycle);
+        cart.ppuAddress(addr);
         return ppuRead(addr);
     }
 
-    void clockMapperA12() {
-        cart.clockA12(vramAddr.reg & 0x3FFF, totalPpuCycle);
+    void drivePpuAddress() {
+        cart.ppuAddress(vramAddr.reg & 0x3FFF);
     }
 
     const char* phaseName() const {

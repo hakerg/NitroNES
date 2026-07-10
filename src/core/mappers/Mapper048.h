@@ -17,6 +17,7 @@ public:
     Mapper048(uint8_t prg, uint8_t chr) : Mapper(prg, chr) { reset(); }
 
     void reset() override {
+        resetA12();
         prg0 = 0;
         prg1 = 1;
         chr0 = chr1 = 0;
@@ -127,8 +128,8 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
-        if (a12RisingEdge(addr, ppuCycle)) tickIrq();
+    void ppuAddress(uint16_t addr) override {
+        if (a12RisingEdge(addr)) tickIrq();
     }
     bool irqState() const override { return irqActive; }
     void irqClear() override { irqActive = false; }

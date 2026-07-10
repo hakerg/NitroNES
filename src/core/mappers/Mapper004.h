@@ -15,6 +15,7 @@ public:
     }
 
     void reset() override {
+        resetA12();
         targetReg = 0;
         prgMode = false;
         chrInversion = false;
@@ -119,8 +120,8 @@ public:
     Mirroring mirror() const override { return mirrorMode; }
     bool hasDynamicMirror() const override { return true; }
 
-    void clockA12(uint16_t addr, uint64_t ppuCycle) override {
-        if (!a12RisingEdge(addr, ppuCycle)) return;
+    void ppuAddress(uint16_t addr) override {
+        if (!a12RisingEdge(addr)) return;
         if (irqCounter == 0 || irqReloadFlag) {
             irqCounter = irqReload;
             irqReloadFlag = false;
@@ -128,12 +129,16 @@ public:
             irqCounter--;
         }
         if (irqCounter == 0 && irqEnable) {
-            irqActive = true;
+            irqActive.set(true, 2);
         }
     }
 
+    void clockPpu() override {
+        Mapper::clockPpu();
+        irqActive.tick();
+    }
 
-    bool irqState() const override { return irqActive; }
+    bool irqState() const override { return irqActive.get(); }
     void irqClear() override { irqActive = false; }
 
 protected:
@@ -177,7 +182,8 @@ protected:
     bool chrInversion = false;
     Mirroring mirrorMode = Mirroring::VERTICAL;
 
-    bool irqActive = false, irqEnable = false, irqReloadFlag = false;
+    DelayedPin<bool> irqActive{false};
+    bool irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
 };
 
