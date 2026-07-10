@@ -560,6 +560,10 @@ static const AcCode e_2007Rendering[] = {
     {'1',"Sprite Zero Hits should be working."},
     {'2',"Reading from $2007 while rendering is enabled should result in a vertical increment of v."},
 };
+static const AcCode e_AttribTiles[] = {
+    {'1',"Moving the PPU t register to an attribute table should render attribute bytes as tile data in scanlines 0 to 15. Results are tested via a sprite zero hit."},
+    {'2',"With the t register pointing to an attribute table, scanlines 16 to 239 should be from the same nametable as the attributes."},
+};
 static const AcTest p16[] = {
     AC_TST ("CHR ROM is not writable", e_CHRROM),
     AC_TST ("PPU Register Mirroring", e_PPURegMirror),
@@ -568,6 +572,7 @@ static const AcTest p16[] = {
     AC_TST ("Palette RAM Quirks", e_PaletteRAMQuirks),
     AC_TST ("Rendering Flag Behavior", e_RenderingFlag),
     AC_TST ("$2007 read w/ rendering", e_2007Rendering),
+    AC_TST ("Attributes As Tiles", e_AttribTiles),
 };
 
 // ===================== Page 17: PPU VBlank Timing =====================
@@ -698,10 +703,6 @@ static const AcTest p18[] = {
 };
 
 // ===================== Page 19: PPU Misc. =====================
-static const AcCode e_AttribTiles[] = {
-    {'1',"Moving the PPU t register to an attribute table should render attribute bytes as tile data in scanlines 0-15."},
-    {'2',"With t pointing to an attribute table, scanlines 16-239 should be from the same nametable as the attributes."},
-};
 static const AcCode e_tRegQuirks[] = {
     {'1',"Sprite Zero Hits should be working."},
     {'2',"Writing to $2006 should overwrite some of the bits set up by writing to $2005."},
@@ -749,8 +750,11 @@ static const AcCode e_ALERead[] = {
     {'1',"Sprite Zero Hits should be working."},
     {'2',"A well timed read from $2007 should affect the PPU Address Bus during the BG read cadence, reading a bit plane from an unintended address."},
 };
+static const AcCode e_HybridAddresses[] = {
+    {'1',"Sprite Zero Hits should be working."},
+    {'2',"A well timed write to $2006 should affect the PPU Address Bus during the background read cadence, performing a nametable fetch from an unintended address."},
+};
 static const AcTest p19[] = {
-    AC_TST ("Attributes As Tiles", e_AttribTiles),
     AC_TST ("t Register Quirks", e_tRegQuirks),
     AC_TST ("Stale BG Shift Registers", e_StaleBG),
     AC_TST ("Stale Sprite Shift Regs", e_StaleSprite),
@@ -759,6 +763,7 @@ static const AcTest p19[] = {
     AC_TST ("$2004 Stress Test", e_2004Stress),
     AC_TST ("$2007 Stress Test", e_2007Stress),
     AC_TST ("ALE + Read", e_ALERead),
+    AC_TST ("Hybrid Addresses", e_HybridAddresses),
 };
 
 // ===================== Page 20: CPU Behavior 2 =====================
