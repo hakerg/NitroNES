@@ -26,8 +26,6 @@ public:
             {"settings.speed", "Base speed"},
             {"settings.speed1", "Speed up"},
             {"settings.speed2", "Speed down"},
-            {"settings.min_audio_delay", "Min delay [ms]"},
-            {"settings.max_audio_delay", "Max delay [ms]"},
             {"settings.sync_mode", "Adjust emulation speed"},
             {"settings.sync.none", "Standard"},
             {"settings.sync.none.tooltip", "Runs the emulation at the console's original native speed."},

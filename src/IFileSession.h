@@ -54,24 +54,17 @@ public:
         core.speed = getSyncedSpeed(baseSpeed);
         settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core.speed);
 
-        AudioBufferHealth health = audio.getHealth();
-        if (core.paused || health == AudioBufferHealth::Overflow) {
+        int audioQueuedMs = audio.getQueuedMs();
+        if (core.paused || audioQueuedMs > 25) {
             waitUntilNextFrameTime(baseSpeed);
             return;
         }
 
         if (canUseScanlineSync(baseSpeed) == CanUseScanlineSyncResult::Success) {
-            if (health == AudioBufferHealth::Underflow) {
-                syncScanline(true);
-            } else {
-                window.delay(1);
-                syncScanline(false);
-            }
+            window.delay(1);
+            nextFrameTime = high_resolution_clock::now();
+            syncScanline();
         } else {
-            // do not change that 'if' to 'while' - will hang if speed too high
-            if (health == AudioBufferHealth::Underflow) {
-                core.tickFrame();
-            }
             waitUntilNextFrameTime(baseSpeed);
             core.tickFrame();
         }
@@ -161,11 +154,11 @@ private:
 
     void waitUntilNextFrameTime(double baseSpeed) {
         nanoseconds frameDuration = getFrameDuration(baseSpeed);
-        lastFrameTime += frameDuration;
-        sleepUntil(lastFrameTime);
+        nextFrameTime += frameDuration;
+        sleepUntil(nextFrameTime);
     }
 
-    void syncScanline(bool doExtraFrame) {
+    void syncScanline() {
         int monitorScanline = 0;
         window.getScanLine(monitorScanline);
 
@@ -183,15 +176,8 @@ private:
         int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
         if (target < 0) target += NES::TOTAL_SCANLINES;
 
-        lastFrameTime = high_resolution_clock::now();
-
         NESCoreBase& core = getCore();
         core.tickWhile([&] { return core.getCurrentScanline() != target; });
-
-        if (doExtraFrame) {
-            core.tickWhile([&] { return core.getCurrentScanline() == target; });
-            core.tickWhile([&] { return core.getCurrentScanline() != target; });
-        }
     }
 
     nanoseconds getFrameDuration(double baseSpeed) {
@@ -228,5 +214,5 @@ private:
         return ratio / static_cast<int>(std::round(ratio));
     }
 
-    high_resolution_clock::time_point lastFrameTime = high_resolution_clock::now();
+    high_resolution_clock::time_point nextFrameTime = high_resolution_clock::now();
 };

@@ -18,18 +18,10 @@ public:
 
     SDL_AudioStream* getSDLStream() const { return sdlStream; }
 
-    AudioBufferHealth getHealth() override {
+    int getQueuedMs() override {
         int queuedBytes = SDL_GetAudioStreamQueued(sdlStream);
         int bytesPerMs = nativeSpec.freq * nativeSpec.channels * SDL_AUDIO_BYTESIZE(nativeSpec.format) / 1000;
-        int queuedMs = queuedBytes / bytesPerMs;
-
-        if (queuedMs < settings.minAudioDelay) {
-            return AudioBufferHealth::Underflow;
-        }
-        if (queuedMs > settings.maxAudioDelay) {
-            return AudioBufferHealth::Overflow;
-        }
-        return AudioBufferHealth::Healthy;
+        return queuedBytes / bytesPerMs;
     }
 
 protected:

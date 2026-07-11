@@ -26,8 +26,6 @@ public:
             {"settings.speed", "Bazowa prędkość"},
             {"settings.speed1", "Przyspieszenie"},
             {"settings.speed2", "Spowolnienie"},
-            {"settings.min_audio_delay", "Minimalne opóźnienie [ms]"},
-            {"settings.max_audio_delay", "Maksymalne opóźnienie [ms]"},
             {"settings.sync_mode", "Dostosuj prędkość emulacji"},
             {"settings.sync.none", "Standardowa"},
             {"settings.sync.none.tooltip", "Uruchamia emulację z oryginalną, natywną prędkością konsoli."},

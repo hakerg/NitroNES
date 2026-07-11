@@ -1,16 +1,10 @@
 #pragma once
 #include "core/AudioStream.h"
 
-enum class AudioBufferHealth {
-    Healthy,
-    Underflow,
-    Overflow
-};
-
 class AppAudioStream : public AudioStream {
 public:
     AppAudioStream(AudioSettings &settings) : AudioStream(settings) {}
-    virtual ~AppAudioStream() = default;
+    ~AppAudioStream() override = default;
 
-    virtual AudioBufferHealth getHealth() = 0;
+    virtual int getQueuedMs() = 0;
 };
