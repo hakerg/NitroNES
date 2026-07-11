@@ -203,6 +203,9 @@ public:
             if (visible && cycle == 257 && renderingEnabled()) evaluateSprites();
             spriteFetchPhase();
 
+            if (cycle == 339 && !renderingEnabled())
+                for (int i = 0; i < spriteCount; i++) spriteScanline[i * 4 + 3] = 0;
+
             if (renderingEnabled() && cycle >= 257 && cycle <= 320) oamAddr = 0;
         }
 
@@ -709,7 +712,7 @@ private:
             else            { pixel = bg.color; paletteIdx = bg.palette; }
             if (spriteZeroHitPossible && isSpriteZeroPixel
                 && mask.renderBackground && mask.renderSprites) {
-                const int xLo = (mask.renderBackgroundLeft && mask.renderSpritesLeft) ? 2 : 9;
+                const int xLo = (mask.renderBackgroundLeft && mask.renderSpritesLeft) ? 1 : 9;
                 if (cycle >= xLo && cycle < 256) hitNow = true;
             }
         }
