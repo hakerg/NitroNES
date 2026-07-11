@@ -643,17 +643,19 @@ private:
             return;
         }
 
-        const bool active = visible && spriteIdx < spriteCount;
+        const uint8_t y = spriteScanline[spriteIdx * 4];
+        const uint8_t row = static_cast<uint8_t>(scanline) - y;
+        const bool active = spriteIdx < spriteCount
+            && (visible || (scanline == 261 && row < (ctrl.spriteSize ? 16 : 8)));
         if (phase == 7) {
             spriteX[spriteIdx] = active ? spriteScanline[spriteIdx * 4 + 3] : 0xFF;
             return;
         }
         if (phase != 4 && phase != 6) return;
 
-        const uint8_t y    = active ? spriteScanline[spriteIdx * 4 + 0] : 0xFF;
         const uint8_t tile = active ? spriteScanline[spriteIdx * 4 + 1] : 0xFF;
         const uint8_t attr = active ? spriteScanline[spriteIdx * 4 + 2] : 0xFF;
-        const uint16_t base = spritePatternAddress(tile, attr, scanline - y);
+        const uint16_t base = spritePatternAddress(tile, attr, active ? row : 0);
         const uint8_t data = busRead(base + (phase == 6 ? 8 : 0));
         if (!active) return;
         const uint8_t v = (attr & 0x40) ? flipByte(data) : data;
