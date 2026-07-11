@@ -158,6 +158,7 @@ public:
         nmiVbl = false;
         ppuOpenBus = 0x00;
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
+        spriteX.fill(0xFF);
         for (auto& p : spritePattern) p = {};
     }
 
@@ -204,7 +205,7 @@ public:
             spriteFetchPhase();
 
             if (cycle == 339 && !renderingEnabled())
-                for (int i = 0; i < spriteCount; i++) spriteScanline[i * 4 + 3] = 0;
+                for (int i = 0; i < 8 && i < spriteCount; i++) spriteX[i] = 0;
 
             if (renderingEnabled() && cycle >= 257 && cycle <= 320) oamAddr = 0;
         }
@@ -328,6 +329,7 @@ private:
     bool     oamCorruptionPending = false;
     uint8_t  oamCorruptionRow = 0;
     uint8_t  spriteScanline[8 * 4]{};
+    std::array<uint8_t, 8> spriteX{};
     uint8_t  spriteCount = 0;
     ShiftPair<uint8_t> spritePattern[8]{};
     bool     spriteZeroHitPossible = false;
@@ -500,9 +502,9 @@ private:
         }
         if (renderingEnabled() && cycle >= 1 && cycle < 258) {
             const bool visibleScanline = (scanline >= 0 && scanline <= 239);
-            for (int i = 0; i < spriteCount; i++) {
-                if (spriteScanline[i * 4 + 3] > 0)
-                    spriteScanline[i * 4 + 3]--;
+            for (int i = 0; i < 8 && i < spriteCount; i++) {
+                if (spriteX[i] > 0)
+                    spriteX[i]--;
                 else if (visibleScanline) {
                     spritePattern[i].lo <<= 1;
                     spritePattern[i].hi <<= 1;
@@ -582,7 +584,6 @@ private:
     void evaluateSprites() {
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         spriteCount = 0;
-        for (auto& p : spritePattern) p = {};
         spriteZeroHitPossible = false;
 
         const int spriteH = ctrl.spriteSize ? 16 : 8;
@@ -641,9 +642,14 @@ private:
             busRead(0x2000 | (vramAddr.reg & 0x0FFF));
             return;
         }
-        if (phase != 4 && phase != 6) return;
 
         const bool active = visible && spriteIdx < spriteCount;
+        if (phase == 7) {
+            spriteX[spriteIdx] = active ? spriteScanline[spriteIdx * 4 + 3] : 0xFF;
+            return;
+        }
+        if (phase != 4 && phase != 6) return;
+
         const uint8_t y    = active ? spriteScanline[spriteIdx * 4 + 0] : 0xFF;
         const uint8_t tile = active ? spriteScanline[spriteIdx * 4 + 1] : 0xFF;
         const uint8_t attr = active ? spriteScanline[spriteIdx * 4 + 2] : 0xFF;
@@ -675,7 +681,7 @@ private:
         if (!mask.renderSprites) return { 0, 0, false };
         if (!mask.renderSpritesLeft && cycle < 9) return { 0, 0, false };
         for (uint8_t i = 0; i < spriteCount; i++) {
-            if (spriteScanline[i * 4 + 3] != 0) continue;
+            if (spriteX[i] != 0) continue;
             const uint8_t lo  = (spritePattern[i].lo & 0x80) ? 1 : 0;
             const uint8_t hi  = (spritePattern[i].hi & 0x80) ? 1 : 0;
             const auto col = (uint8_t)((hi << 1) | lo);
