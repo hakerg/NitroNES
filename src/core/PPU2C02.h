@@ -835,9 +835,12 @@ private:
                         uint32_t cr = (argb >> 16) & 0xFF;
                         uint32_t cg = (argb >>  8) & 0xFF;
                         uint32_t cb =  argb         & 0xFF;
-                        if (!r) cr = (cr * 3) >> 2;
-                        if (!g) cg = (cg * 3) >> 2;
-                        if (!b) cb = (cb * 3) >> 2;
+                        if (g) cr = (cr * 3) >> 2;
+                        if (b) cr = (cr * 3) >> 2;
+                        if (r) cg = (cg * 3) >> 2;
+                        if (b) cg = (cg * 3) >> 2;
+                        if (r) cb = (cb * 3) >> 2;
+                        if (g) cb = (cb * 3) >> 2;
                         argb = (argb & 0xFF000000u) | (cr << 16) | (cg << 8) | cb;
                     }
                     t[emph][i] = argb;

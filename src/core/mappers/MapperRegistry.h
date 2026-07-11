@@ -8,7 +8,7 @@
 
 class MapperRegistry {
 public:
-    using Factory = std::unique_ptr<Mapper> (*)(uint8_t prg, uint8_t chr);
+    using Factory = std::unique_ptr<Mapper> (*)(uint16_t prg, uint8_t chr);
 
     static MapperRegistry &instance() {
         static MapperRegistry r;
@@ -17,7 +17,7 @@ public:
 
     void registerMapper(uint16_t id, Factory f) { factories[id] = f; }
 
-    std::unique_ptr<Mapper> create(uint16_t id, uint8_t prg,
+    std::unique_ptr<Mapper> create(uint16_t id, uint16_t prg,
                                    uint8_t chr) const {
         auto it = factories.find(id);
         if (it == factories.end())
@@ -35,7 +35,7 @@ private:
 
 namespace mapper_registry_detail {
 template <typename T>
-std::unique_ptr<Mapper> makeMapper(uint8_t prg, uint8_t chr) {
+std::unique_ptr<Mapper> makeMapper(uint16_t prg, uint8_t chr) {
     return std::unique_ptr<Mapper>(new T(prg, chr));
 }
 

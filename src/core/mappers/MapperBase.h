@@ -62,7 +62,7 @@ inline bool chrRamWrite(uint16_t addr, uint32_t &mapped, uint8_t chrBanks) {
 
 class Mapper {
 public:
-    Mapper(uint8_t prgBanks, uint8_t chrBanks)
+    Mapper(uint16_t prgBanks, uint8_t chrBanks)
         : prgBanks(prgBanks), chrBanks(chrBanks) {}
     virtual ~Mapper() = default;
 
@@ -70,6 +70,10 @@ public:
     virtual void cpuMapWrite(uint16_t addr, uint32_t &mapped, uint8_t data) = 0;
     virtual bool ppuMapRead(uint16_t addr, uint32_t &mapped) = 0;
     virtual bool ppuMapWrite(uint16_t addr, uint32_t &mapped) = 0;
+    virtual bool cpuReadDirect(uint16_t, uint8_t &) { return false; }
+    virtual bool cpuWriteDirect(uint16_t, uint8_t) { return false; }
+    virtual bool ppuReadDirect(uint16_t, uint8_t &) { return false; }
+    virtual bool ppuWriteDirect(uint16_t, uint8_t) { return false; }
 
     virtual void reset() {}
 
@@ -80,6 +84,7 @@ public:
     virtual void irqClear() {}
 
     virtual void ppuAddress(uint16_t /*addr*/) {}
+    virtual void ppuReadCycle(uint16_t /*addr*/) {}
     virtual void clockPpu() { a12LowQualified.tick(); }
 
     virtual void clock() {}
@@ -87,6 +92,7 @@ public:
     virtual float audioOutput() const { return 0.0f; }
 
     virtual bool hasBusConflicts() const { return false; }
+    virtual bool hasPrgRam() const { return true; }
 
     virtual void setAudioSettings(AudioSettings& settings) {}
 
@@ -110,7 +116,7 @@ protected:
         a12LowQualified.set(true, 12);
     }
 
-    uint8_t prgBanks;
+    uint16_t prgBanks;
     uint8_t chrBanks;
 
 private:

@@ -42,7 +42,10 @@ public:
 
         if (header.mapper1 & 0x04) ifs.seekg(512, std::ios_base::cur);
 
+        const bool nes2 = (header.mapper2 & 0x0C) == 0x08;
         prgBanks = header.prg_rom_chunks;
+        if (nes2 && (header.tv_system1 & 0x0F) != 0x0F)
+            prgBanks |= (uint16_t)(header.tv_system1 & 0x0F) << 8;
         chrBanks = header.chr_rom_chunks;
 
         vPRGMemory.resize(prgBanks * 16384);
@@ -80,7 +83,9 @@ public:
         uint32_t mapped = 0;
         uint8_t data = openBusFallback;
 
-        if (addr >= 0x6000 && addr <= 0x7FFF) {
+        if (pMapper->cpuReadDirect(addr, data)) return data;
+
+        if (pMapper->hasPrgRam() && addr >= 0x6000 && addr <= 0x7FFF) {
             return vPRGRAM[addr & 0x1FFF];
         }
 
@@ -94,7 +99,9 @@ public:
     void cpuWrite(uint16_t addr, uint8_t data) {
         uint32_t mapped = 0;
 
-        if (addr >= 0x6000 && addr <= 0x7FFF) {
+        if (pMapper->cpuWriteDirect(addr, data)) return;
+
+        if (pMapper->hasPrgRam() && addr >= 0x6000 && addr <= 0x7FFF) {
             vPRGRAM[addr & 0x1FFF] = data;
             return;
         }
@@ -111,6 +118,8 @@ public:
 
     bool ppuRead(uint16_t addr, uint8_t& data) {
         uint32_t mapped = 0;
+        pMapper->ppuReadCycle(addr);
+        if (pMapper->ppuReadDirect(addr, data)) return true;
         if (pMapper->ppuMapRead(addr, mapped)) {
             if (mapped < vCHRMemory.size()) data = vCHRMemory[mapped];
             return true;
@@ -120,6 +129,7 @@ public:
 
     bool ppuWrite(uint16_t addr, uint8_t data) {
         uint32_t mapped = 0;
+        if (pMapper->ppuWriteDirect(addr, data)) return true;
         if (pMapper->ppuMapWrite(addr, mapped)) {
             if (mapped < vCHRMemory.size()) vCHRMemory[mapped] = data;
             return true;
@@ -129,7 +139,7 @@ public:
 
 private:
     uint8_t mapperID = 0;
-    uint8_t prgBanks = 0;
+    uint16_t prgBanks = 0;
     uint8_t chrBanks = 0;
     Mirroring hwMirror = Mirroring::HORIZONTAL;
 
