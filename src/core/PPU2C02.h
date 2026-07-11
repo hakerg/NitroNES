@@ -160,12 +160,23 @@ public:
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         spriteX.fill(0xFF);
         for (auto& p : spritePattern) p = {};
+        ppuDataRead.force(false);
+        ppuDataReadAddr.force(0);
+        ppuDataReadPending = false;
+        ppuDataReadPendingAddr = 0;
+        ppuBusData = 0;
+        ppuBusRead = false;
+        ppuAddressLow = 0;
     }
 
     uint32_t* getFramebuffer() { return buf.data(); }
 
     void clock() {
         cart.clockPpu();
+        ppuBusRead = false;
+        const bool updatePpuDataBuffer = ppuDataRead.tick(ppuDataReadPending);
+        const uint16_t ppuDataAddr = ppuDataReadAddr.tick(ppuDataReadPendingAddr);
+        ppuDataReadPending = false;
         const bool visible = (scanline >= 0 && scanline <= 239);
 
         if (oamCorruptionPending && renderingEnabled() && (visible || scanline == 261)) {
@@ -185,14 +196,20 @@ public:
             backgroundFetchPhase();
 
             if (cycle == 256) incrementScrollY();
+            if (visible && cycle == 257 && renderingEnabled()) evaluateSprites();
+            spriteFetchPhase();
             if (cycle == 257) {
                 if (renderingEnabled()) loadBackgroundShifters();
                 transferAddressX();
             }
-            if (cycle == 338 || cycle == 340) {
-                if (renderingEnabled())
-                    bgNextTileId = busRead(0x2000 | (vramAddr.reg & 0x0FFF));
-            }
+            if (cycle == 337 && renderingEnabled())
+                beginBusRead(0x2000 | (vramAddr.reg & 0x0FFF));
+            if (cycle == 338 && renderingEnabled())
+                bgNextTileId = finishBusRead(0x2000 | (vramAddr.reg & 0x0FFF));
+            if (cycle == 339 && renderingEnabled())
+                beginBusRead(0x2000 | (vramAddr.reg & 0x0FFF));
+            if (cycle == 340 && renderingEnabled())
+                bgNextTileId = finishBusRead(0x2000 | (vramAddr.reg & 0x0FFF));
             if (prerender && cycle >= 280 && cycle < 305) transferAddressY();
 
             if (visible && cycle == 64)
@@ -200,9 +217,6 @@ public:
             if (visible && renderingEnabled()) clockOAMEvaluation();
             if (visible && spriteOverflowCycle >= 65 && cycle == spriteOverflowCycle)
                 status.spriteOverflow = 1;
-
-            if (visible && cycle == 257 && renderingEnabled()) evaluateSprites();
-            spriteFetchPhase();
 
             if (cycle == 339 && !renderingEnabled())
                 for (int i = 0; i < 8 && i < spriteCount; i++) spriteX[i] = 0;
@@ -218,6 +232,9 @@ public:
 
         if (scanline == 241 && cycle == 0) nmiVbl = true;
         if (scanline == 261 && cycle == 0) nmiVbl = false;
+
+        if (updatePpuDataBuffer)
+            ppuDataBuffer = ppuBusRead ? ppuBusData : ppuRead(ppuDataAddr);
 
         renderPixel();
 
@@ -298,6 +315,13 @@ private:
     uint8_t  fineX         = 0;
     uint8_t  addressLatch  = 0;
     uint8_t  ppuDataBuffer = 0;
+    ShiftDelay<bool, 4> ppuDataRead{false};
+    ShiftDelay<uint16_t, 4> ppuDataReadAddr{0};
+    bool     ppuDataReadPending = false;
+    uint16_t ppuDataReadPendingAddr = 0;
+    uint8_t  ppuBusData = 0;
+    bool     ppuBusRead = false;
+    uint8_t  ppuAddressLow = 0;
 
     int16_t  scanline             = 0;
     int16_t  cycle                = 0;
@@ -424,18 +448,19 @@ private:
     }
 
     uint8_t readPPUData(bool readOnly) {
+        const uint16_t busAddr = vramAddr.reg & 0x3FFF;
         uint8_t data;
-        if (uint16_t busAddr = vramAddr.reg & 0x3FFF; busAddr >= 0x3F00) {
+        if (busAddr >= 0x3F00) {
             uint8_t pal = ppuRead(busAddr) & 0x3F;
             data = (ppuOpenBus & 0xC0) | pal;
-            ppuDataBuffer = ppuRead(busAddr & 0x2FFF);
             if (!readOnly) refreshOpenBus(0x3F, pal);
         } else {
             data = ppuDataBuffer;
-            ppuDataBuffer = ppuRead(busAddr);
             if (!readOnly) refreshOpenBus(0xFF, data);
         }
         if (!readOnly) {
+            ppuDataReadPendingAddr = busAddr >= 0x3F00 ? busAddr & 0x2FFF : busAddr;
+            ppuDataReadPending = true;
             drivePpuAddress();
             incrementVramAddr();
             drivePpuAddress();
@@ -445,45 +470,66 @@ private:
 
     void backgroundFetchPhase() {
         if (!renderingEnabled()) return;
-        if (!((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338))) return;
+        if (!((cycle >= 1 && cycle < 258) || (cycle >= 321 && cycle < 338))) return;
 
-        updateShifters();
+        if (cycle != 1) {
+            updateShifters();
+            if (cycle != 257 && ((cycle - 1) & 7) == 0) loadBackgroundShifters();
+        }
+        if (cycle == 257 || cycle == 337) return;
 
-        switch ((cycle - 1) & 7) {
-        case 0:
-            loadBackgroundShifters();
-            bgNextTileId = busRead(0x2000 | (vramAddr.reg & 0x0FFF));
+        switch (cycle & 7) {
+        case 1:
+            beginBusRead(0x2000 | (vramAddr.reg & 0x0FFF));
             break;
-        case 2: {
-            uint16_t at = 0x23C0
-                | (vramAddr.nametableY << 11)
-                | (vramAddr.nametableX << 10)
-                | ((vramAddr.coarseY >> 2) << 3)
-                | (vramAddr.coarseX >> 2);
-            bgNextTileAttrib = busRead(at);
+        case 2:
+            bgNextTileId = finishBusRead(0x2000 | (vramAddr.reg & 0x0FFF));
+            break;
+        case 3:
+            beginBusRead(attributeAddress());
+            break;
+        case 4:
+            bgNextTileAttrib = finishBusRead(attributeAddress());
             if (vramAddr.coarseY & 0x02) bgNextTileAttrib >>= 4;
             if (vramAddr.coarseX & 0x02) bgNextTileAttrib >>= 2;
             bgNextTileAttrib &= 0x03;
             break;
-        }
-        case 4: {
+        case 5: {
             const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
                 + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
-            bgNextTilePattern.lo = busRead(base);
+            beginBusRead(base);
             break;
         }
         case 6: {
             const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
                 + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
-            bgNextTilePattern.hi = busRead(base + 8);
+            bgNextTilePattern.lo = finishBusRead(base);
             break;
         }
-        case 7:
+        case 7: {
+            const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
+                + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
+            beginBusRead(base + 8);
+            break;
+        }
+        case 0: {
+            const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
+                + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
+            bgNextTilePattern.hi = finishBusRead(base + 8);
             incrementScrollX();
             break;
+        }
         default:
             break;
         }
+    }
+
+    uint16_t attributeAddress() const {
+        return 0x23C0
+            | (vramAddr.nametableY << 11)
+            | (vramAddr.nametableX << 10)
+            | ((vramAddr.coarseY >> 2) << 3)
+            | (vramAddr.coarseX >> 2);
     }
 
     void loadBackgroundShifters() {
@@ -615,21 +661,6 @@ private:
         return patTable | (((r < 8) ? topTile : (topTile + 1)) << 4) | (uint16_t)(r & 0x07);
     }
 
-    void loadSpritePatterns() {
-        for (uint8_t i = 0; i < 8; i++) {
-            uint8_t y    = (i < spriteCount) ? spriteScanline[i * 4 + 0] : 0xFF;
-            uint8_t tile = (i < spriteCount) ? spriteScanline[i * 4 + 1] : 0xFF;
-            uint8_t attr = (i < spriteCount) ? spriteScanline[i * 4 + 2] : 0xFF;
-            uint16_t addrLo = spritePatternAddress(tile, attr, scanline - y);
-            uint8_t lo = busRead(addrLo);
-            uint8_t hi = busRead(addrLo + 8);
-            if (i >= spriteCount) continue;
-            if (attr & 0x40) { lo = flipByte(lo); hi = flipByte(hi); }
-            spritePattern[i].lo = lo;
-            spritePattern[i].hi = hi;
-        }
-    }
-
     void spriteFetchPhase() {
         if (!renderingEnabled()) return;
         if (cycle < 257 || cycle > 320) return;
@@ -637,9 +668,14 @@ private:
         const bool visible = (scanline >= 0 && scanline <= 239);
         const int spriteIdx = (cycle - 257) / 8;
         const int phase     = (cycle - 257) & 7;
+        const uint16_t nametableAddr = 0x2000 | (vramAddr.reg & 0x0FFF);
 
         if (phase == 0 || phase == 2) {
-            busRead(0x2000 | (vramAddr.reg & 0x0FFF));
+            beginBusRead(nametableAddr);
+            return;
+        }
+        if (phase == 1 || phase == 3) {
+            finishBusRead(nametableAddr);
             return;
         }
 
@@ -647,20 +683,24 @@ private:
         const uint8_t row = static_cast<uint8_t>(scanline) - y;
         const bool active = spriteIdx < spriteCount
             && (visible || (scanline == 261 && row < (ctrl.spriteSize ? 16 : 8)));
-        if (phase == 7) {
-            spriteX[spriteIdx] = active ? spriteScanline[spriteIdx * 4 + 3] : 0xFF;
-            return;
-        }
-        if (phase != 4 && phase != 6) return;
+        if (phase != 4 && phase != 5 && phase != 6 && phase != 7) return;
 
         const uint8_t tile = active ? spriteScanline[spriteIdx * 4 + 1] : 0xFF;
         const uint8_t attr = active ? spriteScanline[spriteIdx * 4 + 2] : 0xFF;
         const uint16_t base = spritePatternAddress(tile, attr, active ? row : 0);
-        const uint8_t data = busRead(base + (phase == 6 ? 8 : 0));
-        if (!active) return;
-        const uint8_t v = (attr & 0x40) ? flipByte(data) : data;
-        if (phase == 4) spritePattern[spriteIdx].lo = v;
-        else            spritePattern[spriteIdx].hi = v;
+        if (phase == 4 || phase == 6) {
+            beginBusRead(base + (phase == 6 ? 8 : 0));
+            return;
+        }
+
+        const uint8_t data = finishBusRead(base + (phase == 7 ? 8 : 0));
+        if (active) {
+            const uint8_t v = (attr & 0x40) ? flipByte(data) : data;
+            if (phase == 5) spritePattern[spriteIdx].lo = v;
+            else            spritePattern[spriteIdx].hi = v;
+        }
+        if (phase == 7)
+            spriteX[spriteIdx] = active ? spriteScanline[spriteIdx * 4 + 3] : 0xFF;
     }
 
     struct Pixel { uint8_t color; uint8_t palette; bool nonzero; };
@@ -815,10 +855,18 @@ private:
         return b;
     }
 
-    uint8_t busRead(uint16_t addr) {
+    void beginBusRead(uint16_t addr) {
         addr &= 0x3FFF;
+        ppuAddressLow = addr & 0x00FF;
         cart.ppuAddress(addr);
-        return ppuRead(addr);
+    }
+
+    uint8_t finishBusRead(uint16_t addr) {
+        addr = (addr & 0x3F00) | ppuAddressLow;
+        cart.ppuAddress(addr);
+        ppuBusData = ppuRead(addr);
+        ppuBusRead = true;
+        return ppuBusData;
     }
 
     void drivePpuAddress() {
