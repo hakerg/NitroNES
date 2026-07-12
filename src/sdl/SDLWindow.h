@@ -7,59 +7,75 @@
 #include "imgui/ImGuiLayer.h"
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_gpu.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
 class SDLWindow : public IWindow {
 public:
-    SDLWindow(ISDLWindowAPI &hardwareAPI) : platformAPI(hardwareAPI) {
-        // --- Inicjalizacja SDL ---
+    explicit SDLWindow(ISDLWindowAPI &hardwareAPI) : platformAPI(hardwareAPI) {
         if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
-            throw std::runtime_error(std::string("SDL_Init: ") +
-                                     SDL_GetError());
+            throw std::runtime_error(std::string("SDL_Init: ") + SDL_GetError());
 
         int winW = (NES::SCREEN_WIDTH * NES::PAR_NUM * 3) / NES::PAR_DEN;
         int winH = NES::SCREEN_HEIGHT * 3;
 
-        window =
-            SDL_CreateWindow("NES Emulator", winW, winH, SDL_WINDOW_RESIZABLE);
+        window = SDL_CreateWindow("NES Emulator", winW, winH, SDL_WINDOW_RESIZABLE);
         if (!window)
-            throw std::runtime_error(std::string("SDL_CreateWindow: ") +
-                                     SDL_GetError());
+            throw std::runtime_error(std::string("SDL_CreateWindow: ") + SDL_GetError());
 
-        renderer = SDL_CreateRenderer(window, nullptr);
-        if (!renderer)
-            throw std::runtime_error(std::string("SDL_CreateRenderer: ") +
-                                     SDL_GetError());
-        SDL_SetRenderVSync(renderer, 0);
+        gpuDevice = SDL_CreateGPUDevice(
+            SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_METALLIB,
+            false, nullptr);
+        if (!gpuDevice)
+            throw std::runtime_error(std::string("SDL_CreateGPUDevice: ") + SDL_GetError());
 
-        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32,
-                                    SDL_TEXTUREACCESS_STREAMING,
-                                    NES::SCREEN_WIDTH, NES::SCREEN_HEIGHT);
-        if (!texture)
-            throw std::runtime_error(std::string("SDL_CreateTexture: ") +
-                                     SDL_GetError());
-        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
-        SDL_SetWindowFullscreen(window, false);
+        if (!SDL_ClaimWindowForGPUDevice(gpuDevice, window))
+            throw std::runtime_error(std::string("SDL_ClaimWindowForGPUDevice: ") + SDL_GetError());
 
-        // --- Inicjalizacja ImGui (przez osobną warstwę) ---
-        uiLayer = std::make_unique<ImGuiLayer>(window, renderer);
+        if (!SDL_SetGPUAllowedFramesInFlight(gpuDevice, 1))
+            throw std::runtime_error(std::string("SDL_SetGPUAllowedFramesInFlight: ") + SDL_GetError());
+        if (!SDL_SetGPUSwapchainParameters(gpuDevice, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE))
+            throw std::runtime_error(std::string("SDL_SetGPUSwapchainParameters: ") + SDL_GetError());
+
+        SDL_GPUTextureCreateInfo texInfo = {};
+        texInfo.type = SDL_GPU_TEXTURETYPE_2D;
+        texInfo.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+        texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        texInfo.width = NES::SCREEN_WIDTH;
+        texInfo.height = NES::SCREEN_HEIGHT;
+        texInfo.layer_count_or_depth = 1;
+        texInfo.num_levels = 1;
+        texInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        nesTexture = SDL_CreateGPUTexture(gpuDevice, &texInfo);
+        if (!nesTexture)
+            throw std::runtime_error(std::string("SDL_CreateGPUTexture: ") + SDL_GetError());
+
+        SDL_GPUTransferBufferCreateInfo tbInfo = {};
+        tbInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        tbInfo.size = NES::SCREEN_WIDTH * NES::SCREEN_HEIGHT * 4;
+        nesTransfer = SDL_CreateGPUTransferBuffer(gpuDevice, &tbInfo);
+        if (!nesTransfer)
+            throw std::runtime_error(std::string("SDL_CreateGPUTransferBuffer: ") + SDL_GetError());
+
+        uiLayer = std::make_unique<ImGuiLayer>(window, gpuDevice);
     }
 
     ~SDLWindow() override {
-        // uiLayer zostanie zniszczone automatycznie tutaj (przed SDL), dzięki
-        // unique_ptr
-        if (texture)
-            SDL_DestroyTexture(texture);
-        if (renderer)
-            SDL_DestroyRenderer(renderer);
+        uiLayer.reset();
+
+        if (gpuDevice) {
+            if (nesTexture) SDL_ReleaseGPUTexture(gpuDevice, nesTexture);
+            if (nesTransfer) SDL_ReleaseGPUTransferBuffer(gpuDevice, nesTransfer);
+            SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
+            SDL_DestroyGPUDevice(gpuDevice);
+        }
         if (window)
             SDL_DestroyWindow(window);
         SDL_Quit();
     }
 
-    // --- Obsługa zdarzeń ---
     bool pollEvent(AppEvent &out) override {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
@@ -94,38 +110,74 @@ public:
     uint64_t getTicks() const override { return SDL_GetTicks(); }
     void delay(uint32_t ms) override { SDL_Delay(ms); }
 
-    void getPixelSize(int &w, int &h) const {
+    void getPixelSize(int &w, int &h) const override {
         SDL_GetWindowSizeInPixels(window, &w, &h);
     }
 
     void presentNESFrame(IFileSession* session) override {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(gpuDevice);
+        if (!cmd)
+            return;
 
-        uint32_t* framebuffer = session ? session->getFramebuffer() : nullptr;
-        if (framebuffer) {
-            SDL_UpdateTexture(texture, nullptr, framebuffer,
-                NES::SCREEN_WIDTH * sizeof(uint32_t));
-
-            int w = 0, h = 0;
-            getPixelSize(w, h);
-
-            float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
-            NES::calcDestRect(w, h, dstX, dstY, dstW, dstH);
-
-            SDL_FRect srcRect = {0.0f, 0.0f,
-                                 static_cast<float>(NES::SCREEN_WIDTH),
-                                 static_cast<float>(NES::SCREEN_HEIGHT)};
-            SDL_FRect dstRect = {dstX, dstY, dstW, dstH};
-            SDL_RenderTexture(renderer, texture, &srcRect, &dstRect);
+        SDL_GPUTexture *swapchain = nullptr;
+        Uint32 sw = 0, sh = 0;
+        bool acquired = SDL_AcquireGPUSwapchainTexture(cmd, window, &swapchain, &sw, &sh);
+        if (!acquired || !swapchain || sw == 0 || sh == 0) {
+            SDL_CancelGPUCommandBuffer(cmd);
+            return;
         }
 
-        uiLayer->render(renderer, session);
-        SDL_RenderPresent(renderer);
+        uint32_t *fb = session ? session->getFramebuffer() : nullptr;
+        if (fb) {
+            void *ptr = SDL_MapGPUTransferBuffer(gpuDevice, nesTransfer, true);
+            if (!ptr) {
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            memcpy(ptr, fb, NES::SCREEN_WIDTH * NES::SCREEN_HEIGHT * sizeof(uint32_t));
+            SDL_UnmapGPUTransferBuffer(gpuDevice, nesTransfer);
+
+            SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass(cmd);
+            SDL_GPUTextureTransferInfo src = {};
+            src.transfer_buffer = nesTransfer;
+            SDL_GPUTextureRegion dst = {};
+            dst.texture = nesTexture;
+            dst.w = NES::SCREEN_WIDTH;
+            dst.h = NES::SCREEN_HEIGHT;
+            dst.d = 1;
+            SDL_UploadToGPUTexture(copy, &src, &dst, true);
+            SDL_EndGPUCopyPass(copy);
+
+            float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
+            NES::calcDestRect(sw, sh, dstX, dstY, dstW, dstH);
+            SDL_GPUBlitInfo blit = {};
+            blit.source.texture = nesTexture;
+            blit.source.w = NES::SCREEN_WIDTH;
+            blit.source.h = NES::SCREEN_HEIGHT;
+            blit.destination.texture = swapchain;
+            blit.destination.x = static_cast<int>(dstX);
+            blit.destination.y = static_cast<int>(dstY);
+            blit.destination.w = static_cast<int>(dstW);
+            blit.destination.h = static_cast<int>(dstH);
+            blit.load_op = SDL_GPU_LOADOP_CLEAR;
+            blit.clear_color = {0, 0, 0, 1};
+            blit.filter = SDL_GPU_FILTER_NEAREST;
+            SDL_BlitGPUTexture(cmd, &blit);
+        } else {
+            SDL_GPUColorTargetInfo target = {};
+            target.texture = swapchain;
+            target.load_op = SDL_GPU_LOADOP_CLEAR;
+            target.clear_color = {0, 0, 0, 1};
+            SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(cmd, &target, 1, nullptr);
+            SDL_EndGPURenderPass(pass);
+        }
+
+        uiLayer->render(cmd, swapchain, session);
+        SDL_SubmitGPUCommandBuffer(cmd);
+        uiLayer->renderPlatformWindows();
     }
 
-    void initMenu(AppSettings &s, IMenuHandler &h,
-                  IInputContext &input) override {
+    void initMenu(AppSettings &s, IMenuHandler &h, IInputContext &input) override {
         this->input = &input;
         uiLayer->init(&s, &h, &input);
     }
@@ -143,8 +195,8 @@ public:
         if (displayID == 0)
             return 60.0;
 
-        const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(displayID);
-        if (mode && mode->refresh_rate_denominator > 0) {
+        if (const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(displayID);
+            mode && mode->refresh_rate_denominator > 0) {
             return (double)mode->refresh_rate_numerator /
                    (double)mode->refresh_rate_denominator;
         }
@@ -264,8 +316,9 @@ private:
     }
 
     SDL_Window *window = nullptr;
-    SDL_Renderer *renderer = nullptr;
-    SDL_Texture *texture = nullptr;
+    SDL_GPUDevice *gpuDevice = nullptr;
+    SDL_GPUTexture *nesTexture = nullptr;
+    SDL_GPUTransferBuffer *nesTransfer = nullptr;
     ISDLWindowAPI &platformAPI;
     IInputContext *input = nullptr;
 

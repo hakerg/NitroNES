@@ -5,22 +5,31 @@
 #include "../../IMenuHandler.h"
 #include "../../lang/LanguageRegistry.h"
 #include "backends/imgui_impl_sdl3.h"
-#include "backends/imgui_impl_sdlrenderer3.h"
+#include "backends/imgui_impl_sdlgpu3.h"
 #include "imgui.h"
 #include "PressStart2P-Regular.h"
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_gpu.h>
 #include <format>
 #include <string>
 
 class ImGuiLayer {
 public:
-    ImGuiLayer(SDL_Window *window, SDL_Renderer *renderer) {
+    ImGuiLayer(SDL_Window *window, SDL_GPUDevice *gpuDevice)
+        : window(window), gpuDevice(gpuDevice) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui::StyleColorsDark();
 
-        ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
-        ImGui_ImplSDLRenderer3_Init(renderer);
+        ImGui_ImplSDL3_InitForSDLGPU(window);
+
+        ImGui_ImplSDLGPU3_InitInfo initInfo = {};
+        initInfo.Device = gpuDevice;
+        initInfo.ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(gpuDevice, window);
+        initInfo.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
+        initInfo.SwapchainComposition = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
+        initInfo.PresentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
+        ImGui_ImplSDLGPU3_Init(&initInfo);
 
         ImVec4 black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
         ImVec4 grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
@@ -96,10 +105,11 @@ public:
         io.Fonts->AddFontFromMemoryTTF((void*)PressStart2P_Regular, 116008, 16.0f, &fontConfig);
         io.IniFilename = nullptr;
         io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     }
 
     ~ImGuiLayer() {
-        ImGui_ImplSDLRenderer3_Shutdown();
+        ImGui_ImplSDLGPU3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
     }
@@ -108,38 +118,56 @@ public:
         settings = s;
         handler = h;
         input = i;
+        applyPresentMode();
     }
 
     bool processEvent(const SDL_Event *ev) {
         ImGui_ImplSDL3_ProcessEvent(ev);
-        if (!waitingForKey)
-            return false;
-        if (ev->type == SDL_EVENT_KEY_DOWN && !ev->key.repeat) {
-            SDL_Scancode sc = ev->key.scancode;
-            if (KeyChord::isModifierScancode(sc))
-                return true;
-            assignWaitingKey(sc, ev->key.mod);
-            return true;
-        }
-        if (ev->type == SDL_EVENT_KEY_UP) {
-            SDL_Scancode sc = ev->key.scancode;
-            if (KeyChord::isModifierScancode(sc)) {
-                assignWaitingKey(sc, SDL_KMOD_NONE);
+
+        if (waitingForKey) {
+            if (ev->type == SDL_EVENT_KEY_DOWN && !ev->key.repeat) {
+                SDL_Scancode sc = ev->key.scancode;
+                if (KeyChord::isModifierScancode(sc))
+                    return true;
+                assignWaitingKey(sc, ev->key.mod);
                 return true;
             }
+            if (ev->type == SDL_EVENT_KEY_UP) {
+                SDL_Scancode sc = ev->key.scancode;
+                if (KeyChord::isModifierScancode(sc)) {
+                    assignWaitingKey(sc, SDL_KMOD_NONE);
+                    return true;
+                }
+            }
+            return true;
         }
+
+        ImGuiIO &io = ImGui::GetIO();
+        if (io.WantCaptureMouse && (
+            ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+            ev->type == SDL_EVENT_MOUSE_BUTTON_UP ||
+            ev->type == SDL_EVENT_MOUSE_WHEEL)) {
+            return true;
+            }
+        if (io.WantCaptureKeyboard && (
+            ev->type == SDL_EVENT_KEY_DOWN ||
+            ev->type == SDL_EVENT_KEY_UP ||
+            ev->type == SDL_EVENT_TEXT_INPUT)) {
+            return true;
+            }
+
         return false;
     }
 
     bool isMenuOpen() const { return menuOpen; }
 
-    void render(SDL_Renderer *renderer, IFileSession *session) {
+    void render(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *swapchain, IFileSession *session) {
         if (input)
             input->setInputBlocked(controlsOpen);
 
         NESCoreBase *core = session ? &session->getCore() : nullptr;
 
-        ImGui_ImplSDLRenderer3_NewFrame();
+        ImGui_ImplSDLGPU3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
@@ -166,15 +194,6 @@ public:
             if (settings && core) {
                 if (ImGui::BeginMenu(tr("emulation"))) {
                     menuOpen = true;
-                    // TODO: NES, PAL, DENDY
-                    /*if (ImGui::BeginMenu(tr("emulation.system"))) {
-                        int sub = core->pal ? 1 : 0;
-                        if (ImGui::RadioButton("NTSC", &sub, 0))
-                            core->pal = false;
-                        if (ImGui::RadioButton("PAL", &sub, 1))
-                            core->pal = true;
-                        ImGui::EndMenu();
-                    }*/
                     ImGui::MenuItem(tr("emulation.pause"), nullptr, &core->paused);
                     if (ImGui::MenuItem(tr("emulation.reset")))
                         handler->onReset();
@@ -219,18 +238,44 @@ public:
 
         ImGui::PopStyleVar();
 
-        renderSyncWindow(renderer, session);
+        renderSyncWindow(session);
         renderAudioWindow();
         renderControlsWindow();
         renderAboutFileWindow(session);
 
-        //ImGui::ShowStyleEditor();
-
         ImGui::Render();
-        ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+        ImGui_ImplSDLGPU3_PrepareDrawData(ImGui::GetDrawData(), cmd);
+
+        if (swapchain) {
+            SDL_GPUColorTargetInfo target = {};
+            target.texture = swapchain;
+            target.load_op = SDL_GPU_LOADOP_LOAD;
+            target.store_op = SDL_GPU_STOREOP_STORE;
+            SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(cmd, &target, 1, nullptr);
+            ImGui_ImplSDLGPU3_RenderDrawData(ImGui::GetDrawData(), cmd, pass);
+            SDL_EndGPURenderPass(pass);
+        }
+    }
+
+    void renderPlatformWindows() {
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
     }
 
 private:
+    void applyPresentMode() {
+        if (!settings)
+            return;
+        if (settings->syncMode == 2)
+            settings->vsync = false;
+        SDL_SetGPUSwapchainParameters(
+            gpuDevice, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+            settings->vsync ? SDL_GPU_PRESENTMODE_VSYNC
+                            : SDL_GPU_PRESENTMODE_IMMEDIATE);
+    }
+
     struct Binding {
         const char *label;
         SDL_Scancode *controllerKey;
@@ -435,7 +480,7 @@ private:
         spacing();
     }
 
-    void renderSyncWindow(SDL_Renderer *renderer, IFileSession *session) {
+    void renderSyncWindow(IFileSession *session) {
         if (!syncSettingsOpen || !settings)
             return;
 
@@ -451,19 +496,12 @@ private:
         spacing();
 
         ImGui::TextUnformatted(tr("settings.sync_mode"));
-
         ImGui::RadioButton(tr("settings.sync.none"), &settings->syncMode, 0);
         addTooltipToLastItem(tr("settings.sync.none.tooltip"));
-
         ImGui::RadioButton(tr("settings.sync.refresh_rate"), &settings->syncMode, 1);
         addTooltipToLastItem(tr("settings.sync.refresh_rate.tooltip"));
-
-        if (ImGui::RadioButton(tr("settings.sync.scanline"), &settings->syncMode, 2)) {
-            settings->vsync = false;
-            if (renderer) {
-                SDL_SetRenderVSync(renderer, 0);
-            }
-        }
+        if (ImGui::RadioButton(tr("settings.sync.scanline"), &settings->syncMode, 2))
+            applyPresentMode();
         addTooltipToLastItem(tr("settings.sync.scanline.tooltip"));
 
         if (settings->syncMode == 2) {
@@ -473,16 +511,13 @@ private:
 
         if (session) {
             double speed = session->getCore().speed;
-            ImGui::TextUnformatted(
-                std::format("{}: {:.2f}%", tr("settings.target_speed"),
-                            speed * 100.0).c_str());
+            ImGui::TextUnformatted(std::format("{}: {:.2f}%", tr("settings.target_speed"), speed * 100.0).c_str());
         }
 
         if (settings->syncMode != 2) {
             spacing();
-            if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync)) {
-                SDL_SetRenderVSync(renderer, settings->vsync ? 1 : 0);
-            }
+            if (ImGui::Checkbox(tr("settings.vsync"), &settings->vsync))
+                applyPresentMode();
         }
 
         ImGui::End();
@@ -565,6 +600,8 @@ private:
 
     static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
 
+    SDL_Window *window = nullptr;
+    SDL_GPUDevice *gpuDevice = nullptr;
     AppSettings *settings = nullptr;
     bool menuOpen = false;
     IMenuHandler *handler = nullptr;
@@ -581,4 +618,3 @@ private:
     int bindSectionBegin = 0;
     int bindSectionEnd = 0;
 };
-
