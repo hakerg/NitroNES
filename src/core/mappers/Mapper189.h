@@ -144,6 +144,7 @@ private:
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
     bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+    const char* name() const override { return "MMC3 modified (Thunder Warrior)"; }
 };
 
 REGISTER_MAPPER(189, Mapper189)

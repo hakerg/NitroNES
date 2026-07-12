@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "MapperBase.h"
 #include "MapperRegistry.h"
 
@@ -75,6 +75,7 @@ private:
     uint8_t reg = 0, addrLow = 0;
     uint16_t addr = 0x8000;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "100-in-1 Contra Function 16. Tylko PRG bank, brak CHR-ROM."; }
 };
 
 REGISTER_MAPPER(15, Mapper015)

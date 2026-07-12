@@ -65,6 +65,7 @@ private:
     bool extPrgMode = false;
     uint8_t extPrgPage = 0;
     uint8_t chrBlock = 0;
+    const char* name() const override { return "MMC3 wariant (Yuu Yuu Hakusho)"; }
 };
 
 REGISTER_MAPPER(115, Mapper115)

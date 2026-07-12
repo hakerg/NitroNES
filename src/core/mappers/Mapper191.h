@@ -8,6 +8,7 @@
 class Mapper191 : public Mapper004 {
 public:
     using Mapper004::Mapper004;
+    const char* name() const override { return "pirackie MMC3 z dodatkowymi 2 KB CHR-RAM (bit7 CHR reg"; }
 };
 
 REGISTER_MAPPER(191, Mapper191)

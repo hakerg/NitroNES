@@ -102,6 +102,7 @@ private:
     uint8_t chrBank1A = 0, chrBank1B = 0;
     uint8_t latch0 = 0xFE, latch1 = 0xFE;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "MMC2"; }
 };
 
 REGISTER_MAPPER(9, Mapper009)

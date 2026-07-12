@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "MapperBase.h"
 #include "MapperRegistry.h"
 
@@ -35,6 +35,7 @@ public:
 private:
     uint8_t prgBankSelect = 0;
     uint8_t chrBankSelect = 0;
+    const char* name() const override { return "GxROM and compatible"; }
 };
 
 REGISTER_MAPPER(66, Mapper066)

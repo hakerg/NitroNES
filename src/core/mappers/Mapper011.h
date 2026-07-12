@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "MapperBase.h"
 #include "MapperRegistry.h"
 
@@ -36,6 +36,7 @@ public:
 private:
     uint8_t prgBankSelect = 0;
     uint8_t chrBankSelect = 0;
+    const char* name() const override { return "Color Dreams"; }
 };
 
 REGISTER_MAPPER(11, Mapper011)

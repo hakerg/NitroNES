@@ -58,6 +58,7 @@ public:
 
 private:
     uint8_t prg = 0, chr0 = 0, chr1 = 1;
+    const char* name() const override { return "BxROM"; }
 };
 
 REGISTER_MAPPER(34, Mapper034)

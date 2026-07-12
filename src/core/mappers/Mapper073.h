@@ -95,6 +95,7 @@ private:
     uint16_t reload = 0, counter = 0;
     bool irqMode = false, irqEnable = false, irqEnableOnAck = false,
          irqActive = false;
+    const char* name() const override { return "VRC3"; }
 };
 
 REGISTER_MAPPER(73, Mapper073)

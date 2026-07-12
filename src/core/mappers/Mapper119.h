@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Mapper004.h"
 #include "MapperRegistry.h"
 
@@ -8,6 +8,7 @@
 class Mapper119 : public Mapper004 {
 public:
     using Mapper004::Mapper004;
+    const char* name() const override { return "TQROM"; }
 };
 
 REGISTER_MAPPER(119, Mapper119)

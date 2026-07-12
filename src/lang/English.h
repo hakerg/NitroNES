@@ -20,6 +20,8 @@ public:
             {"emulation.pause", "Pause"},
             {"emulation.reset", "Reset"},
             {"settings", "Settings"},
+            {"tools", "Tools"},
+            {"tools.about_file", "About File..."},
             {"settings.language", "Language"},
             {"settings.sync", "Synchronization..."},
             {"settings.vsync", "Vertical sync"},

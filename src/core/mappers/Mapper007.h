@@ -49,6 +49,7 @@ public:
 private:
     uint8_t prgBankSelect = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+    const char* name() const override { return "AxROM"; }
 };
 
 REGISTER_MAPPER(7, Mapper007)

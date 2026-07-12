@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "MapperBase.h"
 #include "MapperRegistry.h"
 
@@ -119,6 +119,7 @@ private:
     bool prgMode = false; // false=32KB, true=2×16KB
     Mirroring mirror_ = Mirroring::VERTICAL;
     uint8_t ram[4] = {}; // $5800-$5803, 4 bity każdy
+    const char* name() const override { return "Mapper 225"; }
 };
 
 REGISTER_MAPPER(225, Mapper225)

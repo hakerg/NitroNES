@@ -151,6 +151,7 @@ private:
     bool prgMode = false;
     bool chrInversion = false;
     uint8_t ntA = 0, ntB = 0, ntC = 0, ntD = 0;
+    const char* name() const override { return "MMC3  (modified)"; }
 };
 
 REGISTER_MAPPER(95, Mapper095)

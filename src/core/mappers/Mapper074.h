@@ -12,6 +12,7 @@
 class Mapper074 : public Mapper004 {
 public:
     using Mapper004::Mapper004;
+    const char* name() const override { return "pirate MMC3 z 2 KB CHR-RAM (Di 4 Ci, Ji Jia Zhan Shi)"; }
 };
 
 REGISTER_MAPPER(74, Mapper074)

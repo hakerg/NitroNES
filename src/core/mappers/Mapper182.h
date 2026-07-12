@@ -54,6 +54,7 @@ public:
             return;
         }
     }
+    const char* name() const override { return "MMC3 z poprzestawianymi rejestrami"; }
 };
 
 REGISTER_MAPPER(182, Mapper182)

@@ -76,6 +76,7 @@ private:
     uint8_t sel = 0;
     std::array<uint8_t, 8> R{};
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "Asder/NTDEC. PRG 2x8k + 2x fixed, CHR 2x2k + 4x1k."; }
 };
 
 REGISTER_MAPPER(112, Mapper112)

@@ -94,6 +94,7 @@ private:
     uint8_t addrPort = 0;
     uint8_t prg = 0, chrH = 0, chrL = 0, chrD = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "Sachen (Honey, Poker III 5-in-1)"; }
 };
 
 REGISTER_MAPPER(243, Mapper243)

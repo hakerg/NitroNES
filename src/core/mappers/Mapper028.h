@@ -121,6 +121,7 @@ private:
     uint8_t prgOuter = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
     std::array<uint8_t, 32768> chrRam{};
+    const char* name() const override { return "Action 53"; }
 };
 
 REGISTER_MAPPER(28, Mapper028)

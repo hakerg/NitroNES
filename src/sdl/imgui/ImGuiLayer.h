@@ -179,6 +179,13 @@ public:
                     if (ImGui::MenuItem(tr("emulation.reset")))
                         handler->onReset();
 
+                    if (ImGui::BeginMenu(tr("tools"))) {
+                        menuOpen = true;
+                        if (session && ImGui::MenuItem(tr("tools.about_file")))
+                            aboutFileOpen = true;
+                        ImGui::EndMenu();
+                    }
+
                     ImGui::EndMenu();
                 }
             }
@@ -215,6 +222,7 @@ public:
         renderSyncWindow(renderer, session);
         renderAudioWindow();
         renderControlsWindow();
+        renderAboutFileWindow(session);
 
         //ImGui::ShowStyleEditor();
 
@@ -533,6 +541,19 @@ private:
         ImGui::End();
     }
 
+    void renderAboutFileWindow(IFileSession *session) {
+        if (!aboutFileOpen || !session)
+            return;
+        menuOpen = true;
+        if (!ImGui::Begin(tr("tools.about_file"), &aboutFileOpen, WINDOW_FLAGS)) {
+            ImGui::End();
+            return;
+        }
+        std::string info = session->getInfo();
+        ImGui::TextUnformatted(info.c_str());
+        ImGui::End();
+    }
+
     void addTooltipToLastItem(const char *text) {
         if (!ImGui::IsItemHovered()) return;
         ImGui::BeginTooltip();
@@ -552,6 +573,7 @@ private:
     bool controlsOpen = false;
     bool syncSettingsOpen = false;
     bool audioSettingsOpen = false;
+    bool aboutFileOpen = false;
 
     bool waitingForKey = false;
     bool bindAll = false;
@@ -559,3 +581,4 @@ private:
     int bindSectionBegin = 0;
     int bindSectionEnd = 0;
 };
+

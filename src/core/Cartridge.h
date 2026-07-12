@@ -69,6 +69,14 @@ public:
         return hwMirror;
     }
 
+    uint16_t getMapperID() const { return mapperID; }
+    const Mapper& getMapper() const { return *pMapper; }
+
+    uint16_t getPrgBanks() const { return prgBanks; }
+    uint8_t  getChrBanks() const { return chrBanks; }
+    bool hasPrgRam() const { return pMapper->hasPrgRam(); }
+    bool hasBusConflicts() const { return pMapper->hasBusConflicts(); }
+
     void reset() { pMapper->reset(); }
 
     bool irqState() const { return pMapper->irqState(); }
@@ -149,4 +157,3 @@ private:
 
     std::unique_ptr<Mapper> pMapper;
 };
-

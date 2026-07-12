@@ -17,6 +17,32 @@ public:
 
     NESCoreBase& getCore() override { return *this; }
 
+    std::string getInfo() override {
+        const Cartridge &c = getCartridge();
+        const char *mirror = nullptr;
+        switch (c.getMirroring()) {
+        case Mirroring::HORIZONTAL:  mirror = "Horizontal";  break;
+        case Mirroring::VERTICAL:    mirror = "Vertical";    break;
+        case Mirroring::ONESCREEN_LO: mirror = "One-screen (low)";  break;
+        case Mirroring::ONESCREEN_HI: mirror = "One-screen (high)"; break;
+        case Mirroring::FOURSCREEN:  mirror = "Four-screen"; break;
+        }
+        std::string s;
+        s += "File: " + filename + "\n";
+        s += "Path: " + path + "\n";
+        s += "Mapper: #" + std::to_string(c.getMapperID()) + " ("
+            + c.getMapper().name() + ")\n";
+        s += "PRG ROM: " + std::to_string(c.getPrgBanks() * 16) + " KiB ("
+            + std::to_string(c.getPrgBanks()) + " banks)\n";
+        s += "CHR ROM: " + std::to_string(c.getChrBanks() * 8) + " KiB ("
+            + std::to_string(c.getChrBanks()) + " banks)\n";
+        s += "Mirroring: " + std::string(mirror) + "\n";
+        s += "PRG RAM: " + std::string(c.hasPrgRam() ? "yes" : "no") + "\n";
+        s += "Bus conflicts: " + std::string(c.hasBusConflicts() ? "yes" : "no") + "\n";
+        s += "System: " + std::string(system == NESStandard::PAL ? "PAL" : "NTSC") + "\n";
+        return s;
+    }
+
 protected:
     void onFrameCompleted() override {
         input.tickFrame();

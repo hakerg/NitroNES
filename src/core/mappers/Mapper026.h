@@ -15,6 +15,7 @@ public:
 
 protected:
     bool swapA01() const override { return true; }
+    const char* name() const override { return "Mapper 26"; }
 };
 
 REGISTER_MAPPER(26, Mapper026)

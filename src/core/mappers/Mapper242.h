@@ -46,6 +46,7 @@ public:
 private:
     uint8_t prg = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "Wai Xing Zhan Shi"; }
 };
 
 REGISTER_MAPPER(242, Mapper242)

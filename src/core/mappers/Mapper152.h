@@ -45,6 +45,7 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+    const char* name() const override { return "Bandai (warianty: Arkanoid 2, Gegege no Kitarou 2). Bus"; }
 };
 
 REGISTER_MAPPER(152, Mapper152)

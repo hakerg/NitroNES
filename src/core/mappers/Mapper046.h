@@ -46,6 +46,7 @@ public:
 
 private:
     uint8_t prgHi = 0, chrHi = 0, prgLo = 0, chrLo = 0;
+    const char* name() const override { return "Rumblestation 15-in-1"; }
 };
 
 REGISTER_MAPPER(46, Mapper046)

@@ -54,6 +54,7 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+    const char* name() const override { return "Irem (Napoleon Senki)"; }
 };
 
 REGISTER_MAPPER(77, Mapper077)

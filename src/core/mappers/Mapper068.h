@@ -66,6 +66,7 @@ private:
     std::array<uint8_t, 4> chr{};
     uint8_t prg = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "Sunsoft-4. CHR-ROM jako nametables (uproszczone: brak NT-ROM)."; }
 };
 
 REGISTER_MAPPER(68, Mapper068)

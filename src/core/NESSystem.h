@@ -40,6 +40,8 @@ public:
 
     double getBaseFramerate() const override { return NES::REFRESH_RATE_NTSC_ON; }
 
+    const Cartridge& getCartridge() const { return cart; }
+
 protected:
     virtual uint8_t readController(int port) = 0;
 

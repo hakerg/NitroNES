@@ -77,6 +77,7 @@ public:
 
 private:
     uint8_t multi = 0;
+    const char* name() const override { return "Super HIK 4-in-1 (MMC3 multicart)"; }
 };
 
 REGISTER_MAPPER(49, Mapper049)

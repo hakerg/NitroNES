@@ -150,6 +150,7 @@ private:
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
     bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+    const char* name() const override { return "Taito TC0190FMC + PAL16R4 (z IRQ)"; }
 };
 
 REGISTER_MAPPER(48, Mapper048)

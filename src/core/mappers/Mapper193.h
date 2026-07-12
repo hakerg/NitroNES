@@ -92,6 +92,7 @@ public:
 
 private:
     uint8_t chr0 = 0, chr1 = 0, chr2 = 0, prgReg = 0;
+    const char* name() const override { return "NTDEC TC-112 (Fighting Hero)"; }
 };
 
 REGISTER_MAPPER(193, Mapper193)

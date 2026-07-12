@@ -81,6 +81,7 @@ private:
     bool mode16 = false;
     uint8_t chrLo = 0, chrHi = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "Action 52 / Cheetah Men II"; }
 };
 
 REGISTER_MAPPER(228, Mapper228)

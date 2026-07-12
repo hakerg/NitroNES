@@ -67,6 +67,7 @@ public:
 private:
     uint16_t addrLatch = 0;
     uint8_t dataLatch = 0;
+    const char* name() const override { return "Super 700-in-1"; }
 };
 
 REGISTER_MAPPER(62, Mapper062)

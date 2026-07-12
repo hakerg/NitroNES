@@ -45,6 +45,7 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+    const char* name() const override { return "Sunsoft. Bus conflicts."; }
 };
 
 REGISTER_MAPPER(89, Mapper089)

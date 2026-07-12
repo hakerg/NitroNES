@@ -103,6 +103,7 @@ private:
     Mirroring mirrorMode = Mirroring::VERTICAL;
     bool irqEnable = false, irqActive = false;
     uint16_t irqReload = 0, irqCounter = 0;
+    const char* name() const override { return "Irem H3001. 16-bit licznik IRQ (CPU cycle) z reloadem."; }
 };
 
 REGISTER_MAPPER(65, Mapper065)

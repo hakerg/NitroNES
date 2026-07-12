@@ -78,6 +78,7 @@ public:
 private:
     uint8_t target = 0;
     std::array<uint8_t, 8> regs{};
+    const char* name() const override { return "Namco 118 / Namcot 3433 (Quinty, Dragon Spirit)"; }
 };
 
 REGISTER_MAPPER(88, Mapper088)

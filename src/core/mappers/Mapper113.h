@@ -40,6 +40,7 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "HES."; }
 };
 
 REGISTER_MAPPER(113, Mapper113)

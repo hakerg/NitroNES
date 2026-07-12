@@ -123,6 +123,7 @@ private:
     Mirroring mirrorMode = Mirroring::VERTICAL;
     uint16_t irqCounter = 0;
     bool irqEnable = false, irqActive = false, irqHighNext = true;
+    const char* name() const override { return "Sunsoft-3 (Fantasy Zone 2 J)"; }
 };
 
 REGISTER_MAPPER(67, Mapper067)

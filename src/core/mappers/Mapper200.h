@@ -48,6 +48,7 @@ public:
 private:
     uint8_t bank = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "1200-in-1 / 36-in-1"; }
 };
 
 REGISTER_MAPPER(200, Mapper200)

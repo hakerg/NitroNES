@@ -35,6 +35,7 @@ public:
 
 private:
     uint8_t prg = 0;
+    const char* name() const override { return "Crazy Climber. PRG bank zmienny w $C000, $8000 sta�y. Bus"; }
 };
 
 REGISTER_MAPPER(180, Mapper180)

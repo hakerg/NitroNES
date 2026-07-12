@@ -55,6 +55,7 @@ public:
 private:
     uint8_t reg = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "20-in-1 multicart"; }
 };
 
 REGISTER_MAPPER(231, Mapper231)

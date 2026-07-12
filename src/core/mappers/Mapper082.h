@@ -104,6 +104,7 @@ private:
     std::array<uint8_t, 3> prg{};
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
     bool chrMode = false;
+    const char* name() const override { return "Taito X1-017 (SD Keiji Blader, Kyuukyoku Harikiri Stadium)"; }
 };
 
 REGISTER_MAPPER(82, Mapper082)

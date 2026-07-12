@@ -38,6 +38,7 @@ public:
 
 private:
     uint8_t bank = 0;
+    const char* name() const override { return "8-in-1 / 21-in-1 multicart"; }
 };
 
 REGISTER_MAPPER(201, Mapper201)

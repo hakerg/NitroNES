@@ -80,6 +80,7 @@ private:
     uint8_t P = 0;
     bool O = false, L = false, S = false;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+    const char* name() const override { return "1200-in-1"; }
 };
 
 REGISTER_MAPPER(227, Mapper227)

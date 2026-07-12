@@ -185,6 +185,7 @@ protected:
     DelayedPin<bool> irqActive{false};
     bool irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+    const char* name() const override { return "MMC3"; }
 };
 
 REGISTER_MAPPER(4, Mapper004)

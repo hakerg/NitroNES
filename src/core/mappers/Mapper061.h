@@ -56,6 +56,7 @@ public:
 
 private:
     uint16_t addrLatch = 0;
+    const char* name() const override { return "20-in-1"; }
 };
 
 REGISTER_MAPPER(61, Mapper061)

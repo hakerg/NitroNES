@@ -49,6 +49,8 @@ public:
     virtual NESCoreBase& getCore() = 0;
     virtual void processKeyDown(AppKey key) {}
 
+    virtual std::string getInfo() = 0;
+
     void clockCore(double baseSpeed) {
         NESCoreBase& core = getCore();
         core.speed = getSyncedSpeed(baseSpeed);

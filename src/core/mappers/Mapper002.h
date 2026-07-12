@@ -47,6 +47,7 @@ public:
 
 private:
     uint8_t prgBankLo = 0, prgBankHi = 0;
+    const char* name() const override { return "UxROM (and compatible)"; }
 };
 
 REGISTER_MAPPER(2, Mapper002)

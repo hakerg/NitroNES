@@ -34,6 +34,7 @@ public:
 
 private:
     uint8_t prg = 0;
+    const char* name() const override { return "Senjou no Ookami. 16k PRG @ $8000 (bity 2-4 z zapisu)."; }
 };
 
 REGISTER_MAPPER(94, Mapper094)

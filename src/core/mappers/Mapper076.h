@@ -58,6 +58,7 @@ public:
 private:
     uint8_t bankSel = 0;
     std::array<uint8_t, 8> R{};
+    const char* name() const override { return "Namcot 108 (wariant; bez nametable RAM control)."; }
 };
 
 REGISTER_MAPPER(76, Mapper076)

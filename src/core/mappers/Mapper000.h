@@ -28,6 +28,7 @@ public:
     bool ppuMapWrite(uint16_t addr, uint32_t &mapped) override {
         return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
     }
+    const char* name() const override { return "NROM"; }
 };
 
 REGISTER_MAPPER(0, Mapper000)

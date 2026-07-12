@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "MapperBase.h"
 #include "MapperRegistry.h"
 
@@ -94,6 +94,7 @@ private:
     uint8_t chrBank = 0;
     bool prgMode = false;
     Mirroring mirror_ = Mirroring::VERTICAL;
+    const char* name() const override { return "Mapper 58"; }
 };
 
 REGISTER_MAPPER(58, Mapper058)

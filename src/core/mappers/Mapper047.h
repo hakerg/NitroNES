@@ -38,6 +38,7 @@ public:
 
 private:
     uint8_t block = 0;
+    const char* name() const override { return "Super Spike V'Ball + Nintendo World Cup (MMC3 multicart)"; }
 };
 
 REGISTER_MAPPER(47, Mapper047)

@@ -34,6 +34,7 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+    const char* name() const override { return "Jaleco JF-11/JF-14. Rejestr w $6000-7FFF."; }
 };
 
 REGISTER_MAPPER(140, Mapper140)

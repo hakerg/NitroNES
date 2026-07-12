@@ -66,6 +66,7 @@ public:
 
 private:
     uint8_t reg8000 = 0, reg8800 = 0;
+    const char* name() const override { return "GK 47-in-1 / 6-in-1 (SuperGK)"; }
 };
 
 REGISTER_MAPPER(57, Mapper057)

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "../audio_extensions/VRC6Audio.h"
 #include "MapperBase.h"
@@ -292,6 +292,7 @@ public:
 
 protected:
     bool swapA01() const override { return false; }
+    const char* name() const override { return "VRC6"; }
 };
 
 REGISTER_MAPPER(24, Mapper024)

@@ -30,6 +30,7 @@ public:
 
 private:
     uint8_t chr = 0;
+    const char* name() const override { return "Jaleco/Konami. Rejestr w $6000-7FFF (zamiast SRAM)."; }
 };
 
 REGISTER_MAPPER(87, Mapper087)

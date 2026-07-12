@@ -131,6 +131,7 @@ private:
         if ((reg0 & 0x3F) != 0)
             locked = true;
     }
+    const char* name() const override { return "Maxi 15"; }
 };
 
 REGISTER_MAPPER(234, Mapper234)

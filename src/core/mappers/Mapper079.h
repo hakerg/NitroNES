@@ -36,6 +36,7 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+    const char* name() const override { return "NINA-03/06 (American Video Entertainment)."; }
 };
 
 REGISTER_MAPPER(79, Mapper079)

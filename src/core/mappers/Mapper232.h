@@ -50,6 +50,7 @@ public:
 
 private:
     uint8_t block = 0, page = 0;
+    const char* name() const override { return "Camerica/Codemasters Quattro"; }
 };
 
 REGISTER_MAPPER(232, Mapper232)

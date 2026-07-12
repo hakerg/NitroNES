@@ -41,6 +41,7 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+    const char* name() const override { return "35-in-1 multicart"; }
 };
 
 REGISTER_MAPPER(203, Mapper203)

@@ -35,6 +35,7 @@ public:
 
 private:
     uint8_t block = 0xFF; // pierwszy reset() przejdzie na 0
+    const char* name() const override { return "Reset-Based 4-in-1 (NROM-128 x4)"; }
 };
 
 REGISTER_MAPPER(60, Mapper060)

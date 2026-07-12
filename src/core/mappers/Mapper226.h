@@ -68,6 +68,7 @@ private:
     uint8_t prgLo = 0, prgHi = 0;
     bool mode32 = true;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "76-in-1 / Super 42-in-1"; }
 };
 
 REGISTER_MAPPER(226, Mapper226)

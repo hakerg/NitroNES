@@ -363,6 +363,7 @@ private:
     bool splitActive = false;
     uint8_t splitFineY = 0;
     MMC5Audio audio;
+    const char* name() const override { return "MMC5"; }
 };
 
 REGISTER_MAPPER(5, Mapper005)

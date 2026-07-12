@@ -177,6 +177,7 @@ private:
     bool irqEnable = false, irqActive = false, irqReloadFlag = false,
          irqCpuMode = false;
     uint8_t prescaler = 0;
+    const char* name() const override { return "Tengen RAMBO-1"; }
 };
 
 REGISTER_MAPPER(64, Mapper064)

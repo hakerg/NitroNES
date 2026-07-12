@@ -48,6 +48,7 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "Cosmo Carrier / Holy Diver. Bus conflicts."; }
 };
 
 REGISTER_MAPPER(78, Mapper078)

@@ -67,6 +67,7 @@ public:
 
 private:
     uint8_t block = 0;
+    const char* name() const override { return "MMC3 multicart (15-in-1, 3-in-1)"; }
 };
 
 REGISTER_MAPPER(205, Mapper205)

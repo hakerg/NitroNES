@@ -38,6 +38,7 @@ public:
 
 private:
     uint8_t chr0 = 0, chr1 = 4;
+    const char* name() const override { return "Sunsoft-1. Rejestr w $6000-7FFF."; }
 };
 
 REGISTER_MAPPER(184, Mapper184)

@@ -41,6 +41,7 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+    const char* name() const override { return "Jing Ke Xin Zhuan / Sheng Huo Lie Zhuan"; }
 };
 
 REGISTER_MAPPER(240, Mapper240)

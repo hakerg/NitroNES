@@ -119,6 +119,7 @@ private:
     std::array<uint8_t, 128> ram{};
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
     bool ramEnabled = false;
+    const char* name() const override { return "Taito X1-005 (Minelvaton Saga, Taito Grand Prix)"; }
 };
 
 REGISTER_MAPPER(80, Mapper080)

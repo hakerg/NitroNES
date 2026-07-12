@@ -55,6 +55,7 @@ private:
     uint8_t prgBankLo = 0, prgBankHi = 0;
     bool hasMirror = false;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+    const char* name() const override { return "Camerica / Codemasters (UNROM-podobny)"; }
 };
 
 REGISTER_MAPPER(71, Mapper071)

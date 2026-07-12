@@ -43,6 +43,7 @@ public:
 
 private:
     uint8_t prg = 0;
+    const char* name() const override { return "Sunsoft-2 (Fantasy Zone JP)"; }
 };
 
 REGISTER_MAPPER(93, Mapper093)

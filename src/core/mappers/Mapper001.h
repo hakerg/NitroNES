@@ -147,6 +147,7 @@ private:
     uint8_t controlReg = 0x1C;
     uint8_t chrBank0 = 0, chrBank1 = 0, prgBankReg = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+    const char* name() const override { return "MMC1"; }
 };
 
 REGISTER_MAPPER(1, Mapper001)

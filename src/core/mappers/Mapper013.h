@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "MapperBase.h"
 #include "MapperRegistry.h"
 
@@ -42,6 +42,7 @@ public:
 
 private:
     uint8_t chrBank = 0;
+    const char* name() const override { return "CPROM. PRG fixed 32KB, CHR-RAM 16KB; bank 4KB @ $1000."; }
 };
 
 REGISTER_MAPPER(13, Mapper013)

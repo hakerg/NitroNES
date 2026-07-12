@@ -43,6 +43,7 @@ public:
 
 private:
     uint8_t reg = 0xFF;
+    const char* name() const override { return "Final Fantasy V (pirate)"; }
 };
 
 REGISTER_MAPPER(164, Mapper164)

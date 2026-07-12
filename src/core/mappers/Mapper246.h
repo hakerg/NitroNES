@@ -57,6 +57,7 @@ public:
 private:
     std::array<uint8_t, 4> prg{};
     std::array<uint8_t, 4> chr{};
+    const char* name() const override { return "Fong Shen Bang"; }
 };
 
 REGISTER_MAPPER(246, Mapper246)

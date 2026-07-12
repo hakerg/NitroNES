@@ -39,6 +39,7 @@ public:
 
 private:
     uint8_t reg = 0;
+    const char* name() const override { return "protect. CHR enable na podstawie warto�ci w rejestrze; bus"; }
 };
 
 REGISTER_MAPPER(185, Mapper185)
