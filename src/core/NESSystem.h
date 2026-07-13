@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <array>
 #include "NESCoreBase.h"
 #include "Cartridge.h"
@@ -42,13 +42,6 @@ public:
 
     const Cartridge& getCartridge() const { return cart; }
 
-    uint8_t memPeek(uint16_t addr) override {
-        if (addr < 0x2000) return cpuRam[addr & 0x07FF];
-        if (addr < 0x4000) return ppu.cpuPeek(addr);
-        if (addr >= 0x4020) return cart.cpuRead(addr, 0x00);
-        return 0xFF;
-    }
-
 protected:
     virtual uint8_t readController(int port) = 0;
 
@@ -66,8 +59,18 @@ protected:
                         1.0 / (getCPUClockRate() * speed));
     }
 
-    uint8_t memRead(uint16_t addr) override {
+    uint8_t readMemory(uint16_t addr, MemoryReadMode mode) override {
         uint8_t data = a2a03.getBusData();
+
+        if (mode == MemoryReadMode::Peek) {
+            if (addr < 0x2000) return cpuRam[addr & 0x07FF];
+            if (addr < 0x4000) return ppu.cpuPeek(addr);
+            if (addr == 0x4015) return a2a03.getAPU().cpuPeek(addr);
+            if (addr == 0x4016) return controllerShift  & 0x01;
+            if (addr == 0x4017) return controllerShift2 & 0x01;
+            if (addr >= 0x4020) return cart.cpuRead(addr, 0x00);
+            return 0x00;
+        }
 
         const uint16_t prevAddr = lastBusReadAddr;
         lastBusReadAddr = addr;
@@ -100,19 +103,15 @@ protected:
             data = cart.cpuRead(addr, data);
         }
 
+        if (mode == MemoryReadMode::External)
+            lastBusReadAddr = prevAddr;
         return data;
     }
 
-    uint8_t memReadExternal(uint16_t addr) override {
-        const uint16_t saved = lastBusReadAddr;
-        const uint8_t data = memRead(addr);
-        lastBusReadAddr = saved;
-        return data;
-    }
-
-    void memWrite(uint16_t addr, uint8_t data) override {
+    void writeMemory(uint16_t addr, uint8_t data) override {
         if (addr < 0x2000)  { cpuRam[addr & 0x07FF] = data; return; }
         if (addr < 0x4000)  { ppu.cpuWrite(addr, data); return; }
+        if (addr >= 0x4000 && addr <= 0x4017) { a2a03.writeAPU(addr, data); return; }
         if (addr >= 0x4020) cart.cpuWrite(addr, data);
     }
 

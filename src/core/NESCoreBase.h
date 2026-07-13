@@ -10,6 +10,8 @@ enum class NESStandard { NTSC, PAL, DENDY };
 
 class NESCoreBase : public IA2A03 {
 public:
+    enum class MemoryReadMode { Cpu, External, Peek };
+
     NESStandard system = NESStandard::NTSC;
     double speed = 1.0;
     bool paused = false;
@@ -50,21 +52,21 @@ public:
     virtual uint32_t* getFramebuffer() = 0;
     virtual void setTracer(Tracer* t) { a2a03.setTracer(t); }
 
-    virtual uint8_t memPeek(uint16_t addr) = 0;
-    virtual void memWrite(uint16_t addr, uint8_t data) = 0;
+    uint8_t memPeek(uint16_t addr) { return readMemory(addr, MemoryReadMode::Peek); }
+    void memWrite(uint16_t addr, uint8_t data) { a2a03.writeExternal(addr, data); }
 
     int getCurrentScanline() {
         PPU2C02* p = getPPU();
         return p ? p->getScanline() : -1;
     }
 
-    uint8_t a2a03ReadData(uint16_t addr) override { return memRead(addr); }
-    uint8_t a2a03ReadDataExternal(uint16_t addr) override { return memReadExternal(addr); }
-    void    a2a03WriteData(uint16_t addr, uint8_t data) override { memWrite(addr, data); }
-
 protected:
-    virtual uint8_t memRead(uint16_t addr) = 0;
-    virtual uint8_t memReadExternal(uint16_t addr) = 0;
+    uint8_t a2a03ReadData(uint16_t addr) override { return readMemory(addr, MemoryReadMode::Cpu); }
+    uint8_t a2a03ReadDataExternal(uint16_t addr) override { return readMemory(addr, MemoryReadMode::External); }
+    void    a2a03WriteData(uint16_t addr, uint8_t data) override { writeMemory(addr, data); }
+
+    virtual uint8_t readMemory(uint16_t addr, MemoryReadMode mode) = 0;
+    virtual void writeMemory(uint16_t addr, uint8_t data) = 0;
 
     virtual void    clockOneCycle() = 0;
     virtual PPU2C02* getPPU() { return nullptr; }

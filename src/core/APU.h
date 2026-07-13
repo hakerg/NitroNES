@@ -623,6 +623,20 @@ public:
         return 0x00;
     }
 
+    uint8_t cpuPeek(uint16_t addr) const {
+        if (addr != 0x4015)
+            return 0x00;
+        uint8_t status = 0x00;
+        if (pulse1.lengthCounter   > 0) status |= 0x01;
+        if (pulse2.lengthCounter   > 0) status |= 0x02;
+        if (triangle.lengthCounter > 0) status |= 0x04;
+        if (noise.lengthCounter    > 0) status |= 0x08;
+        if (dmc.bytesRemaining     > 0) status |= 0x10;
+        if (frameIRQPending)            status |= 0x40;
+        if (dmc.irqPending)             status |= 0x80;
+        return status;
+    }
+
     void clock(bool isAPUCycle) {
         pulse1.tickHaltDelay();
         pulse2.tickHaltDelay();

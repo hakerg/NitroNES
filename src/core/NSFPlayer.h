@@ -199,23 +199,6 @@ public:
     uint32_t* getFramebuffer() override { return nullptr; }
     int getCompletedFramesCount() override { return completedFramesCount; }
 
-    uint8_t memPeek(uint16_t addr) override {
-        if (addr <= 0x07FF) return cpuRam[addr];
-        if (addr >= 0x2000 && addr <= 0x3FFF) return 0x80;
-        if (addr >= 0x5000 && addr <= 0x5002) return trampoline[addr - 0x5000];
-        if (addr >= 0x6000 && addr <= 0x7FFF) return extRam[addr - 0x6000];
-        if (addr >= 0x8000) {
-            if (nsfHeader.isBankswitched()) {
-                uint8_t  bankIdx = (addr - 0x8000) / 4096;
-                uint16_t offset  = (addr - 0x8000) % 4096;
-                uint32_t romAddr = (uint32_t)banks[bankIdx] * 4096 + offset;
-                return (romAddr < bankRom.size()) ? bankRom[romAddr] : 0x00;
-            }
-            return prgRom[addr - 0x8000];
-        }
-        return 0x00;
-    }
-
 protected:
     void clockOneCycle() override {
         trampolineMaintenance();
@@ -234,12 +217,15 @@ protected:
                         1.0 / (getCPUClockRate() * speed));
     }
 
-    uint8_t memReadExternal(uint16_t addr) override { return memRead(addr); }
-
-    uint8_t memRead(uint16_t addr) override {
+    uint8_t readMemory(uint16_t addr, MemoryReadMode mode) override {
         uint8_t data = a2a03.getBusData();
-        if (addr <= 0x07FF) {
-            data = cpuRam[addr];
+        if (mode == MemoryReadMode::Peek && addr == 0x4015)
+            return a2a03.getAPU().cpuPeek(addr);
+        if (mode == MemoryReadMode::Peek && (addr == 0x4016 || addr == 0x4017))
+            return 0x00;
+
+        if (addr < 0x2000) {
+            data = cpuRam[addr & 0x07FF];
         }
         else if (addr >= 0x2000 && addr <= 0x3FFF) {
             data = 0x80;
@@ -263,9 +249,10 @@ protected:
         return data;
     }
 
-    void memWrite(uint16_t addr, uint8_t data) override {
-        if (addr <= 0x07FF) { cpuRam[addr] = data; return; }
+    void writeMemory(uint16_t addr, uint8_t data) override {
+        if (addr < 0x2000) { cpuRam[addr & 0x07FF] = data; return; }
         if (addr >= 0x2000 && addr <= 0x3FFF) return;
+        if (addr >= 0x4000 && addr <= 0x4017) { a2a03.writeAPU(addr, data); return; }
         if (addr >= 0x6000 && addr <= 0x7FFF) { extRam[addr - 0x6000] = data; return; }
         if (addr >= 0x5FF8 && addr <= 0x5FFF) {
             banks[addr - 0x5FF8] = data;
