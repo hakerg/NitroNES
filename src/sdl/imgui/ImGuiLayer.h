@@ -624,6 +624,12 @@ private:
                 memBase = static_cast<uint16_t>(v & 0xFFFF);
         }
 
+        if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+            int step = -static_cast<int>(ImGui::GetIO().MouseWheel) * MEM_COLS;
+            memBase = static_cast<uint16_t>((memBase + step) & 0xFFFF);
+            std::snprintf(memAddrBuf, sizeof(memAddrBuf), "%X", memBase);
+        }
+
         for (int i = 0; i < MEM_ROWS * MEM_COLS; i++)
             memCache[i] = core.memPeek(static_cast<uint16_t>(memBase + i));
 
@@ -643,11 +649,11 @@ private:
             for (int r = 0; r < MEM_ROWS; r++) {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(std::format("{:04X} ", memBase + r * MEM_COLS).c_str());
+                ImGui::TextUnformatted(std::format("{:04X} ", (memBase + r * MEM_COLS) & 0xFFFF).c_str());
                 for (int c = 0; c < MEM_COLS; c++) {
                     ImGui::TableNextColumn();
                     int idx = r * MEM_COLS + c;
-                    auto addr = static_cast<uint16_t>(memBase + idx);
+                    auto addr = static_cast<uint16_t>((memBase + idx) & 0xFFFF);
 
                     std::snprintf(memEditBuf[idx], sizeof(memEditBuf[idx]),
                                   "%02X", memCache[idx]);
