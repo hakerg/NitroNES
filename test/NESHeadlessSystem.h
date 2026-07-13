@@ -33,12 +33,6 @@ public:
 
     uint32_t* framebuffer() { return ppu.getFramebuffer(); }
 
-    uint8_t peekCPU(uint16_t addr) {
-        if (addr < 0x2000) return cpuRam[addr & 0x07FF];
-        if (addr < 0x4000) return ppu.cpuRead(addr, true);
-        if (addr >= 0x4020) return cart.cpuRead(addr, 0x00);
-        return 0xFF;
-    }
     uint64_t  frameNo() { return (uint64_t)ppu.getCompletedFramesCount(); }
     uint64_t  cycleNo() { return a2a03.getCPU().getCycle(); }
 

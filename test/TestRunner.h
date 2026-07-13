@@ -335,7 +335,7 @@ private:
         for (uint32_t i = 0; i < len; i += 16) {
             std::printf("%04X: ", (uint16_t)(addr + i));
             for (uint32_t j = 0; j < 16 && i + j < len; ++j)
-                std::printf("%02X ", nes.peekCPU((uint16_t)(addr + i + j)));
+                std::printf("%02X ", nes.memPeek((uint16_t)(addr + i + j)));
             std::printf("\n");
         }
     }

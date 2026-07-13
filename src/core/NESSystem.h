@@ -42,6 +42,13 @@ public:
 
     const Cartridge& getCartridge() const { return cart; }
 
+    uint8_t memPeek(uint16_t addr) override {
+        if (addr < 0x2000) return cpuRam[addr & 0x07FF];
+        if (addr < 0x4000) return ppu.cpuPeek(addr);
+        if (addr >= 0x4020) return cart.cpuRead(addr, 0x00);
+        return 0xFF;
+    }
+
 protected:
     virtual uint8_t readController(int port) = 0;
 

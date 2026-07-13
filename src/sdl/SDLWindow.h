@@ -260,6 +260,12 @@ private:
         case SDL_EVENT_QUIT:
             out = {AppEventType::Quit};
             return true;
+        case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+            if (ev.window.windowID == SDL_GetWindowID(window)) {
+                out = {AppEventType::Quit};
+                return true;
+            }
+            return false;
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             out = {AppEventType::WindowResized};
             return true;

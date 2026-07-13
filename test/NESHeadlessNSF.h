@@ -16,8 +16,6 @@ public:
         tickWhile([&]{ return cycleNo() < target; });
     }
 
-    uint8_t peekCPU(uint16_t addr) { return memRead(addr); }
-
     uint64_t frameNo() { return (uint64_t)getCompletedFramesCount(); }
     uint64_t cycleNo() { return a2a03.getCPU().getCycle(); }
 

@@ -50,6 +50,9 @@ public:
     virtual uint32_t* getFramebuffer() = 0;
     virtual void setTracer(Tracer* t) { a2a03.setTracer(t); }
 
+    virtual uint8_t memPeek(uint16_t addr) = 0;
+    virtual void memWrite(uint16_t addr, uint8_t data) = 0;
+
     int getCurrentScanline() {
         PPU2C02* p = getPPU();
         return p ? p->getScanline() : -1;
@@ -61,8 +64,7 @@ public:
 
 protected:
     virtual uint8_t memRead(uint16_t addr) = 0;
-    virtual uint8_t memReadExternal(uint16_t addr) { return memRead(addr); }
-    virtual void    memWrite(uint16_t addr, uint8_t data) = 0;
+    virtual uint8_t memReadExternal(uint16_t addr) = 0;
 
     virtual void    clockOneCycle() = 0;
     virtual PPU2C02* getPPU() { return nullptr; }

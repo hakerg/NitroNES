@@ -84,13 +84,25 @@ public:
         }
     }
 
-    uint8_t cpuRead(uint16_t addr, bool readOnly = false) {
+    uint8_t cpuRead(uint16_t addr) {
         switch (addr & 0x0007) {
         case 0: case 1: case 3: case 5: case 6:
             return ppuOpenBus;
-        case 2: return readStatus(readOnly);
-        case 4: return readOAMData(readOnly);
-        case 7: return readPPUData(readOnly);
+        case 2: return readStatus();
+        case 4: return readOAMData();
+        case 7: return readPPUData();
+        default: break;
+        }
+        return ppuOpenBus;
+    }
+
+    uint8_t cpuPeek(uint16_t addr) {
+        switch (addr & 0x0007) {
+        case 0: case 1: case 3: case 5: case 6:
+            return ppuOpenBus;
+        case 2: return peekStatus();
+        case 4: return peekOAMData();
+        case 7: return peekPPUData();
         default: break;
         }
         return ppuOpenBus;
@@ -376,40 +388,55 @@ private:
         ppuOpenBus = (ppuOpenBus & ~maskBits) | (value & maskBits);
     }
 
-    uint8_t readStatus(bool readOnly) {
+    uint8_t readStatus() {
         uint8_t ppuBits = status.reg & 0xE0;
         uint8_t data = ppuBits | (ppuOpenBus & 0x1F);
-        if (!readOnly) {
-            if (scanline == 241) {
-                if (cycle == 1) {
-                    suppressVblThisFrame = true;
-                }
-                if (cycle == 1 || cycle == 2 || cycle == 3) {
-                    nmiCycleLatch = false;
-                }
+        if (scanline == 241) {
+            if (cycle == 1) {
+                suppressVblThisFrame = true;
             }
-            status.verticalBlank = 0;
-            nmiVbl = false;
-            addressLatch = 0;
-            refreshOpenBus(0xE0, ppuBits);
+            if (cycle == 1 || cycle == 2 || cycle == 3) {
+                nmiCycleLatch = false;
+            }
         }
+        status.verticalBlank = 0;
+        nmiVbl = false;
+        addressLatch = 0;
+        refreshOpenBus(0xE0, ppuBits);
         return data;
     }
 
-    uint8_t readOAMData(bool readOnly) {
+    uint8_t peekStatus() {
+        uint8_t ppuBits = status.reg & 0xE0;
+        return ppuBits | (ppuOpenBus & 0x1F);
+    }
+
+    uint8_t readOAMData() {
         if (renderingEnabled() && scanline <= 239) {
             if ((cycle >= 1 && cycle <= 64) || (cycle >= 257 && cycle <= 320)) {
-                if (!readOnly) refreshOpenBus(0xFF, 0xFF);
+                refreshOpenBus(0xFF, 0xFF);
                 return 0xFF;
             }
             if (cycle >= 65 && cycle <= 256) {
-                if (!readOnly) refreshOpenBus(0xFF, oamDataBuffer);
+                refreshOpenBus(0xFF, oamDataBuffer);
                 return oamDataBuffer;
             }
         }
         uint8_t data = OAM[oamAddr];
         if ((oamAddr & 0x03) == 0x02) data &= 0xE3;
-        if (!readOnly) refreshOpenBus(0xFF, data);
+        refreshOpenBus(0xFF, data);
+        return data;
+    }
+
+    uint8_t peekOAMData() {
+        if (renderingEnabled() && scanline <= 239) {
+            if ((cycle >= 1 && cycle <= 64) || (cycle >= 257 && cycle <= 320))
+                return 0xFF;
+            if (cycle >= 65 && cycle <= 256)
+                return oamDataBuffer;
+        }
+        uint8_t data = OAM[oamAddr];
+        if ((oamAddr & 0x03) == 0x02) data &= 0xE3;
         return data;
     }
 
@@ -447,25 +474,32 @@ private:
         oamEvalAddr += row >= 0 && row < (ctrl.spriteSize ? 16 : 8) ? 4 : 5;
     }
 
-    uint8_t readPPUData(bool readOnly) {
+    uint8_t readPPUData() {
         const uint16_t busAddr = vramAddr.reg & 0x3FFF;
         uint8_t data;
         if (busAddr >= 0x3F00) {
             uint8_t pal = ppuRead(busAddr) & 0x3F;
             data = (ppuOpenBus & 0xC0) | pal;
-            if (!readOnly) refreshOpenBus(0x3F, pal);
+            refreshOpenBus(0x3F, pal);
         } else {
             data = ppuDataBuffer;
-            if (!readOnly) refreshOpenBus(0xFF, data);
+            refreshOpenBus(0xFF, data);
         }
-        if (!readOnly) {
-            ppuDataReadPendingAddr = busAddr >= 0x3F00 ? busAddr & 0x2FFF : busAddr;
-            ppuDataReadPending = true;
-            drivePpuAddress();
-            incrementVramAddr();
-            drivePpuAddress();
-        }
+        ppuDataReadPendingAddr = busAddr >= 0x3F00 ? busAddr & 0x2FFF : busAddr;
+        ppuDataReadPending = true;
+        drivePpuAddress();
+        incrementVramAddr();
+        drivePpuAddress();
         return data;
+    }
+
+    uint8_t peekPPUData() {
+        const uint16_t busAddr = vramAddr.reg & 0x3FFF;
+        if (busAddr >= 0x3F00) {
+            uint8_t pal = ppuRead(busAddr) & 0x3F;
+            return (ppuOpenBus & 0xC0) | pal;
+        }
+        return ppuDataBuffer;
     }
 
     void backgroundFetchPhase() {

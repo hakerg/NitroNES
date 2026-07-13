@@ -12,6 +12,7 @@
 #include <SDL3/SDL_gpu.h>
 #include <format>
 #include <string>
+#include <charconv>
 
 class ImGuiLayer {
 public:
@@ -31,14 +32,14 @@ public:
         initInfo.PresentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
         ImGui_ImplSDLGPU3_Init(&initInfo);
 
-        ImVec4 black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-        ImVec4 grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
+        auto black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+        auto grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
 
-        ImVec4 darkBlue = ImVec4(0.0f/255.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
-        ImVec4 blue = ImVec4(24.0f/255.0f, 80.0f/255.0f, 199.0f/255.0f, 1.0f);
-        ImVec4 lightBlue = ImVec4(104.0f/255.0f, 166.0f/255.0f, 1.0f, 1.0f);
+        auto darkBlue = ImVec4(0.0f/255.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
+        auto blue = ImVec4(24.0f/255.0f, 80.0f/255.0f, 199.0f/255.0f, 1.0f);
+        auto lightBlue = ImVec4(104.0f/255.0f, 166.0f/255.0f, 1.0f, 1.0f);
 
-        ImVec4 transparent = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        auto transparent = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 
         ImGuiStyle& style = ImGui::GetStyle();
         float scale = 2.0f;
@@ -95,6 +96,8 @@ public:
         style.Colors[ImGuiCol_CheckMark] = lightBlue;
 
         style.Colors[ImGuiCol_TableHeaderBg] = transparent;
+        style.Colors[ImGuiCol_TableRowBg] = grey;
+        style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(106.0f/255.0f, 109.0f/255.0f, 106.0f/255.0f, 1.0f);
 
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
@@ -124,37 +127,31 @@ public:
     bool processEvent(const SDL_Event *ev) {
         ImGui_ImplSDL3_ProcessEvent(ev);
 
+        if (!imguiFocused)
+            return false;
+
         if (waitingForKey) {
             if (ev->type == SDL_EVENT_KEY_DOWN && !ev->key.repeat) {
                 SDL_Scancode sc = ev->key.scancode;
-                if (KeyChord::isModifierScancode(sc))
-                    return true;
-                assignWaitingKey(sc, ev->key.mod);
+                if (!KeyChord::isModifierScancode(sc))
+                    assignWaitingKey(sc, ev->key.mod);
                 return true;
             }
-            if (ev->type == SDL_EVENT_KEY_UP) {
-                SDL_Scancode sc = ev->key.scancode;
-                if (KeyChord::isModifierScancode(sc)) {
-                    assignWaitingKey(sc, SDL_KMOD_NONE);
-                    return true;
-                }
+            if (ev->type == SDL_EVENT_KEY_UP &&
+                KeyChord::isModifierScancode(ev->key.scancode)) {
+                assignWaitingKey(ev->key.scancode, SDL_KMOD_NONE);
+                return true;
             }
-            return true;
         }
 
-        ImGuiIO &io = ImGui::GetIO();
-        if (io.WantCaptureMouse && (
-            ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+        if (ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
             ev->type == SDL_EVENT_MOUSE_BUTTON_UP ||
-            ev->type == SDL_EVENT_MOUSE_WHEEL)) {
-            return true;
-            }
-        if (io.WantCaptureKeyboard && (
+            ev->type == SDL_EVENT_MOUSE_WHEEL ||
             ev->type == SDL_EVENT_KEY_DOWN ||
             ev->type == SDL_EVENT_KEY_UP ||
-            ev->type == SDL_EVENT_TEXT_INPUT)) {
+            ev->type == SDL_EVENT_TEXT_INPUT) {
             return true;
-            }
+        }
 
         return false;
     }
@@ -163,7 +160,7 @@ public:
 
     void render(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *swapchain, IFileSession *session) {
         if (input)
-            input->setInputBlocked(controlsOpen);
+            input->setInputBlocked(imguiFocused);
 
         NESCoreBase *core = session ? &session->getCore() : nullptr;
 
@@ -200,8 +197,10 @@ public:
 
                     if (ImGui::BeginMenu(tr("tools"))) {
                         menuOpen = true;
-                        if (session && ImGui::MenuItem(tr("tools.about_file")))
+                        if (ImGui::MenuItem(tr("tools.about_file")))
                             aboutFileOpen = true;
+                        if (ImGui::MenuItem(tr("tools.memory_viewer")))
+                            memoryViewerOpen = true;
                         ImGui::EndMenu();
                     }
 
@@ -212,8 +211,8 @@ public:
             if (settings && ImGui::BeginMenu(tr("settings"))) {
                 menuOpen = true;
                 if (ImGui::BeginMenu(tr("settings.language"))) {
-                    auto &reg = LanguageRegistry::instance();
-                    for (auto &[code, lang] : reg.languages()) {
+                    for (auto &reg = LanguageRegistry::instance();
+                         auto &[code, lang] : reg.languages()) {
                         if (ImGui::RadioButton(lang->getName(),
                                                reg.getCurrentCode() == code))
                             reg.setCode(code);
@@ -242,6 +241,11 @@ public:
         renderAudioWindow();
         renderControlsWindow();
         renderAboutFileWindow(session);
+        renderMemoryViewerWindow(session);
+
+        imguiFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow) ||
+                       ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) ||
+                       waitingForKey;
 
         ImGui::Render();
         ImGui_ImplSDLGPU3_PrepareDrawData(ImGui::GetDrawData(), cmd);
@@ -257,7 +261,7 @@ public:
         }
     }
 
-    void renderPlatformWindows() {
+    static void renderPlatformWindows() {
         if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
@@ -299,7 +303,7 @@ private:
         return appBinding(index - 20);
     }
 
-    Binding controllerBinding(ControllerSettings &s, int index) {
+    static Binding controllerBinding(ControllerSettings &s, int index) {
         switch (index) {
         case 0: return {"A", &s.key_A, AppKey::Unknown};
         case 1: return {"B", &s.key_B, AppKey::Unknown};
@@ -315,7 +319,7 @@ private:
         }
     }
 
-    Binding appBinding(int index) {
+    static Binding appBinding(int index) {
         switch (index) {
         case 0: return {"controls.pause", nullptr, AppKey::Pause};
         case 1: return {"controls.fullscreen", nullptr, AppKey::FullScreen};
@@ -396,15 +400,22 @@ private:
         }
     }
 
-    void spacing() {
+    static void spacing() {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImGui::GetStyle().ItemInnerSpacing);
         ImGui::Spacing();
         ImGui::PopStyleVar();
     }
 
-    bool button(const char* text) {
+    static bool button(const char* text) {
         ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, ImGui::GetStyle().ItemInnerSpacing.x);
         bool res = ImGui::Button(text);
+        ImGui::PopStyleVar();
+        return res;
+    }
+
+    static bool inputText(const char *label, char *buf, size_t bufSize, ImGuiInputTextFlags flags = 0) {
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+        bool res = ImGui::InputText(label, buf, bufSize, flags);
         ImGui::PopStyleVar();
         return res;
     }
@@ -467,11 +478,16 @@ private:
 
         spacing();
 
-        if (ImGui::BeginTable(nameId, 3, ImGuiTableFlags_None)) {
+        if (ImGui::BeginTable(nameId, 3, TABLE_FLAGS)) {
             ImGui::TableSetupColumn(tr("controls.action"));
             ImGui::TableSetupColumn(tr("controls.key"));
             ImGui::TableSetupColumn("");
-            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(tr("controls.action"));
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(tr("controls.key"));
+            ImGui::TableNextColumn();
             for (int i = 0; i < count; i++)
                 renderBindingRow(begin + i);
             ImGui::EndTable();
@@ -589,7 +605,71 @@ private:
         ImGui::End();
     }
 
-    void addTooltipToLastItem(const char *text) {
+    void renderMemoryViewerWindow(IFileSession *session) {
+        if (!memoryViewerOpen || !session)
+            return;
+        menuOpen = true;
+        if (!ImGui::Begin(tr("tools.memory_viewer"), &memoryViewerOpen, WINDOW_FLAGS)) {
+            ImGui::End();
+            return;
+        }
+
+        NESCoreBase &core = session->getCore();
+
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("FFFF ").x);
+        if (inputText(tr("tools.memory_viewer.address"), memAddrBuf,
+                      sizeof(memAddrBuf), HEX_INPUT_FLAGS)) {
+            if (uint32_t v = 0;
+                std::from_chars(memAddrBuf, memAddrBuf + strlen(memAddrBuf), v, 16).ec == std::errc())
+                memBase = static_cast<uint16_t>(v & 0xFFFF);
+        }
+
+        for (int i = 0; i < MEM_ROWS * MEM_COLS; i++)
+            memCache[i] = core.memPeek(static_cast<uint16_t>(memBase + i));
+
+        ImGui::PushStyleVarX(ImGuiStyleVar_CellPadding, 0);
+
+        if (ImGui::BeginTable("memview", MEM_COLS + 1, TABLE_FLAGS)) {
+            ImGui::TableSetupColumn("");
+            for (int c = 0; c < MEM_COLS; c++)
+                ImGui::TableSetupColumn(std::format("{:X}", c).c_str());
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            for (int c = 0; c < MEM_COLS; c++) {
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(std::format("{:X}", c).c_str());
+            }
+            for (int r = 0; r < MEM_ROWS; r++) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(std::format("{:04X} ", memBase + r * MEM_COLS).c_str());
+                for (int c = 0; c < MEM_COLS; c++) {
+                    ImGui::TableNextColumn();
+                    int idx = r * MEM_COLS + c;
+                    auto addr = static_cast<uint16_t>(memBase + idx);
+
+                    std::snprintf(memEditBuf[idx], sizeof(memEditBuf[idx]),
+                                  "%02X", memCache[idx]);
+                    ImGui::SetNextItemWidth(ImGui::CalcTextSize("FF ").x);
+                    if (inputText(std::format("##mem{}", idx).c_str(), memEditBuf[idx],
+                                  sizeof(memEditBuf[idx]), HEX_INPUT_FLAGS)) {
+                        if (uint32_t v = 0;
+                            std::from_chars(memEditBuf[idx],
+                                            memEditBuf[idx] + strlen(memEditBuf[idx]), v, 16).ec == std::errc())
+                            core.memWrite(addr, static_cast<uint8_t>(v & 0xFF));
+                    }
+                }
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::PopStyleVar();
+
+        ImGui::End();
+    }
+
+    static void addTooltipToLastItem(const char *text) {
         if (!ImGui::IsItemHovered()) return;
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetIO().DisplaySize.x);
@@ -599,6 +679,13 @@ private:
     }
 
     static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
+    static constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_RowBg;
+    static constexpr ImGuiInputTextFlags HEX_INPUT_FLAGS =
+        ImGuiInputTextFlags_CharsHexadecimal |
+        ImGuiInputTextFlags_CharsUppercase |
+        ImGuiInputTextFlags_CharsNoBlank |
+        ImGuiInputTextFlags_EnterReturnsTrue |
+        ImGuiInputTextFlags_AutoSelectAll;
 
     SDL_Window *window = nullptr;
     SDL_GPUDevice *gpuDevice = nullptr;
@@ -611,10 +698,21 @@ private:
     bool syncSettingsOpen = false;
     bool audioSettingsOpen = false;
     bool aboutFileOpen = false;
+    bool memoryViewerOpen = false;
 
-    bool waitingForKey = false;
+    static constexpr int MEM_ROWS = 16;
+    static constexpr int MEM_COLS = 16;
+    uint16_t memBase = 0x0000;
+    char memAddrBuf[8] = "0";
+    uint8_t memCache[MEM_ROWS * MEM_COLS] = {};
+    char memEditBuf[MEM_ROWS * MEM_COLS][4] = {};
+
     bool bindAll = false;
     int bindingIndex = 0;
     int bindSectionBegin = 0;
     int bindSectionEnd = 0;
+
+    bool waitingForKey = false;
+
+    bool imguiFocused = false;
 };
