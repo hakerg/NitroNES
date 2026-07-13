@@ -621,13 +621,12 @@ private:
                       sizeof(memAddrBuf), HEX_INPUT_FLAGS)) {
             if (uint32_t v = 0;
                 std::from_chars(memAddrBuf, memAddrBuf + strlen(memAddrBuf), v, 16).ec == std::errc())
-                memBase = static_cast<uint16_t>(v & 0xFFFF);
+                setMemAddr(static_cast<uint16_t>(v & 0xFFFF));
         }
 
         if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
             int step = -static_cast<int>(ImGui::GetIO().MouseWheel) * MEM_COLS;
-            memBase = static_cast<uint16_t>((memBase + step) & 0xFFFF);
-            std::snprintf(memAddrBuf, sizeof(memAddrBuf), "%X", memBase);
+            setMemAddr(static_cast<uint16_t>((memBase + step) & 0xFFFF));
         }
 
         for (int i = 0; i < MEM_ROWS * MEM_COLS; i++)
@@ -675,6 +674,11 @@ private:
         ImGui::End();
     }
 
+    void setMemAddr(uint16_t addr) {
+        memBase = addr;
+        std::snprintf(memAddrBuf, sizeof(memAddrBuf), "%04X", memBase);
+    }
+
     static void addTooltipToLastItem(const char *text) {
         if (!ImGui::IsItemHovered()) return;
         ImGui::BeginTooltip();
@@ -709,7 +713,7 @@ private:
     static constexpr int MEM_ROWS = 16;
     static constexpr int MEM_COLS = 16;
     uint16_t memBase = 0x0000;
-    char memAddrBuf[8] = "0";
+    char memAddrBuf[5] = "0000";
     uint8_t memCache[MEM_ROWS * MEM_COLS] = {};
     char memEditBuf[MEM_ROWS * MEM_COLS][4] = {};
 
