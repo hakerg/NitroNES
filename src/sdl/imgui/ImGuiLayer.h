@@ -632,6 +632,8 @@ private:
             setMemAddr(static_cast<uint16_t>((memBase + step) & 0xFFFF));
         }
 
+        spacing();
+
         for (int i = 0; i < MEM_ROWS * MEM_COLS; i++)
             memCache[i] = core.memPeek(static_cast<uint16_t>(memBase + i));
 
