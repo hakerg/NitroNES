@@ -2,9 +2,6 @@
 
 struct AudioSettings {
     float volume = 1.5f;
-    bool useFilter90 = false;
-    bool useFilter440 = false;
-    bool useFilter14k = false;
-    bool reduceClicks = false;
+    bool useFilters = false;
     float pitch = 1.0f;
 };

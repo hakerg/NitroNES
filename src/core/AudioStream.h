@@ -78,9 +78,11 @@ private:
 
         float y = blipRunningSum;
         y = hpf01.process(y);
-        if (settings.useFilter90) y = hpf90.process(y);
-        if (settings.useFilter440) y = hpf440.process(y);
-        if (settings.useFilter14k) y = lpf14k.process(y);
+        if (settings.useFilters) {
+            y = hpf90.process(y);
+            y = hpf440.process(y);
+            y = lpf14k.process(y);
+        }
         y *= settings.volume;
         submitSample(y);
 

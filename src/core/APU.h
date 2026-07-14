@@ -104,7 +104,7 @@ struct PulseChannel {
             }
         }
 
-        if (!settings.reduceClicks) dutyPos = 0;
+        dutyPos = 0;
         envStart = true;
     }
 

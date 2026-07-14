@@ -555,18 +555,8 @@ private:
 
         spacing();
 
-        ImGui::Checkbox(tr("settings.audio.reduce_clicks"), &audioSettings.reduceClicks);
         ImGui::Checkbox(tr("settings.audio.adjust_pitch"), &settings->adjustPitch);
-
-        spacing();
-
-        if (ImGui::CollapsingHeader(tr("settings.audio.filters"))) {
-            spacing();
-
-            ImGui::Checkbox(tr("settings.audio.hp90"), &audioSettings.useFilter90);
-            ImGui::Checkbox(tr("settings.audio.hp440"), &audioSettings.useFilter440);
-            ImGui::Checkbox(tr("settings.audio.lp14k"), &audioSettings.useFilter14k);
-        }
+        ImGui::Checkbox(tr("settings.audio.use_filters"), &audioSettings.useFilters);
 
         ImGui::End();
     }

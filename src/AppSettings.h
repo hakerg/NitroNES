@@ -85,10 +85,7 @@ private:
         f("scanlineBufferMs", scanlineBufferMs);
         f("language", language);
         f("audio.volume", audioSettings.volume);
-        f("audio.filter90", audioSettings.useFilter90);
-        f("audio.filter440", audioSettings.useFilter440);
-        f("audio.filter14k", audioSettings.useFilter14k);
-        f("audio.reduceClicks", audioSettings.reduceClicks);
+        f("audio.useFilters", audioSettings.useFilters);
         f("audio.adjustPitch", adjustPitch);
         f("speed", speed);
         f("speed1", speed1);
