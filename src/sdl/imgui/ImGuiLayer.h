@@ -176,8 +176,6 @@ public:
         ImGui::PushStyleVarY(ImGuiStyleVar_WindowPadding, 0);
 
         if (handler->isMenuVisible() && ImGui::BeginMainMenuBar()) {
-            ImGui::SetCursorPosX(0.0f);
-
             if (ImGui::BeginMenu(tr("file"))) {
                 menuOpen = true;
                 if (ImGui::MenuItem(tr("file.open")))
@@ -659,8 +657,7 @@ private:
                     int idx = r * MEM_COLS + c;
                     auto addr = static_cast<uint16_t>((memBase + idx) & 0xFFFF);
 
-                    std::snprintf(memEditBuf[idx], sizeof(memEditBuf[idx]),
-                                  "%02X", memCache[idx]);
+                    std::snprintf(memEditBuf[idx], sizeof(memEditBuf[idx]), "%02X", memCache[idx]);
                     ImGui::SetNextItemWidth(ImGui::CalcTextSize("FF ").x);
 
                     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
