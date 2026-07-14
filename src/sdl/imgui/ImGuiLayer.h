@@ -34,6 +34,7 @@ public:
 
         auto black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
         auto grey = ImVec4(74.0f/255.0f, 77.0f/255.0f, 74.0f/255.0f, 1.0f);
+        auto lightGrey = ImVec4(106.0f/255.0f, 109.0f/255.0f, 106.0f/255.0f, 1.0f);
 
         auto darkBlue = ImVec4(0.0f/255.0f, 19.0f/255.0f, 128.0f/255.0f, 1.0f);
         auto blue = ImVec4(24.0f/255.0f, 80.0f/255.0f, 199.0f/255.0f, 1.0f);
@@ -97,7 +98,9 @@ public:
 
         style.Colors[ImGuiCol_TableHeaderBg] = transparent;
         style.Colors[ImGuiCol_TableRowBg] = grey;
-        style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(106.0f/255.0f, 109.0f/255.0f, 106.0f/255.0f, 1.0f);
+        style.Colors[ImGuiCol_TableRowBgAlt] = lightGrey;
+
+        style.Colors[ImGuiCol_TextSelectedBg] = lightBlue;
 
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
@@ -657,6 +660,9 @@ private:
                     std::snprintf(memEditBuf[idx], sizeof(memEditBuf[idx]),
                                   "%02X", memCache[idx]);
                     ImGui::SetNextItemWidth(ImGui::CalcTextSize("FF ").x);
+
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+
                     if (inputText(std::format("##mem{}", idx).c_str(), memEditBuf[idx],
                                   sizeof(memEditBuf[idx]), HEX_INPUT_FLAGS)) {
                         if (uint32_t v = 0;
@@ -664,6 +670,8 @@ private:
                                             memEditBuf[idx] + strlen(memEditBuf[idx]), v, 16).ec == std::errc())
                             core.memWrite(addr, static_cast<uint8_t>(v & 0xFF));
                     }
+
+                    ImGui::PopStyleColor();
                 }
             }
             ImGui::EndTable();
