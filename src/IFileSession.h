@@ -64,10 +64,12 @@ public:
 
         if (canUseScanlineSync(baseSpeed) == CanUseScanlineSyncResult::Success) {
             if (baseSpeed < 2) window.delay(1);
+            window.pumpEvents();
             nextFrameTime = high_resolution_clock::now();
             syncScanline();
         } else {
             waitUntilNextFrameTime(baseSpeed);
+            window.pumpEvents();
             core.tickFrame();
         }
     }

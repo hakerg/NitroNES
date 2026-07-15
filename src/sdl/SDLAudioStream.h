@@ -8,7 +8,7 @@
 class SDLAudioStream : public AppAudioStream {
 public:
     explicit SDLAudioStream(AppSettings &settings)
-        : AppAudioStream(settings.audioSettings), settings(settings) {
+        : AppAudioStream(settings.audioSettings) {
         if (!open())
             std::cerr << "[Audio] Ostrzezenie: brak audio\n";
     }
@@ -19,17 +19,24 @@ public:
     SDL_AudioStream* getSDLStream() const { return sdlStream; }
 
     int getQueuedMs() override {
+        if (!isOpen() || nativeSpec.freq <= 0)
+            return 0;
         int queuedBytes = SDL_GetAudioStreamQueued(sdlStream);
-        int bytesPerMs = nativeSpec.freq * nativeSpec.channels * SDL_AUDIO_BYTESIZE(nativeSpec.format) / 1000;
-        return queuedBytes / bytesPerMs;
+        if (queuedBytes < 0)
+            return 0;
+        return static_cast<int>(static_cast<int64_t>(queuedBytes) * 1000 /
+                                (nativeSpec.freq * CHANNELS * sizeof(float)));
     }
 
 protected:
     void submitSample(float sample) override {
+        if (!isOpen())
+            return;
         outBuf.push_back(sample);
         if (outBuf.size() >= batchSize) {
-            SDL_PutAudioStreamData(sdlStream, outBuf.data(),
-                (int)(outBuf.size() * sizeof(float)));
+            if (!SDL_PutAudioStreamData(sdlStream, outBuf.data(),
+                                       (int)(outBuf.size() * sizeof(float))))
+                std::cerr << "[Audio] Blad zapisu do streamu: " << SDL_GetError() << "\n";
             outBuf.clear();
         }
     }
@@ -91,6 +98,7 @@ private:
         }
 
         batchSize = nativeSpec.freq / 1000;
+        outBuf.reserve(batchSize);
         init(nativeSpec.freq);
         return true;
     }
@@ -112,5 +120,4 @@ private:
     std::vector<float> outBuf;
     SDL_AudioSpec nativeSpec{};
     int batchSize = 1;
-    AppSettings& settings;
 };

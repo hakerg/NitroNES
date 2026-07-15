@@ -87,6 +87,8 @@ public:
         return false;
     }
 
+    void pumpEvents() override { SDL_PumpEvents(); }
+
     void showCursor(bool visible) override {
         if (visible)
             SDL_ShowCursor();

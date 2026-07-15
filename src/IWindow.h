@@ -14,6 +14,7 @@ public:
     virtual ~IWindow() = default;
 
     virtual bool pollEvent(AppEvent &out) = 0;
+    virtual void pumpEvents() = 0;
     virtual void showCursor(bool visible) = 0;
     virtual void toggleFullscreen() = 0;
     virtual bool isFullscreen() const = 0;
