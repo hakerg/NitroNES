@@ -3,8 +3,6 @@
 #include "CPU6502.h"
 #include "DMA.h"
 
-class NESCoreBase;
-
 class IA2A03 {
 public:
     virtual ~IA2A03() = default;
@@ -60,8 +58,6 @@ public:
     DMA& getDMA() { return dma; }
     uint8_t getBusData() { return busData; }
 
-    void writeAPU(uint16_t addr, uint8_t data) { apu.writeData(addr, data, isAPUPutCycle); }
-
     void setTracer(Tracer* t) { cpu.setTracer(t); dma.setTracer(t); apu.setTracer(t); }
 
     uint8_t cpuReadData() override {
@@ -90,15 +86,7 @@ public:
     }
 
     void loadDMCSample(uint8_t data) override { apu.loadDMCSample(data); }
-
-private:
-    friend class NESCoreBase;
-
     uint16_t getAddr() { return dma.overridesAddr() ? dma.getAddr() : cpu.getAddr(); }
-
-    void writeExternal(uint16_t addr, uint8_t data) {
-        writeData(addr, data);
-    }
 
     uint8_t readData() {
         if (dma.overridesAddr()) return readDMA();
@@ -145,12 +133,9 @@ private:
     }
 
     void writeData(uint8_t data) {
-        writeData(getAddr(), data);
-    }
-
-    void writeData(uint16_t addr, uint8_t data) {
         busData = data;
         internalBus = data;
+        uint16_t addr = getAddr();
 
         core.a2a03WriteData(addr, data);
 
@@ -160,9 +145,12 @@ private:
 
         if (addr == 0x4014) {
             dma.write4014(data);
+        } else if (addr >= 0x4000 && addr <= 0x4017) {
+            apu.writeData(addr, data, isAPUPutCycle);
         }
     }
 
+private:
     CPU6502 cpu;
     APU apu;
     DMA dma;
