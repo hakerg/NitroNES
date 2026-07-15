@@ -51,7 +51,7 @@ public:
     virtual void setTracer(Tracer* t) { a2a03.setTracer(t); }
 
     virtual uint8_t peekMemory(uint16_t addr) = 0;
-    void writeMemory(uint16_t addr, uint8_t data) { a2a03.writeExternal(addr, data); }
+    void writeMemory(uint16_t addr, uint8_t data) { a2a03.writeData(addr, data); }
 
     int getCurrentScanline() {
         PPU2C02* p = getPPU();
