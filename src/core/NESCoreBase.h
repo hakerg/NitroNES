@@ -50,21 +50,22 @@ public:
     virtual uint32_t* getFramebuffer() = 0;
     virtual void setTracer(Tracer* t) { a2a03.setTracer(t); }
 
-    virtual uint8_t memPeek(uint16_t addr) = 0;
-    virtual void memWrite(uint16_t addr, uint8_t data) = 0;
+    virtual uint8_t peekMemory(uint16_t addr) = 0;
+    void writeMemory(uint16_t addr, uint8_t data) { a2a03.writeExternal(addr, data); }
 
     int getCurrentScanline() {
         PPU2C02* p = getPPU();
         return p ? p->getScanline() : -1;
     }
 
-    uint8_t a2a03ReadData(uint16_t addr) override { return memRead(addr); }
-    uint8_t a2a03ReadDataExternal(uint16_t addr) override { return memReadExternal(addr); }
-    void    a2a03WriteData(uint16_t addr, uint8_t data) override { memWrite(addr, data); }
+    uint8_t a2a03ReadData(uint16_t addr) override { return readMemory(addr); }
+    uint8_t a2a03ReadDataExternal(uint16_t addr) override { return readMemoryExternal(addr); }
+    void    a2a03WriteData(uint16_t addr, uint8_t data) override { writeMemoryMapped(addr, data); }
 
 protected:
-    virtual uint8_t memRead(uint16_t addr) = 0;
-    virtual uint8_t memReadExternal(uint16_t addr) = 0;
+    virtual uint8_t readMemory(uint16_t addr) = 0;
+    virtual uint8_t readMemoryExternal(uint16_t addr) = 0;
+    virtual void writeMemoryMapped(uint16_t addr, uint8_t data) = 0;
 
     virtual void    clockOneCycle() = 0;
     virtual PPU2C02* getPPU() { return nullptr; }

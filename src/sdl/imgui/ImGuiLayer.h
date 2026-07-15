@@ -623,7 +623,7 @@ private:
         spacing();
 
         for (int i = 0; i < MEM_ROWS * MEM_COLS; i++)
-            memCache[i] = core.memPeek(static_cast<uint16_t>(memBase + i));
+            memCache[i] = core.peekMemory(static_cast<uint16_t>(memBase + i));
 
         ImGui::PushStyleVarX(ImGuiStyleVar_CellPadding, 0);
 
@@ -657,7 +657,7 @@ private:
                         if (uint32_t v = 0;
                             std::from_chars(memEditBuf[idx],
                                             memEditBuf[idx] + strlen(memEditBuf[idx]), v, 16).ec == std::errc())
-                            core.memWrite(addr, static_cast<uint8_t>(v & 0xFF));
+                            core.writeMemory(addr, static_cast<uint8_t>(v & 0xFF));
                     }
 
                     ImGui::PopStyleColor();

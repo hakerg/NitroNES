@@ -63,7 +63,7 @@ public:
         }
 
         if (canUseScanlineSync(baseSpeed) == CanUseScanlineSyncResult::Success) {
-            window.delay(1);
+            if (baseSpeed < 2) window.delay(1);
             nextFrameTime = high_resolution_clock::now();
             syncScanline();
         } else {

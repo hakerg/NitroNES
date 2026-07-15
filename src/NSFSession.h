@@ -29,8 +29,8 @@ public:
     std::string getInfo() override {
         const NSFHeader &h = header();
         std::string chips;
-        if (h.extraChipFlags & 0x01) chips += "VRCVI ";
-        if (h.extraChipFlags & 0x02) chips += "VRCVII ";
+        if (h.extraChipFlags & 0x01) chips += "VRC6 ";
+        if (h.extraChipFlags & 0x02) chips += "VRC7 ";
         if (h.extraChipFlags & 0x04) chips += "FDS ";
         if (h.extraChipFlags & 0x08) chips += "MMC5 ";
         if (h.extraChipFlags & 0x10) chips += "Namco 106 ";

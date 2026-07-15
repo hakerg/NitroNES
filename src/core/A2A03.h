@@ -3,6 +3,8 @@
 #include "CPU6502.h"
 #include "DMA.h"
 
+class NESCoreBase;
+
 class IA2A03 {
 public:
     virtual ~IA2A03() = default;
@@ -133,9 +135,12 @@ public:
     }
 
     void writeData(uint8_t data) {
+        writeData(getAddr(), data);
+    }
+
+    void writeData(uint16_t addr, uint8_t data) {
         busData = data;
         internalBus = data;
-        uint16_t addr = getAddr();
 
         core.a2a03WriteData(addr, data);
 
@@ -151,6 +156,12 @@ public:
     }
 
 private:
+    friend class NESCoreBase;
+
+    void writeExternal(uint16_t addr, uint8_t data) {
+        writeData(addr, data);
+    }
+
     CPU6502 cpu;
     APU apu;
     DMA dma;
