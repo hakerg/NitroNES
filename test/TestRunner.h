@@ -203,9 +203,16 @@ private:
             printMem((uint16_t)parseInt(parts[1]), parseInt(parts[2]));
             return true;
         }
-        if (head == "screen" && parts.size() <= 2) {
-            printScreen(parts.size() == 2 && parts[1] == "ascii");
-            return true;
+        if (head == "screen") {
+            if (parts.size() == 1) {
+                printScreen(false, 0);
+                return true;
+            }
+            if ((parts.size() == 2 || parts.size() == 3) && parts[1] == "ascii") {
+                printScreen(true, parts.size() == 3 ? parseInt(parts[2]) : 0);
+                return true;
+            }
+            return false;
         }
         if (head == "pixels" && parts.size() == 5) {
             printPixels((int)parseInt(parts[1]), (int)parseInt(parts[2]),
@@ -245,6 +252,10 @@ private:
             if (any() && !traceFp) openTrace();
             return true;
         }
+        if (head == "ac" && parts.size() == 3) {
+            navigateAccuracyCoin((int)parseInt(parts[1]), (int)parseInt(parts[2]));
+            return true;
+        }
         return false;
     }
 
@@ -262,19 +273,20 @@ private:
     }
 
     // memory / screen --------------------------------------------------------
-    void printScreen(bool ascii) {
+    void printScreen(bool ascii, uint32_t asciiOffset) {
         if constexpr (requires { nes.dumpNametable((uint8_t*)nullptr, 0); }) {
             uint8_t tiles[960]{};
             nes.dumpNametable(tiles, 0);
             std::cout << "---- screen (NT0) frame=" << nes.frameNo()
                       << " cyc=" << nes.cycleNo()
-                      << (ascii ? " ascii" : " hex") << " ----\n";
+                      << (ascii ? " ascii offset=" + std::to_string(asciiOffset) : " hex") << " ----\n";
             for (int row = 0; row < 30; ++row) {
                 std::string line;
                 for (int col = 0; col < 32; ++col) {
                     uint8_t t = tiles[row * 32 + col];
                     if (ascii) {
-                        line += (t >= 0x20 && t <= 0x7E) ? char(t) : ' ';
+                        uint32_t c = t + asciiOffset;
+                        line += (c >= 0x20 && c <= 0x7E) ? char(c) : ' ';
                     } else {
                         char b[4]; std::snprintf(b, sizeof(b), "%02X", t);
                         if (col) line += ' ';
@@ -374,5 +386,21 @@ private:
 
     static std::string hex4(uint16_t v) {
         char b[8]; std::snprintf(b, sizeof(b), "%04X", v); return b;
+    }
+
+    void navigateAccuracyCoin(int page, int row) {
+        for (int f = 0; f < 60; ++f) nes.tickFrame();
+        for (int i = 1; i < page; ++i) {
+            nes.setController1(0x01);
+            for (int f = 0; f < 20; ++f) nes.tickFrame();
+            nes.setController1(0x00);
+            for (int f = 0; f < 20; ++f) nes.tickFrame();
+        }
+        for (int i = 0; i < row; ++i) {
+            nes.setController1(0x04);
+            for (int f = 0; f < 20; ++f) nes.tickFrame();
+            nes.setController1(0x00);
+            for (int f = 0; f < 20; ++f) nes.tickFrame();
+        }
     }
 };

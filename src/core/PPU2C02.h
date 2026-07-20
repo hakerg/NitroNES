@@ -179,6 +179,7 @@ public:
         ppuBusData = 0;
         ppuBusRead = false;
         ppuAddressLow = 0;
+        ppuBusAddr = 0;
     }
 
     uint32_t* getFramebuffer() { return buf.data(); }
@@ -334,6 +335,7 @@ private:
     uint8_t  ppuBusData = 0;
     bool     ppuBusRead = false;
     uint8_t  ppuAddressLow = 0;
+    uint16_t ppuBusAddr = 0;
 
     int16_t  scanline             = 0;
     int16_t  cycle                = 0;
@@ -895,11 +897,13 @@ private:
     void beginBusRead(uint16_t addr) {
         addr &= 0x3FFF;
         ppuAddressLow = addr & 0x00FF;
+        ppuBusAddr = addr;
         cart.ppuAddress(addr);
     }
 
     uint8_t finishBusRead(uint16_t addr) {
         addr = (addr & 0x3F00) | ppuAddressLow;
+        ppuBusAddr = addr;
         cart.ppuAddress(addr);
         ppuBusData = ppuRead(addr);
         ppuBusRead = true;
@@ -907,6 +911,7 @@ private:
     }
 
     void drivePpuAddress() {
+        ppuBusAddr = vramAddr.reg & 0x3FFF;
         cart.ppuAddress(vramAddr.reg & 0x3FFF);
     }
 
@@ -926,17 +931,26 @@ private:
 
     void emitTrace() {
         if (!tracer || !tracer->ppu) return;
-        char str[256];
+        char str[512];
         std::snprintf(str, sizeof(str),
             "PPU[SL=%3d,CY=%3d] %-10s V=%04X T=%04X fX=%u W=%u "
-            "CTRL=%02X MASK=%02X STAT=%02X OAMA=%02X SPR=%u NMI=%u%s",
+            "CTRL=%02X MASK=%02X STAT=%02X OAMA=%02X SPR=%u NMI=%u%s "
+            "BUS=%04X BD=%02X BR=%u BUF=%02X "
+            "BGP=%04X:%04X BGA=%04X:%04X OBUF=%02X",
             (int)scanline, (int)cycle, phaseName(),
             (unsigned)vramAddr.reg, (unsigned)tramAddr.reg,
             (unsigned)fineX, (unsigned)addressLatch,
             (unsigned)ctrl.reg, (unsigned)mask.reg, (unsigned)status.reg,
             (unsigned)oamAddr, (unsigned)spriteCount,
             nmiLineLow() ? 1u : 0u,
-            frameOdd ? " ODD" : "");
+            frameOdd ? " ODD" : "",
+            (unsigned)ppuBusAddr,
+            (unsigned)ppuBusData,
+            ppuBusRead ? 1u : 0u,
+            (unsigned)ppuDataBuffer,
+            (unsigned)bgPattern.lo, (unsigned)bgPattern.hi,
+            (unsigned)bgAttrib.lo, (unsigned)bgAttrib.hi,
+            (unsigned)oamDataBuffer);
         tracer->writePpu(str);
     }
 };

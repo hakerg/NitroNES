@@ -61,9 +61,14 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
   frames:N             clockuj N klatek PPU (lub N wywołań play() dla .nsf)
   cycles:N             clockuj N cykli CPU
   reset                hard reset
-  screen[:ascii]       wypisz nametable 0 (32x30) jako indeksy kafelków w hex
-                       (np. 24 24 0C 19...); dodaj :ascii, by renderować
-                       drukowalne kafelki jako znaki (tylko .nes)
+  screen[:ascii[:OFFSET]] wypisz nametable 0 (32x30) jako indeksy kafelków w hex
+                       (np. 24 24 0C 19...); `:ascii` renderuje drukowalne
+                       wartości `indeks kafelka + OFFSET` jako znaki (tylko .nes)
+                       Offset można podać dziesiętnie, jako `$hex` lub `0xhex`:
+                       blargg = `$00`; AccuracyCoin = `$37` dla liter i `$30`
+                       dla cyfr. AccuracyCoin ma osobne indeksy spacji i znaków
+                       interpunkcyjnych, więc jeden offset nie odwzorowuje ich
+                       pełnego fontu.
   pixels:X:Y:W:H       zrzuć wycinek framebuffera WxH od (X,Y) jako RGB w hex,
                        jedna linia na rząd (np. FF0000 00FF00 0000FF; tylko .nes)
   mem:ADDR:LEN         dump LEN bajtów z magistrali CPU od ADDR (hex/dec/$hex/0xhex)
@@ -74,6 +79,8 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
   pad2=... +... -...   to samo dla pada 2
   trace:CHAN:STATE     włącz/wyłącz kanał trace (CHAN=cpu|ppu|dma|apu, STATE=on|off)
   trace-file:PATH      zmień plik wyjściowy trace (domyślnie: trace.log)
+  ac:PAGE:ROW          nawiguj menu AccuracyCoin do strony PAGE (1-based),
+                      wiersza ROW (0-based), przez pad RIGHT/DOWN (20-frame timing)
   song:N               (tylko .nsf) initSong(N)
   next / prev          (tylko .nsf) przełącz na następny/poprzedni utwór
   songinfo             (tylko .nsf) wypisz nazwę/artystę/copyright/load/init/play
@@ -85,11 +92,18 @@ PPU, DMA, APU) sam generuje swój wiersz w trakcie clockowania — TestRunner ty
 dodaje prefix `F=… CYC=…` i otwiera plik.
 
   - `ppu` (3 linie na cykl CPU): `F=… CYC=… PPU[SL=…,CY=…] PHASE V=… T=… fX=…
-    W=… CTRL=… MASK=… STAT=… OAMA=… SPR=… NMI=… [ODD]`
+    W=… CTRL=… MASK=… STAT=… OAMA=… SPR=… NMI=… [ODD]
+    BUS=… BD=… BR=… BUF=… BGP=…:… BGA=…:… OBUF=…`
       * PHASE = `PRE` / `IDLE` / `BG-FETCH` / `SPR-FETCH` / `BG-PREFTCH` /
         `NT-DUMMY` / `POST` / `VBLANK`
       * V/T = loopy `vramAddr`/`tramAddr`, fX = fine X, W = write latch
       * SPR = sprite count po evaluacji, ODD = marker klatki nieparzystej
+      * BUS = fizyczna magistrala adresowa PPU (`ppuBusAddr`), BD = dane
+        na magistrali (`ppuBusData`), BR = czy w tym cyklu był odczyt PPU
+      * BUF = bufor odczytu PPUDATA (`ppuDataBuffer`)
+      * BGP = rejestry przesuwne BG `lo:hi` (`bgPattern`), BGA = atrybuty
+        BG `lo:hi` (`bgAttrib`) — przydatne przy testach BG Serial In
+      * OBUF = bufor OAM (`oamDataBuffer`) — przydatne przy testach $2004
   - `cpu` (2 linie na cykl CPU):
       * `F=… CYC=… PHI1 PC=… A=… X=… Y=… S=… P=<flagi> R/W $XXXX[=DD][(nazwa)]
         MNEMONIC step ; symbol_PC` — stan rejestrów + decyzja na ten cykl
@@ -128,9 +142,11 @@ Przykłady:
   nes_test mytest.asm frames:60 screen mem:0x00:16
   nes_test mytest.asm trace:cpu:on trace:dma:on trace:apu:on frames:5
   nes_test ROM.nes frames:120 pad1+START frames:1 pad1-START frames:600 screen:ascii
+  nes_test AccuracyCoin.asm frames:60 screen:ascii:0x37
   nes_test ROM.nes frames:120 pixels:0:0:16:8
   nes_test ROM.nes frames:600 reset frames:600 mem:0x6000:32
   nes_test song.nsf songinfo cycles:5000000 trace:cpu:on cycles:100000 info
+  nes_test AccuracyCoin.asm ac:18:2 trace:cpu:on trace:ppu:on pad1+A frames:20 pad1-A frames:60
 
 ### Diagnozowanie zawieszeń / zdarzeń odległych w czasie
 
@@ -204,4 +220,3 @@ Krytyczne zasady formatu NESASM3:
 - Kod testowy: .bank 2 / .org $C000
 - Wektory: .bank 3 / .org $FFFA / .word nmi / .word reset / .word irq
 - Przed VBlank looopem: wyłącz APU IRQ: lda #$40 / sta $4017
-
