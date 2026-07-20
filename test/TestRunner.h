@@ -3,14 +3,15 @@
 #include "../src/core/Tracer.h"
 #include <algorithm>
 #include <cctype>
-#include <cstdarg>
 #include <cstdio>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 template <typename CoreT>
@@ -71,16 +72,16 @@ public:
     }
 
     // Tracer ----------------------------------------------------------------
-    void writeCpu(const char* body) override {
+    void writeCpu(std::string_view body) override {
         flushPending();
         beginLine(body);
     }
-    void writePpu(const char* body) override {
+    void writePpu(std::string_view body) override {
         flushPending();
         beginLine(body);
     }
-    void appendDma(const char* body) override { appendToPending(body); }
-    void appendApu(const char* body) override { appendToPending(body); }
+    void appendDma(std::string_view body) override { appendToPending(body); }
+    void appendApu(std::string_view body) override { appendToPending(body); }
 
     std::string symbolExact(uint16_t addr) const override {
         if (const char* io = nesIoRegName(addr)) return io;
@@ -96,8 +97,7 @@ public:
         uint16_t off = pc - it->first;
         if (off > 0x40) return {};
         if (off == 0) return it->second;
-        char buf[16]; std::snprintf(buf, sizeof(buf), "+%u", (unsigned)off);
-        return it->second + buf;
+        return std::format("{}+{}", it->second, off);
     }
 
 private:
@@ -109,7 +109,7 @@ private:
     std::string pending;
 
     // helpers ----------------------------------------------------------------
-    void appendToPending(const char* body) {
+    void appendToPending(std::string_view body) {
         if (pending.empty()) return;
         pending += "  ";
         pending += body;
@@ -288,9 +288,8 @@ private:
                         uint32_t c = t + asciiOffset;
                         line += (c >= 0x20 && c <= 0x7E) ? char(c) : ' ';
                     } else {
-                        char b[4]; std::snprintf(b, sizeof(b), "%02X", t);
                         if (col) line += ' ';
-                        line += b;
+                        line += std::format("{:02X}", t);
                     }
                 }
                 if (ascii) {
@@ -318,9 +317,8 @@ private:
                         || x < 0 || x >= NES::SCREEN_WIDTH)
                         continue;
                     uint32_t rgb = fb[y * NES::SCREEN_WIDTH + x] & 0x00FFFFFFu;
-                    char b[8]; std::snprintf(b, sizeof(b), "%06X", rgb);
                     if (!line.empty()) line += ' ';
-                    line += b;
+                    line += std::format("{:06X}", rgb);
                 }
                 std::cout << line << "\n";
             }
@@ -345,10 +343,10 @@ private:
     void printMem(uint16_t addr, uint32_t len) {
         std::cout << "---- mem $" << hex4(addr) << " len=" << len << " ----\n";
         for (uint32_t i = 0; i < len; i += 16) {
-            std::printf("%04X: ", (uint16_t)(addr + i));
+            std::string line = std::format("{:04X}: ", (uint16_t)(addr + i));
             for (uint32_t j = 0; j < 16 && i + j < len; ++j)
-                std::printf("%02X ", nes.peekMemory((uint16_t)(addr + i + j)));
-            std::printf("\n");
+                line += std::format("{:02X} ", nes.peekMemory((uint16_t)(addr + i + j)));
+            std::cout << line << "\n";
         }
     }
 
@@ -366,14 +364,10 @@ private:
         if (traceFp) { std::fclose(traceFp); traceFp = nullptr; }
     }
 
-    void beginLine(const char* body) {
+    void beginLine(std::string_view body) {
         if (!traceFp) openTrace();
         if (!traceFp) return;
-        char prefix[64];
-        std::snprintf(prefix, sizeof(prefix), "F=%llu CYC=%llu ",
-                      (unsigned long long)nes.frameNo(),
-                      (unsigned long long)nes.cycleNo());
-        pending.assign(prefix);
+        pending = std::format("F={} CYC={} ", nes.frameNo(), nes.cycleNo());
         pending += body;
     }
 
@@ -385,7 +379,7 @@ private:
     }
 
     static std::string hex4(uint16_t v) {
-        char b[8]; std::snprintf(b, sizeof(b), "%04X", v); return b;
+        return std::format("{:04X}", v);
     }
 
     void navigateAccuracyCoin(int page, int row) {

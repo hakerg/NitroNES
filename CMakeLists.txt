@@ -35,7 +35,8 @@ FetchContent_MakeAvailable(imgui)
 # ------------------------------------
 
 # Dodaj główne źródło pliku wykonywalnego
-add_executable(NESEmulator "src/NES Emulator.cpp" resources.rc)
+add_library(NESEmulatorResources OBJECT resources.rc)
+add_executable(NESEmulator "src/NES Emulator.cpp" $<TARGET_OBJECTS:NESEmulatorResources>)
 set_property(TARGET NESEmulator PROPERTY OUTPUT_NAME "NES Emulator")
 
 # Ustawienie standardu C++23

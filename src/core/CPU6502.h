@@ -1,8 +1,8 @@
 #pragma once
 #include "DelayedPin.h"
 #include <cstdint>
-#include <cstdio>
 #include <string>
+#include <format>
 #include "Tracer.h"
 
 class ICPUBus {
@@ -419,37 +419,32 @@ private:
         if (!tracer || !tracer->cpu) return;
         const uint16_t a = currentStep.busAddr;
         const std::string sym = tracer->symbolExact(a);
-        char addrField[48];
-        if (currentStep.isRead) {
-            std::snprintf(addrField, sizeof(addrField),
-                          sym.empty() ? "R $%04X" : "R $%04X(%s)",
-                          a, sym.c_str());
-        } else {
-            std::snprintf(addrField, sizeof(addrField),
-                          sym.empty() ? "W $%04X=%02X" : "W $%04X=%02X(%s)",
-                          a, currentStep.writeData, sym.c_str());
-        }
-        char body[256];
+        std::string addrField;
+        if (currentStep.isRead)
+            addrField = sym.empty() ? std::format("R ${:04X}", a)
+                                    : std::format("R ${:04X}({})", a, sym);
+        else
+            addrField = sym.empty() ? std::format("W ${:04X}={:02X}", a, currentStep.writeData)
+                                    : std::format("W ${:04X}={:02X}({})", a, currentStep.writeData, sym);
         const std::string near = tracer->symbolNear(pre.PC);
-        std::snprintf(body, sizeof(body),
-            "PHI1 PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%s %-28s %-4s %-18s%s%s%s",
-            pre.PC, pre.A, pre.X, pre.Y, pre.S, flagStr(pre.P).c_str(),
+        auto body = std::format("PHI1 PC={:04X} A={:02X} X={:02X} Y={:02X} S={:02X} P={} {:<28} {:<4} {:<18}{}{}{}",
+            pre.PC, pre.A, pre.X, pre.Y, pre.S, flagStr(pre.P),
             stalled ? "STALL" : addrField,
             stalled ? "----" : currentOpName(),
             stalled ? "stalled" : currentStepName(),
-            near.empty() ? "" : " ; ", near.c_str(), "");
+            near.empty() ? "" : " ; ", near, "");
         tracer->writeCpu(body);
     }
 
     void emitTracePhi2() {
         if (!tracer || !tracer->cpu) return;
-        char body[64];
+        std::string body;
         if (currentStep.isRead && !bus.isReadOverridden())
-            std::snprintf(body, sizeof(body), "PHI2 fetched=%02X", fetched);
+            body = std::format("PHI2 fetched={:02X}", fetched);
         else if (!currentStep.isRead)
-            std::snprintf(body, sizeof(body), "PHI2 wrote=%02X", currentStep.writeData);
+            body = std::format("PHI2 wrote={:02X}", currentStep.writeData);
         else
-            std::snprintf(body, sizeof(body), "PHI2 (dma-override)");
+            body = "PHI2 (dma-override)";
         tracer->writeCpu(body);
     }
 };

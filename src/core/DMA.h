@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
-#include <cstdio>
+#include <string>
+#include <format>
 #include "DelayedPin.h"
 #include "Tracer.h"
 
@@ -149,15 +150,14 @@ private:
         static const char* dmcPh[] = { "Idle", "Halt", "Dummy", "Read" };
         static const char* oamPh[] = { "Idle", "Halt", "Xfer" };
         static const char* acts[]  = { "None", "OAMGet", "OAMPut", "DMCGet" };
-        char buf[160];
-        int n = std::snprintf(buf, sizeof(buf), "DMA:%s/%s %s @%04X hb=%d",
+        auto buf = std::format("DMA:{}/{} {} @{:04X} hb={}",
                       oamPh[(int)oamPhase & 3],
                       dmcPh[(int)dmcPhase & 3],
                       acts[(int)action    & 3],
                       (unsigned)getAddr(),
                       (int)hadBytesRecently.get());
         if (hadBytesRecently.isPending())
-            std::snprintf(buf + n, sizeof(buf) - n, "->%d(%d)",
+            buf += std::format("->{}({})",
                           (int)hadBytesRecently.getTarget(), hadBytesRecently.getDelay());
         tracer->appendDma(buf);
     }

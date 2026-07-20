@@ -3,7 +3,7 @@
 #include "DelayedPin.h"
 #include "Tracer.h"
 #include <cstdint>
-#include <cstdio>
+#include <format>
 
 static constexpr uint8_t LENGTH_TABLE[32] = {
     10, 254, 20,  2, 40,  4, 80,  6, 160,  8, 60, 10, 14, 12, 26, 14,
@@ -521,9 +521,8 @@ public:
 
     void emitTrace() {
         if (!tracer || !tracer->apu) return;
-        char buf[128];
-        std::snprintf(buf, sizeof(buf),
-            "APU:DMC bytes=%u buf=%c halt=%c addr=%04X shift=%02X bits=%u tmr=%u sil=%c irq=%c",
+        auto buf = std::format(
+            "APU:DMC bytes={} buf={} halt={} addr={:04X} shift={:02X} bits={} tmr={} sil={} irq={}",
             (unsigned)dmc.bytesRemaining,
             dmc.sampleBufferEmpty ? 'E' : 'F',
             dmc.dmaHaltOnPut ? 'P' : 'G',

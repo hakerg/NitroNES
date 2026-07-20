@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 class Tracer {
 public:
@@ -9,10 +10,10 @@ public:
     bool cpu = false, ppu = false, dma = false, apu = false;
     bool any() const { return cpu || ppu || dma || apu; }
 
-    virtual void writeCpu(const char* body) = 0;
-    virtual void writePpu(const char* body) = 0;
-    virtual void appendDma(const char* body) = 0;
-    virtual void appendApu(const char* body) = 0;
+    virtual void writeCpu(std::string_view body) = 0;
+    virtual void writePpu(std::string_view body) = 0;
+    virtual void appendDma(std::string_view body) = 0;
+    virtual void appendApu(std::string_view body) = 0;
 
     virtual std::string symbolNear(uint16_t pc) const { (void)pc; return {}; }
     virtual std::string symbolExact(uint16_t addr) const { (void)addr; return {}; }
@@ -53,4 +54,3 @@ inline const char* nesIoRegName(uint16_t addr) {
         default:     return nullptr;
     }
 }
-

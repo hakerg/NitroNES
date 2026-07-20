@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
-#include <cstdio>
 #include <cstring>
+#include <format>
 #include "Cartridge.h"
 #include "DelayedPin.h"
 #include "NESConst.h"
@@ -931,12 +931,11 @@ private:
 
     void emitTrace() {
         if (!tracer || !tracer->ppu) return;
-        char str[512];
-        std::snprintf(str, sizeof(str),
-            "PPU[SL=%3d,CY=%3d] %-10s V=%04X T=%04X fX=%u W=%u "
-            "CTRL=%02X MASK=%02X STAT=%02X OAMA=%02X SPR=%u NMI=%u%s "
-            "BUS=%04X BD=%02X BR=%u BUF=%02X "
-            "BGP=%04X:%04X BGA=%04X:%04X OBUF=%02X",
+        auto str = std::format(
+            "PPU[SL={:3d},CY={:3d}] {:<10s} V={:04X} T={:04X} fX={} W={} "
+            "CTRL={:02X} MASK={:02X} STAT={:02X} OAMA={:02X} SPR={} NMI={}{} "
+            "BUS={:04X} BD={:02X} BR={} BUF={:02X} "
+            "BGP={:04X}:{:04X} BGA={:04X}:{:04X} OBUF={:02X}",
             (int)scanline, (int)cycle, phaseName(),
             (unsigned)vramAddr.reg, (unsigned)tramAddr.reg,
             (unsigned)fineX, (unsigned)addressLatch,

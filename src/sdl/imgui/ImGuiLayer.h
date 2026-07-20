@@ -13,11 +13,13 @@
 #include <format>
 #include <string>
 #include <charconv>
+#include <array>
 
 class ImGuiLayer {
 public:
     ImGuiLayer(SDL_Window *window, SDL_GPUDevice *gpuDevice)
-        : window(window), gpuDevice(gpuDevice) {
+        : window(window), gpuDevice(gpuDevice), memAddrBuf(4, '0') {
+
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui::StyleColorsDark();
@@ -414,9 +416,21 @@ private:
         return res;
     }
 
-    static bool inputText(const char *label, char *buf, size_t bufSize, ImGuiInputTextFlags flags = 0) {
+    static int inputTextResizeCallback(ImGuiInputTextCallbackData *data) {
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+            auto *str = static_cast<std::string *>(data->UserData);
+            str->resize(data->BufTextLen);
+            data->Buf = str->data();
+            data->BufSize = static_cast<int>(str->capacity() + 1);
+        }
+        return 0;
+    }
+
+    static bool inputText(const char *label, std::string &str, ImGuiInputTextFlags flags = 0) {
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-        bool res = ImGui::InputText(label, buf, bufSize, flags);
+        flags |= ImGuiInputTextFlags_CallbackResize;
+        bool res = ImGui::InputText(label, str.data(), str.capacity() + 1, flags,
+                                    inputTextResizeCallback, &str);
         ImGui::PopStyleVar();
         return res;
     }
@@ -608,10 +622,9 @@ private:
         NESCoreBase &core = session->getCore();
 
         ImGui::SetNextItemWidth(ImGui::CalcTextSize("FFFF ").x);
-        if (inputText(tr("tools.memory_viewer.address"), memAddrBuf,
-                      sizeof(memAddrBuf), HEX_INPUT_FLAGS)) {
+        if (inputText(tr("tools.memory_viewer.address"), memAddrBuf, HEX_INPUT_FLAGS)) {
             if (uint32_t v = 0;
-                std::from_chars(memAddrBuf, memAddrBuf + strlen(memAddrBuf), v, 16).ec == std::errc())
+                std::from_chars(memAddrBuf.data(), memAddrBuf.data() + memAddrBuf.size(), v, 16).ec == std::errc())
                 setMemAddr(static_cast<uint16_t>(v & 0xFFFF));
         }
 
@@ -647,16 +660,15 @@ private:
                     int idx = r * MEM_COLS + c;
                     auto addr = static_cast<uint16_t>((memBase + idx) & 0xFFFF);
 
-                    std::snprintf(memEditBuf[idx], sizeof(memEditBuf[idx]), "%02X", memCache[idx]);
+                    memEditBuf[idx] = std::format("{:02X}", memCache[idx]);
                     ImGui::SetNextItemWidth(ImGui::CalcTextSize("FF ").x);
 
                     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
-                    if (inputText(std::format("##mem{}", idx).c_str(), memEditBuf[idx],
-                                  sizeof(memEditBuf[idx]), HEX_INPUT_FLAGS)) {
+                    if (inputText(std::format("##mem{}", idx).c_str(), memEditBuf[idx], HEX_INPUT_FLAGS)) {
                         if (uint32_t v = 0;
-                            std::from_chars(memEditBuf[idx],
-                                            memEditBuf[idx] + strlen(memEditBuf[idx]), v, 16).ec == std::errc())
+                            std::from_chars(memEditBuf[idx].data(),
+                                            memEditBuf[idx].data() + memEditBuf[idx].size(), v, 16).ec == std::errc())
                             core.writeMemory(addr, static_cast<uint8_t>(v & 0xFF));
                     }
 
@@ -673,7 +685,7 @@ private:
 
     void setMemAddr(uint16_t addr) {
         memBase = addr;
-        std::snprintf(memAddrBuf, sizeof(memAddrBuf), "%04X", memBase);
+        memAddrBuf = std::format("{:04X}", memBase);
     }
 
     static void addTooltipToLastItem(const char *text) {
@@ -710,9 +722,9 @@ private:
     static constexpr int MEM_ROWS = 16;
     static constexpr int MEM_COLS = 16;
     uint16_t memBase = 0x0000;
-    char memAddrBuf[5] = "0000";
+    std::string memAddrBuf;
     uint8_t memCache[MEM_ROWS * MEM_COLS] = {};
-    char memEditBuf[MEM_ROWS * MEM_COLS][4] = {};
+    std::array<std::string, MEM_ROWS * MEM_COLS> memEditBuf;
 
     bool bindAll = false;
     int bindingIndex = 0;
