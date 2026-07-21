@@ -16,12 +16,13 @@
 // CPU trace.
 //
 // Commands (run sequentially; one per argv):
-//   frames:N            tick N PPU frames (or N play() calls for .nsf)
+//   frames:N            tick N frames (or N play() calls for .nsf)
 //   cycles:N            tick N CPU cycles
-//   reset               trigger hardware reset
-//   screen[:ascii[:OFFSET]] dump nametable 0 as hex tile indices (.nes only);
-//                          :ascii renders printable tile+OFFSET values as characters
-//                          (OFFSET: blargg=$00, AccuracyCoin letters=$37, digits=$30)
+//   reset               soft reset
+//   screen              dump nametable 0 as hex tile indices
+//   ascii[:MAP]         dump nametable 0 as characters; MAP is a
+//                       string where position N = character for tile index N
+//                       (need not be full 256; missing tiles render as space)
 //   pixels:X:Y:W:H      dump a framebuffer region as RGB hex, one row per line
 //                       (.nes only, e.g. FF0000 00FF00 0000FF)
 //   mem:ADDR:LEN        dump LEN bytes from CPU bus ADDR (hex/dec/$hex/0xhex)
@@ -32,7 +33,8 @@
 //   trace:CHAN:STATE    enable/disable trace channel (CHAN=cpu|ppu|dma|apu, STATE=on|off)
 //   trace-file:PATH     redirect trace output (default: trace.log)
 //   ac:PAGE:ROW         navigate AccuracyCoin menu to page PAGE (1-based),
-//                       row ROW (0-based), via pad RIGHT/DOWN (20-frame timing)
+//                       row ROW (1-based), via pad RIGHT/DOWN (20-frame timing),
+//                       then press A to launch the highlighted test.
 //   song:N              (.nsf only) initSong(N)
 //   next / prev         (.nsf only) switch to next/previous song
 //   songinfo            (.nsf only) print song name/artist/copyright
@@ -190,11 +192,10 @@ int main(int argc, char* argv[]) {
         std::cerr <<
             "Usage: nes_test <rom-or-asm-or-nsf> [command]...\n"
             "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65; tmp build dir)\n"
-            "Commands: frames:N cycles:N reset screen[:ascii[:OFFSET]] pixels:X:Y:W:H mem:ADDR:LEN\n"
-            "ASCII offsets: blargg=$00, AccuracyCoin letters=$37 and digits=$30\n"
+            "Commands: frames:N cycles:N reset screen ascii[:MAP] pixels:X:Y:W:H mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
             "          trace:cpu|ppu|dma|apu:on|off  trace-file:PATH\n"
-            "          ac:PAGE:ROW (AccuracyCoin menu navigation)\n"
+            "          ac:PAGE:ROW (AccuracyCoin menu navigation + run)\n"
             "NSF only: song:N next prev songinfo\n"
             "Buttons:  A B SELECT START UP DOWN LEFT RIGHT\n";
         return 1;

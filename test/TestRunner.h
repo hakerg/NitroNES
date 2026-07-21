@@ -187,8 +187,7 @@ private:
         const std::string& head = parts[0];
 
         if (head == "frames" && parts.size() == 2) {
-            uint32_t n = parseInt(parts[1]);
-            for (uint32_t i = 0; i < n; ++i) nes.tickFrame();
+            nes.tickFrames(parseInt(parts[1]));
             return true;
         }
         if (head == "cycles" && parts.size() == 2) {
@@ -203,16 +202,16 @@ private:
             printMem((uint16_t)parseInt(parts[1]), parseInt(parts[2]));
             return true;
         }
-        if (head == "screen") {
-            if (parts.size() == 1) {
-                printScreen(false, 0);
-                return true;
-            }
-            if ((parts.size() == 2 || parts.size() == 3) && parts[1] == "ascii") {
-                printScreen(true, parts.size() == 3 ? parseInt(parts[2]) : 0);
-                return true;
-            }
-            return false;
+        if (head == "screen" && parts.size() == 1) {
+            printScreen(false, {});
+            return true;
+        }
+        if (head == "ascii") {
+            auto colonPos = cmd.find(':');
+            std::string charMap = (colonPos != std::string::npos)
+                ? cmd.substr(colonPos + 1) : std::string{};
+            printScreen(true, charMap);
+            return true;
         }
         if (head == "pixels" && parts.size() == 5) {
             printPixels((int)parseInt(parts[1]), (int)parseInt(parts[2]),
@@ -273,20 +272,20 @@ private:
     }
 
     // memory / screen --------------------------------------------------------
-    void printScreen(bool ascii, uint32_t asciiOffset) {
+    void printScreen(bool ascii, const std::string& charMap) {
         if constexpr (requires { nes.dumpNametable((uint8_t*)nullptr, 0); }) {
             uint8_t tiles[960]{};
             nes.dumpNametable(tiles, 0);
             std::cout << "---- screen (NT0) frame=" << nes.frameNo()
                       << " cyc=" << nes.cycleNo()
-                      << (ascii ? " ascii offset=" + std::to_string(asciiOffset) : " hex") << " ----\n";
+                      << (ascii ? " ascii" : " hex") << " ----\n";
             for (int row = 0; row < 30; ++row) {
                 std::string line;
                 for (int col = 0; col < 32; ++col) {
                     uint8_t t = tiles[row * 32 + col];
                     if (ascii) {
-                        uint32_t c = t + asciiOffset;
-                        line += (c >= 0x20 && c <= 0x7E) ? char(c) : ' ';
+                        if (t < charMap.size()) line += charMap[t];
+                        else line += ' ';
                     } else {
                         if (col) line += ' ';
                         line += std::format("{:02X}", t);
@@ -383,18 +382,22 @@ private:
     }
 
     void navigateAccuracyCoin(int page, int row) {
-        for (int f = 0; f < 60; ++f) nes.tickFrame();
+        nes.tickFrames(60);
+
         for (int i = 1; i < page; ++i) {
             nes.setController1(0x01);
-            for (int f = 0; f < 20; ++f) nes.tickFrame();
+            nes.tickFrames(20);
             nes.setController1(0x00);
-            for (int f = 0; f < 20; ++f) nes.tickFrame();
+            nes.tickFrames(20);
         }
+
         for (int i = 0; i < row; ++i) {
             nes.setController1(0x04);
-            for (int f = 0; f < 20; ++f) nes.tickFrame();
+            nes.tickFrames(20);
             nes.setController1(0x00);
-            for (int f = 0; f < 20; ++f) nes.tickFrame();
+            nes.tickFrames(20);
         }
+
+        nes.setController1(0x80);
     }
 };

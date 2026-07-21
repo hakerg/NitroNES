@@ -31,6 +31,10 @@ public:
         onFrameCompleted();
     }
 
+    void tickFrames(uint32_t n) {
+        for (uint32_t i = 0; i < n; ++i) tickFrame();
+    }
+
     template <typename ConditionFunc>
     void tickWhile(ConditionFunc condition) {
         if (paused) return;
