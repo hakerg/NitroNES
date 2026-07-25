@@ -22,7 +22,8 @@
 //   screen              dump nametable 0 as hex tile indices
 //   ascii[:MAP]         dump nametable 0 as characters; MAP is a
 //                       string where position N = character for tile index N
-//                       (need not be full 256; missing tiles render as space)
+//                       (need not be full 256; missing tiles render as space;
+//                        default: standard ASCII, tile N = char N for $20-$7E)
 //   pixels:X:Y:W:H      dump a framebuffer region as RGB hex, one row per line
 //                       (.nes only, e.g. FF0000 00FF00 0000FF)
 //   mem:ADDR:LEN        dump LEN bytes from CPU bus ADDR (hex/dec/$hex/0xhex)

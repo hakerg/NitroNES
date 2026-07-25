@@ -384,9 +384,9 @@ private:
             case RmwKind::SLO: P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = fetched << 1; A |= tmp; setZN(A); break;
             case RmwKind::RLA: { uint8_t c = (P & FLAG_C) ? 1 : 0; P = (P & ~FLAG_C) | ((fetched & 0x80) ? FLAG_C : 0); tmp = (fetched << 1) | c; A &= tmp; setZN(A); } break;
             case RmwKind::SRE: P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = fetched >> 1; A ^= tmp; setZN(A); break;
-            case RmwKind::RRA: { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = (fetched >> 1) | c; fetched = tmp; doExecADC(); } break;
+            case RmwKind::RRA: { uint8_t c = (P & FLAG_C) ? 0x80 : 0; P = (P & ~FLAG_C) | ((fetched & 0x01) ? FLAG_C : 0); tmp = (fetched >> 1) | c; uint8_t orig = fetched; fetched = tmp; doExecADC(); fetched = orig; } break;
             case RmwKind::DCP: { tmp = fetched - 1; uint8_t r = A - tmp; P = (P & ~(FLAG_C | FLAG_Z | FLAG_N)) | (A >= tmp ? FLAG_C : 0) | (r == 0 ? FLAG_Z : 0) | (r & 0x80); } break;
-            case RmwKind::ISC: { tmp = fetched + 1; fetched = tmp; doExecSBC(); } break;
+            case RmwKind::ISC: { tmp = fetched + 1; uint8_t orig = fetched; fetched = tmp; doExecSBC(); fetched = orig; } break;
         }
     }
 

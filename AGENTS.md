@@ -60,6 +60,8 @@ Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
                        MAP to ciąg znaków, gdzie pozycja N = znak dla kafelka
                        o indeksie N. Nie musi mieć pełnych 256 znaków — brakujące
                        kafelki renderowane są jako spacja.
+                       Domyślnie (bez MAP): mapowanie standardowego ASCII
+                       (kafelek N = znak ASCII N dla $20-$7E).
                        AccuracyCoin: patrz zalecana mapa poniżej.
   pixels:X:Y:W:H       zrzuć wycinek framebuffera WxH od (X,Y) jako RGB w hex,
                        jedna linia na rząd (np. FF0000 00FF00 0000FF)

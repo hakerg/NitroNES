@@ -209,7 +209,7 @@ private:
         if (head == "ascii") {
             auto colonPos = cmd.find(':');
             std::string charMap = (colonPos != std::string::npos)
-                ? cmd.substr(colonPos + 1) : std::string{};
+                ? cmd.substr(colonPos + 1) : defaultAsciiMap();
             printScreen(true, charMap);
             return true;
         }
@@ -272,6 +272,13 @@ private:
     }
 
     // memory / screen --------------------------------------------------------
+    static std::string defaultAsciiMap() {
+        std::string map(256, ' ');
+        for (int i = 0x20; i <= 0x7E; ++i)
+            map[i] = (char)i;
+        return map;
+    }
+
     void printScreen(bool ascii, const std::string& charMap) {
         if constexpr (requires { nes.dumpNametable((uint8_t*)nullptr, 0); }) {
             uint8_t tiles[960]{};
