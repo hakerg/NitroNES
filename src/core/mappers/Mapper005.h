@@ -84,7 +84,7 @@ public:
         if (addr < 0x8000) return false;
         const uint8_t slot = (addr - 0x8000) >> 13;
         const uint8_t reg = slotRegister(slot);
-        if (slot < 3 && !(reg & 0x80)) return false;
+        if (!slotIsRomOnly(slot) && !(reg & 0x80)) return false;
         const uint8_t total = prgBanks * 2;
         mapped = (uint32_t)mapper_helpers::maskBank(prgBank(slot), total) * 0x2000
             + (addr & 0x1FFF);
@@ -228,10 +228,18 @@ private:
         }
         if (addr < 0x8000 || addr >= 0xE000) return false;
         const uint8_t slot = (addr - 0x8000) >> 13;
+        if (slotIsRomOnly(slot)) return false;
         const uint8_t reg = slotRegister(slot);
         if (reg & 0x80) return false;
         bank = prgBank(slot) & 7;
         return true;
+    }
+
+    bool slotIsRomOnly(uint8_t slot) const {
+        if (slot == 3) return true;
+        if (prgMode == 0) return true;
+        if (prgMode == 1 && slot == 2) return true;
+        return false;
     }
 
     uint32_t chrBank(uint16_t addr) const {

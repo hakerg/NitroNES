@@ -488,19 +488,21 @@ public:
         triangle.enabled = false; triangle.lengthCounter = 0; triangle.skipNextLengthClock = false;
         noise.enabled   = false;  noise.lengthCounter   = 0; noise.skipNextLengthClock = false;
 
-        pulse1.lengthHalt.force(false);
-        pulse2.lengthHalt.force(false);
-        triangle.lengthHalt.force(false);
-        noise.lengthHalt.force(false);
+        // $4000-$400F to latche, ktorych reset nie czyści (lengthHalt i reszta
+        // stanu kanałów zachowują wartości). Reset czyści tylko $4015 (wyłącza
+        // kanały) i restartuje frame counter.
         dmc.dmaDelay.force(false);
-        val4017.force(0);
+
+        // $4017: tryb (D7) zachowany, inhibit IRQ (D6) wyczyszczony
+        val4017.force(val4017.get() & 0x80);
+        frameMode = (val4017.get() >> 7) & 0x01;
+        frameIRQInhibit = false;
 
         dmc.bytesRemaining   = 0;
         dmc.irqPending       = false;
 
         frameIRQPending = false;
         frame4015ClearPending = false;
-        frameMode = 0;
         frameCounter = 0;
     }
 

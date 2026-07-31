@@ -13,7 +13,7 @@ Emulator NES robiony pod kątem minimalnych opóźnień oraz zgodności z fizycz
 - W `nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.asm` są cenne obszerne komentarze o testach.
 - Możesz odpalać inne ROM-y testowe przez `nes_test`, aby pozyskać więcej informacji.
 - Dokumentacja różnych komponentów jest rozbita na wiele plików, więc pamiętaj, żeby sprawdzić wszystkie, bo każdy zawiera cenne informacje. Oszczędzi to wiele czasu przy analizie.
-- Aktualny stan testów: zbuduj `accuracy_coin` przez ninja, a następnie uruchom `build/release/accuracy_coin.exe`.
+- Aktualny stan testów: uruchom `python run_tests.py` (buduje projekt, odpala accuracy_coin i wszystkie ROM-y testowe, wypisuje faile).
 
 ## Ważne katalogi
 
@@ -25,6 +25,21 @@ Emulator NES robiony pod kątem minimalnych opóźnień oraz zgodności z fizycz
 - `metalnes/` - kod źródłowy emulatora zgodnego na poziomie tranzystorów (nie odpala się na Windows)
 
 ## Narzędzia diagnostyczne
+
+### run_tests.py (przegląd stanu — preferowany do sprawdzania)
+Buduje `accuracy_coin` + `nes_test` przez ninja, odpala accuracy_coin oraz
+wszystkie ROM-y testowe z jednoznacznym wynikiem tekstowym (testy wizualne
+i niejednoznaczne są pomijane — nie da się ich zweryfikować automatycznie)
+i wypisuje aktualny stan: wszystkie faile z powodami. Nic nie porównuje —
+raport to po prostu stan. Użycie:
+- `python run_tests.py` — build + wszystkie testy (~4 min)
+- `python run_tests.py --no-build` — bez przebudowy
+
+Aktualne faile i ich powody (stan na dziś):
+- accuracy_coin: 6 testów PPU str. 18-19 (timing cyklowy PPU)
+- `mmc3_test/5-MMC3` i `mmc3_irq_tests/6.MMC3_rev_B` — testy rewizji B
+  (Sharp); emulujemy rewizję A/MMC6, rewizje są wzajemnie wykluczające się
+- `read_joy3/count_errors*` i `test_buttons` to INFO (szum sprzętu / interaktywne)
 
 ### accuracy_coin (build/release/accuracy_coin.exe)
 Odpala `nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.nes` i zwraca listę testów z wynikami pass/fail.

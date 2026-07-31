@@ -122,13 +122,18 @@ public:
 
     void ppuAddress(uint16_t addr) override {
         if (!a12RisingEdge(addr)) return;
+        bool fire = false;
         if (irqCounter == 0 || irqReloadFlag) {
+            // zachowanie rewizji A / MMC6: IRQ tylko przy reloadzie z $C001
+            // (flagi reloadu) na wartość 0, nigdy przy "siedzeniu" na 0
+            fire = irqReloadFlag && (irqReload == 0);
             irqCounter = irqReload;
             irqReloadFlag = false;
         } else {
             irqCounter--;
+            fire = (irqCounter == 0);
         }
-        if (irqCounter == 0 && irqEnable) {
+        if (fire && irqEnable) {
             irqActive.set(true, 2);
         }
     }
