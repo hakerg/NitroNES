@@ -50,12 +50,12 @@ Akceptowane wejście:
 - `*.nes` — uruchamia od razu
 - `*.nsf` — uruchamia przez rdzeń NSFPlayer (headless `NESHeadlessNSF`), brak
   PPU/ekranu; komenda `frames:N` odpowiada N wywołaniom `play()`.
-- `*.asm` — kompiluje przez nesasm3. Zawartość katalogu źródłowego jest
-  kopiowana do `%TEMP%/nes_test_build/<hash>/<basename>/` i build leci tam —
-  repo nigdy nie jest modyfikowane. Obok wynikowego `.nes` pojawia się `.fns`.
+- `*.asm` — kompiluje przez nesasm3 w katalogu pliku źródłowego; build
+  nadpisuje istniejące artefakty w tym katalogu. Obok wynikowego `.nes`
+  pojawia się `.fns`.
 - `*.s`  — kompiluje przez ca65 + linkuje przez ld65 (z `--feature force_range`
-  dla zgodności z kodem blargga); artefakty trafiają do
-  `%TEMP%/nes_test_build/<hash>/<basename>/` — repo nigdy nie jest dotykane.
+  dla zgodności z kodem blargga); artefakty (`.o`, `.nes`, `.lbl`) trafiają do
+  katalogu pliku źródłowego, nadpisując istniejące.
   `nes.cfg` i katalog `common/` są wyszukiwane automatycznie obok pliku
   źródłowego (w górę drzewa do 4 poziomów).
 

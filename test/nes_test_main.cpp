@@ -6,10 +6,8 @@
 // Input file handling:
 //   *.nes            run as-is
 //   *.nsf            run through the NSF player core (no PPU/screen)
-//   *.asm            assemble with nesasm3 (source dir contents copied to a
-//                    temp build dir; original tree is never modified)
-//   *.s              assemble + link with ca65/ld65 (artifacts go to a temp
-//                    build dir so the source tree is never modified)
+//   *.asm            assemble with nesasm3 in the source directory
+//   *.s              assemble + link with ca65/ld65 in the source directory
 //
 // A symbol file next to the resulting .nes (`.fns` for nesasm or `.lbl` for
 // ld65 VICE format) is loaded automatically; symbol names then appear in the
@@ -48,7 +46,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -106,34 +103,16 @@ static int runCmd(const std::string& cmd, const fs::path& workDir = {}) {
     return ret;
 }
 
-static fs::path makeBuildDir(const fs::path& srcAbs) {
-    fs::path buildDir = fs::temp_directory_path() / "nes_test_build"
-                       / std::to_string(std::hash<std::string>{}(srcAbs.string()))
-                       / srcAbs.stem();
-    std::error_code ec;
-    fs::remove_all(buildDir, ec);
-    fs::create_directories(buildDir, ec);
-    return buildDir;
-}
-
 static fs::path buildAsmNesasm(const fs::path& asmPath, const fs::path& binaryDir) {
     fs::path nesasm = findNesasm(binaryDir);
     fs::path asmAbs = fs::absolute(asmPath);
-    fs::path buildDir = makeBuildDir(asmAbs);
+    fs::path srcDir = asmAbs.parent_path();
+    fs::path nesOut = asmAbs; nesOut.replace_extension(".nes");
 
-    std::error_code ec;
-    for (const auto& entry : fs::directory_iterator(asmAbs.parent_path(), ec)) {
-        if (!entry.is_regular_file()) continue;
-        fs::copy_file(entry.path(), buildDir / entry.path().filename(),
-                      fs::copy_options::overwrite_existing, ec);
-    }
-
-    fs::path asmInBuild = buildDir / asmAbs.filename();
-    fs::path nesOut = asmInBuild; nesOut.replace_extension(".nes");
-
-    std::string cmd = "\"\"" + nesasm.string() + "\" \"" + asmInBuild.string() + "\"\"";
-    if (runCmd(cmd, buildDir) != 0)
+    std::string cmd = "\"\"" + nesasm.string() + "\" \"" + asmAbs.string() + "\"\"";
+    if (runCmd(cmd, srcDir) != 0)
         throw std::runtime_error("nesasm failed");
+    std::error_code ec;
     if (!fs::exists(nesOut, ec)) throw std::runtime_error("compiled .nes not found");
     return nesOut;
 }
@@ -146,11 +125,9 @@ static fs::path buildSrcCa65(const fs::path& srcPath, const fs::path& binaryDir)
     if (nesCfg.empty())
         throw std::runtime_error("nes.cfg not found near " + srcAbs.string());
 
-    fs::path buildDir = makeBuildDir(srcAbs);
-
-    fs::path objOut = buildDir / (srcAbs.stem().string() + ".o");
-    fs::path nesOut = buildDir / (srcAbs.stem().string() + ".nes");
-    fs::path lblOut = buildDir / (srcAbs.stem().string() + ".lbl");
+    fs::path objOut = srcDir / (srcAbs.stem().string() + ".o");
+    fs::path nesOut = srcDir / (srcAbs.stem().string() + ".nes");
+    fs::path lblOut = srcDir / (srcAbs.stem().string() + ".lbl");
 
     fs::path ca65 = findCc65Bin(binaryDir, "ca65");
     fs::path ld65 = findCc65Bin(binaryDir, "ld65");
@@ -192,7 +169,7 @@ int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr <<
             "Usage: nes_test <rom-or-asm-or-nsf> [command]...\n"
-            "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65; tmp build dir)\n"
+            "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65)\n"
             "Commands: frames:N cycles:N reset screen ascii[:MAP] pixels:X:Y:W:H mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
             "          trace:cpu|ppu|dma|apu:on|off  trace-file:PATH\n"
