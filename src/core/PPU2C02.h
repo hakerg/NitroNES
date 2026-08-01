@@ -198,12 +198,14 @@ public:
         }
 
         if (bool prerender = (scanline == 261); visible || prerender) {
-            if (prerender && cycle == 1) {
-                status.verticalBlank  = 0;
+            if (prerender && cycle == 0) {
                 status.spriteZeroHit  = 0;
                 status.spriteOverflow = 0;
                 spriteOverflowCycle   = -1;
                 for (auto& p : spritePattern) p = {};
+            }
+            if (prerender && cycle == 1) {
+                status.verticalBlank  = 0;
             }
 
             backgroundFetchPhase();
