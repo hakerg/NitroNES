@@ -197,7 +197,7 @@ def main():
 
     if not args.no_build:
         print("=== BUILD ===")
-        r = subprocess.run(["ninja", "-C", BUILD, "accuracy_coin", "nes_test"])
+        r = subprocess.run(["ninja", "-C", BUILD])
         if r.returncode != 0:
             print("BUILD FAILED")
             return 2

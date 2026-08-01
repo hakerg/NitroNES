@@ -27,7 +27,7 @@ Emulator NES robiony pod kątem minimalnych opóźnień oraz zgodności z fizycz
 ## Narzędzia diagnostyczne
 
 ### run_tests.py (przegląd stanu — preferowany do sprawdzania)
-Buduje `accuracy_coin` + `nes_test` przez ninja, odpala accuracy_coin oraz
+Buduje cały projekt przez ninja, odpala accuracy_coin oraz
 wszystkie ROM-y testowe z jednoznacznym wynikiem tekstowym (testy wizualne
 i niejednoznaczne są pomijane — nie da się ich zweryfikować automatycznie)
 i wypisuje aktualny stan: wszystkie faile z powodami. Nic nie porównuje —
