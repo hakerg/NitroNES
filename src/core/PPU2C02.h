@@ -164,7 +164,6 @@ public:
         spriteCount = 0;
         spriteZeroHitPossible = false;
         spriteOverflowCycle = -1;
-        spriteZeroHitDelay.force(false);
         suppressVblThisFrame = false;
         nmiCycleLatch = false;
         nmiVbl = false;
@@ -374,8 +373,6 @@ private:
     ShiftPair<uint8_t> spritePattern[8]{};
     bool     spriteZeroHitPossible = false;
     int16_t  spriteOverflowCycle   = -1;
-
-    ShiftDelay<bool, 2> spriteZeroHitDelay{false};
 
     std::array<uint8_t, 32>          palScreen;
     std::array<uint32_t, 256 * 240>  buf;
@@ -657,7 +654,7 @@ private:
                 else dot += 2;
             } else {
                 if (int16_t diff = (int16_t)scanline - (int16_t)OAM[n * 4 + m];
-                    diff >= 0 && diff < spriteH) return (int16_t)dot;
+                    diff >= 0 && diff < spriteH) return (int16_t)(dot + 1);
                 m = (m + 1) & 3;
                 dot += 2;
             }
@@ -777,17 +774,13 @@ private:
     void renderPixel() {
         const int x = cycle - 1;
         const int y = scanline;
-        if ((unsigned)x >= (unsigned)NES::SCREEN_WIDTH || (unsigned)y >= (unsigned)NES::SCREEN_HEIGHT) {
-            status.spriteZeroHit |= spriteZeroHitDelay.tick(false);
-            return;
-        }
+        if ((unsigned)x >= (unsigned)NES::SCREEN_WIDTH || (unsigned)y >= (unsigned)NES::SCREEN_HEIGHT) return;
 
         Pixel bg = sampleBackground();
         bool spriteZero = false, fgPriority = false;
         Pixel sp = sampleSprite(spriteZero, fgPriority);
         const bool isSpriteZeroPixel = spriteZero && sp.nonzero;
 
-        bool hitNow = false;
         uint8_t pixel = 0, paletteIdx = 0;
         if (!bg.nonzero && sp.nonzero) {
             pixel = sp.color; paletteIdx = sp.palette;
@@ -799,10 +792,9 @@ private:
             if (spriteZeroHitPossible && isSpriteZeroPixel
                 && mask.renderBackground && mask.renderSprites) {
                 const int xLo = (mask.renderBackgroundLeft && mask.renderSpritesLeft) ? 1 : 9;
-                if (cycle >= xLo && cycle < 256) hitNow = true;
+                if (cycle >= xLo && cycle < 256) status.spriteZeroHit = 1;
             }
         }
-        status.spriteZeroHit |= spriteZeroHitDelay.tick(hitNow);
 
         uint8_t idx;
         if (!renderingEnabled() && (vramAddr.reg & 0x3F00) == 0x3F00)
