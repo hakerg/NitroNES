@@ -35,11 +35,6 @@ public:
                 nmiCycleLatch = false;
             break;
         case 1: {
-            const bool disableRendering = renderingEnabled() && !(data & 0x18);
-            if (disableRendering && (scanline == 261 || scanline <= 239)) {
-                oamCorruptionRow = ((cycle + 1) / 2) & 0x1F;
-                oamCorruptionPending = true;
-            }
             mask.reg = data;
             break;
         }
@@ -168,6 +163,8 @@ public:
         nmiCycleLatch = false;
         nmiVbl = false;
         ppuOpenBus = 0x00;
+        renderingActive = false;
+        renderEnableDelay.force(false);
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         spriteX.fill(0xFF);
         for (auto& p : spritePattern) p = {};
@@ -185,11 +182,18 @@ public:
 
     void clock() {
         cart.clockPpu();
+        const bool wasRendering = renderingActive;
+        renderingActive = renderEnableDelay.tick(mask.renderBackground || mask.renderSprites);
         ppuBusRead = false;
         const bool updatePpuDataBuffer = ppuDataRead.tick(ppuDataReadPending);
         const uint16_t ppuDataAddr = ppuDataReadAddr.tick(ppuDataReadPendingAddr);
         ppuDataReadPending = false;
         const bool visible = (scanline >= 0 && scanline <= 239);
+
+        if (wasRendering && !renderingActive && (visible || scanline == 261)) {
+            oamCorruptionRow = ((cycle + 1) / 2) & 0x1F;
+            oamCorruptionPending = true;
+        }
 
         if (oamCorruptionPending && renderingEnabled() && (visible || scanline == 261)) {
             std::memcpy(OAM + oamCorruptionRow * 8, OAM, 8);
@@ -349,6 +353,9 @@ private:
 
     uint8_t  ppuOpenBus = 0x00;
 
+    bool renderingActive = false;
+    ShiftDelay<bool, 3> renderEnableDelay{false};
+
     template <typename T>
     struct ShiftPair { T lo = 0, hi = 0; };
 
@@ -383,7 +390,7 @@ private:
         return addr;
     }
 
-    bool renderingEnabled() const { return mask.renderBackground || mask.renderSprites; }
+    bool renderingEnabled() const { return renderingActive; }
 
     void refreshOpenBus(uint8_t maskBits, uint8_t value) {
         ppuOpenBus = (ppuOpenBus & ~maskBits) | (value & maskBits);
@@ -504,13 +511,16 @@ private:
     }
 
     void backgroundFetchPhase() {
-        if (!renderingEnabled()) return;
         if (!((cycle >= 1 && cycle < 258) || (cycle >= 321 && cycle < 338))) return;
 
         if (cycle != 1) {
-            updateShifters();
-            if (cycle != 257 && ((cycle - 1) & 7) == 0) loadBackgroundShifters();
+            clockSpriteShifters();
+            if (renderingEnabled()) {
+                updateShifters();
+                if (cycle != 257 && ((cycle - 1) & 7) == 0) loadBackgroundShifters();
+            }
         }
+        if (!renderingEnabled()) return;
         if (cycle == 257 || cycle == 337) return;
 
         switch (cycle & 7) {
@@ -575,21 +585,21 @@ private:
     }
 
     void updateShifters() {
-        if (renderingEnabled()) {
-            bgPattern.lo <<= 1;
-            bgPattern.hi = (bgPattern.hi << 1) | 0x0001;
-            bgAttrib.lo  <<= 1;
-            bgAttrib.hi  <<= 1;
-        }
-        if (renderingEnabled() && cycle >= 1 && cycle < 258) {
-            const bool visibleScanline = (scanline >= 0 && scanline <= 239);
-            for (int i = 0; i < 8 && i < spriteCount; i++) {
-                if (spriteX[i] > 0)
-                    spriteX[i]--;
-                else if (visibleScanline) {
-                    spritePattern[i].lo <<= 1;
-                    spritePattern[i].hi <<= 1;
-                }
+        bgPattern.lo <<= 1;
+        bgPattern.hi = (bgPattern.hi << 1) | 0x0001;
+        bgAttrib.lo  <<= 1;
+        bgAttrib.hi  <<= 1;
+    }
+
+    void clockSpriteShifters() {
+        if (cycle < 1 || cycle >= 258) return;
+        const bool visibleScanline = (scanline >= 0 && scanline <= 239);
+        for (int i = 0; i < 8 && i < spriteCount; i++) {
+            if (spriteX[i] > 0)
+                spriteX[i]--;
+            else if (visibleScanline && renderingEnabled()) {
+                spritePattern[i].lo <<= 1;
+                spritePattern[i].hi <<= 1;
             }
         }
     }
@@ -808,7 +818,7 @@ private:
 
     void advanceCycle() {
         if (scanline == 261 && cycle == 338)
-            oddFrameSkip.set(frameOdd && renderingEnabled(), 2);
+            oddFrameSkip.set(frameOdd && (mask.renderBackground || mask.renderSprites), 2);
         oddFrameSkip.tick();
 
         cycle++;
