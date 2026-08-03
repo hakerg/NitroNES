@@ -257,8 +257,12 @@ public:
         if (scanline == 241 && cycle == 0) nmiVbl = true;
         if (scanline == 261 && cycle == 0) nmiVbl = false;
 
-        if (updatePpuDataBuffer)
+        if (updatePpuDataBuffer) {
             ppuDataBuffer = ppuBusRead ? ppuBusData : ppuRead(ppuDataAddr);
+            drivePpuAddress();
+            incrementVramAddr();
+            drivePpuAddress();
+        }
 
         renderPixel();
 
@@ -544,9 +548,6 @@ private:
         }
         ppuDataReadPendingAddr = busAddr >= 0x3F00 ? busAddr & 0x2FFF : busAddr;
         ppuDataReadPending = true;
-        drivePpuAddress();
-        incrementVramAddr();
-        drivePpuAddress();
         return data;
     }
 
