@@ -177,6 +177,7 @@ public:
         ppuDataReadPendingAddr = 0;
         ppuBusData = 0;
         ppuBusRead = false;
+        ppuBusAle = false;
         ppuAddressLow = 0;
         ppuBusAddr = 0;
     }
@@ -188,6 +189,7 @@ public:
         const bool wasRendering = renderingActive;
         renderingActive = renderEnableDelay.tick(mask.renderBackground || mask.renderSprites);
         ppuBusRead = false;
+        ppuBusAle = false;
         const bool updatePpuDataBuffer = ppuDataRead.tick(ppuDataReadPending);
         const uint16_t ppuDataAddr = ppuDataReadAddr.tick(ppuDataReadPendingAddr);
         ppuDataReadPending = false;
@@ -258,7 +260,15 @@ public:
         if (scanline == 261 && cycle == 0) nmiVbl = false;
 
         if (updatePpuDataBuffer) {
-            ppuDataBuffer = ppuBusRead ? ppuBusData : ppuRead(ppuDataAddr);
+            if (ppuBusRead)
+                ppuDataBuffer = ppuBusData;
+            else if (ppuBusAle) {
+                ppuAddressLow = ppuBusData;
+                ppuBusAddr = (ppuBusAddr & 0x3F00) | ppuAddressLow;
+                cart.ppuAddress(ppuBusAddr);
+                ppuDataBuffer = ppuRead(ppuBusAddr);
+            } else
+                ppuDataBuffer = ppuRead(ppuDataAddr);
             drivePpuAddress();
             incrementVramAddr();
             drivePpuAddress();
@@ -349,6 +359,7 @@ private:
     uint16_t ppuDataReadPendingAddr = 0;
     uint8_t  ppuBusData = 0;
     bool     ppuBusRead = false;
+    bool     ppuBusAle  = false;
     uint8_t  ppuAddressLow = 0;
     uint16_t ppuBusAddr = 0;
 
@@ -952,6 +963,7 @@ private:
         addr &= 0x3FFF;
         ppuAddressLow = addr & 0x00FF;
         ppuBusAddr = addr;
+        ppuBusAle = true;
         cart.ppuAddress(addr);
     }
 
