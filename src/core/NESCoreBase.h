@@ -75,7 +75,13 @@ protected:
     virtual PPU2C02* getPPU() { return nullptr; }
 
     virtual void pushAudioSample(float sample, double dt) = 0;
+
     virtual void onFrameCompleted() {}
+
+    void pushAudioOutput(float external) {
+        pushAudioSample(a2a03.getAPU().getOutputSample() + external,
+                        1.0 / (getCPUClockRate() * speed));
+    }
 
     A2A03 a2a03;
     std::array<uint8_t, 2048> cpuRam;

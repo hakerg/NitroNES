@@ -129,7 +129,6 @@ public:
         trampoline[2] = (TRAMPOLINE_ADDR >> 8) & 0xFF;
 
         currentSong = nsfHeader.startingSong;
-        initSong(currentSong);
         return true;
     }
 
@@ -231,9 +230,7 @@ protected:
         a2a03.clockPhi1();
         a2a03.clockPhi2();
 
-        const float mapperOut = expChip ? expChip->audioOutput() : 0.0f;
-        pushAudioSample(a2a03.getAPU().getOutputSample() + mapperOut,
-                        1.0 / (getCPUClockRate() * speed));
+        pushAudioOutput(expChip ? expChip->audioOutput() : 0.0f);
     }
 
     uint8_t readMemoryExternal(uint16_t addr) override { return readMemory(addr); }

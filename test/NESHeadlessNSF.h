@@ -4,7 +4,9 @@
 class NESHeadlessNSF : public NSFPlayer {
 public:
     explicit NESHeadlessNSF(const std::string& path)
-        : NSFPlayer(audioSettings, path) {}
+        : NSFPlayer(audioSettings, path) {
+        initSong(getCurrentSong());
+    }
 
     void setController1(uint8_t buttons) { controller1 = buttons; }
     void setController2(uint8_t buttons) { controller2 = buttons; }

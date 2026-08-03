@@ -20,11 +20,15 @@ public:
     NSFSession(const std::string &path, IWindow &window,
                AppAudioStream &audio, AppSettings &settings)
         : IFileSession(path, audio, window, settings),
-          NSFPlayer(settings.audioSettings, path) {}
+          NSFPlayer(settings.audioSettings, path) {
+        initSong(getCurrentSong());
+    }
 
     ~NSFSession() override = default;
 
     NESCoreBase& getCore() override { return *this; }
+
+    int getAudioBufferTargetMs() const override { return 100; }
 
     std::string getInfo() override {
         const NSFHeader &h = header();

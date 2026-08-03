@@ -65,8 +65,7 @@ protected:
         ppu.clock();
         a2a03.clockPhi2();
 
-        pushAudioSample(a2a03.getAPU().getOutputSample() + cart.audioOutput(),
-                        1.0 / (getCPUClockRate() * speed));
+        pushAudioOutput(cart.audioOutput());
     }
 
     uint8_t readMemory(uint16_t addr) override {
