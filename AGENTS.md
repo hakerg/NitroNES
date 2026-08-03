@@ -36,8 +36,6 @@ raport to po prostu stan. Użycie:
 - `python run_tests.py --no-build` — bez przebudowy
 
 Aktualne faile i ich powody (stan na dziś):
-- accuracy_coin: 2 testy PPU str. 19 (timing cyklowy PPU:
-  ALE+Read, Hybrid Addresses)
 - `mmc3_test/5-MMC3` i `mmc3_irq_tests/6.MMC3_rev_B` — testy rewizji B
   (Sharp); emulujemy rewizję A/MMC6, rewizje są wzajemnie wykluczające się
 - `read_joy3/count_errors*` i `test_buttons` to INFO (szum sprzętu / interaktywne)

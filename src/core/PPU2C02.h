@@ -63,9 +63,8 @@ public:
                 addressLatch = 1;
             } else {
                 tramAddr.reg = (tramAddr.reg & 0xFF00) | data;
-                vramAddr.reg = tramAddr.reg;
+                vramAddrWritePending = true;
                 addressLatch = 0;
-                drivePpuAddress();
             }
             break;
         case 7:
@@ -180,6 +179,9 @@ public:
         ppuBusAle = false;
         ppuAddressLow = 0;
         ppuBusAddr = 0;
+        vramAddrWrite.force(false);
+        vramAddrWriteValue.force(0);
+        vramAddrWritePending = false;
     }
 
     uint32_t* getFramebuffer() { return buf.data(); }
@@ -193,6 +195,13 @@ public:
         const bool updatePpuDataBuffer = ppuDataRead.tick(ppuDataReadPending);
         const uint16_t ppuDataAddr = ppuDataReadAddr.tick(ppuDataReadPendingAddr);
         ppuDataReadPending = false;
+        const bool applyVramAddrWrite = vramAddrWrite.tick(vramAddrWritePending);
+        const uint16_t vramAddrWriteVal = vramAddrWriteValue.tick(tramAddr.reg);
+        vramAddrWritePending = false;
+        if (applyVramAddrWrite) {
+            vramAddr.reg = vramAddrWriteVal;
+            drivePpuAddress();
+        }
         const bool visible = (scanline >= 0 && scanline <= 239);
 
         if (wasRendering && !renderingActive && (visible || scanline == 261)) {
@@ -362,6 +371,10 @@ private:
     bool     ppuBusAle  = false;
     uint8_t  ppuAddressLow = 0;
     uint16_t ppuBusAddr = 0;
+
+    ShiftDelay<bool, 3>     vramAddrWrite{false};
+    ShiftDelay<uint16_t, 3> vramAddrWriteValue{0};
+    bool vramAddrWritePending = false;
 
     int16_t  scanline             = 0;
     int16_t  cycle                = 0;
