@@ -51,15 +51,18 @@ public:
 
     virtual std::string getInfo() = 0;
 
-    virtual int getAudioBufferTargetMs() const { return 25; }
+    virtual int getAudioBufferTargetMs() const { return 15; }
 
     void clockCore(double baseSpeed) {
         NESCoreBase& core = getCore();
         core.speed = getSyncedSpeed(baseSpeed);
         settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core.speed);
 
+        int frameMs = static_cast<int>(duration_cast<milliseconds>(getFrameDuration(baseSpeed)).count());
+        int bufferTarget = frameMs + getAudioBufferTargetMs();
+
         int audioQueuedMs = audio.getQueuedMs();
-        if (core.paused || audioQueuedMs > getAudioBufferTargetMs()) {
+        if (core.paused || audioQueuedMs > bufferTarget) {
             waitUntilNextFrameTime(baseSpeed);
             return;
         }
