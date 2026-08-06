@@ -67,6 +67,32 @@ public:
                 std::cerr << "[nes_test] unknown command: " << cmd << "\n";
                 return false;
             }
+            std::cout.flush();
+            std::cerr.flush();
+        }
+        return true;
+    }
+
+    // Interactive mode: read commands from stdin, one per line. Each command
+    // response is flushed immediately, so a script can drive the machine
+    // step-by-step (e.g. "frames:1" then "ascii" then check the result and
+    // either continue or kill the process). EOF ends the session. Lines
+    // starting with '#' and blank lines are ignored.
+    bool runInteractive() {
+        std::string line;
+        while (std::getline(std::cin, line)) {
+            trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            if (line == "quit" || line == "exit") break;
+            std::cerr << "[nes_test] > " << line << "\n";
+            if (!dispatch(line)) {
+                std::cerr << "[nes_test] unknown command: " << line << "\n";
+                std::cout.flush();
+                std::cerr.flush();
+                return false;
+            }
+            std::cout.flush();
+            std::cerr.flush();
         }
         return true;
     }

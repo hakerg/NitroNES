@@ -162,6 +162,7 @@ static int runTest(const fs::path& romPath, const std::vector<std::string>& comm
         }
     }
 
+    if (commands.empty()) return runner.runInteractive() ? 0 : 1;
     return runner.run(commands) ? 0 : 1;
 }
 
@@ -170,6 +171,8 @@ int main(int argc, char* argv[]) {
         std::cerr <<
             "Usage: nes_test <rom-or-asm-or-nsf> [command]...\n"
             "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65)\n"
+            "With no commands, reads them from stdin (one per line, '#' = comment);\n"
+            "each response is flushed, enabling script-driven stepping.\n"
             "Commands: frames:N cycles:N reset screen ascii[:MAP] pixels:X:Y:W:H mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
             "          trace:cpu|ppu|dma|apu:on|off  trace-file:PATH\n"

@@ -36,6 +36,7 @@
 #include "Mapper065.h"
 #include "Mapper066.h"
 #include "Mapper068.h"
+#include "Mapper069.h"
 #include "Mapper070.h"
 #include "Mapper071.h"
 #include "Mapper072.h"

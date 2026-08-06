@@ -10,7 +10,7 @@ class Mapper078 : public Mapper {
 public:
     using Mapper::Mapper;
     void reset() override {
-        prg = 0;
+        prg = (prgBanks / 2) > 0 ? (prgBanks / 2 - 1) & 0x07 : 0;
         chr = 0;
         mirrorMode = Mirroring::HORIZONTAL;
     }
@@ -36,7 +36,7 @@ public:
     bool ppuMapRead(uint16_t a, uint32_t &mapped) override {
         if (a > 0x1FFF)
             return false;
-        mapped = (uint32_t)chr * 0x2000 + (a & 0x1FFF);
+        mapped = (uint32_t)mapper_helpers::maskBank(chr, chrBanks) * 0x2000 + (a & 0x1FFF);
         return true;
     }
     bool ppuMapWrite(uint16_t a, uint32_t &mapped) override {

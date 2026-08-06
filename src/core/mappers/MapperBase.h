@@ -14,7 +14,7 @@ enum class Mirroring {
 
 namespace mapper_helpers {
 
-inline uint8_t maskBank(uint8_t bank, uint8_t numBanks) {
+inline uint16_t maskBank(uint16_t bank, uint16_t numBanks) {
     if (numBanks == 0)
         return 0;
     if ((numBanks & (numBanks - 1)) == 0)
@@ -22,35 +22,35 @@ inline uint8_t maskBank(uint8_t bank, uint8_t numBanks) {
     return bank % numBanks;
 }
 
-inline uint32_t mapPrg16k_fixedHi(uint16_t addr, uint8_t bankLo,
-                                  uint8_t prgBanks) {
+inline uint32_t mapPrg16k_fixedHi(uint16_t addr, uint16_t bankLo,
+                                  uint16_t prgBanks) {
     if (addr < 0xC000)
         return (uint32_t)maskBank(bankLo, prgBanks) * 0x4000 + (addr & 0x3FFF);
     return (uint32_t)maskBank(prgBanks - 1, prgBanks) * 0x4000 +
            (addr & 0x3FFF);
 }
 
-inline uint32_t mapPrg16k_fixedLo(uint16_t addr, uint8_t bankHi,
-                                  uint8_t prgBanks) {
+inline uint32_t mapPrg16k_fixedLo(uint16_t addr, uint16_t bankHi,
+                                  uint16_t prgBanks) {
     if (addr < 0xC000)
         return (uint32_t)0 * 0x4000 + (addr & 0x3FFF);
     return (uint32_t)maskBank(bankHi, prgBanks) * 0x4000 + (addr & 0x3FFF);
 }
 
-inline uint32_t mapPrg32k(uint16_t addr, uint8_t bank32, uint8_t prgBanks) {
-    uint8_t n = prgBanks / 2;
+inline uint32_t mapPrg32k(uint16_t addr, uint16_t bank32, uint16_t prgBanks) {
+    uint16_t n = prgBanks / 2;
     if (n == 0)
         n = 1;
     return (uint32_t)maskBank(bank32, n) * 0x8000 + (addr & 0x7FFF);
 }
 
-inline uint32_t mapChr8k(uint16_t addr, uint8_t bank, uint8_t chrBanks) {
+inline uint32_t mapChr8k(uint16_t addr, uint16_t bank, uint16_t chrBanks) {
     if (chrBanks == 0)
         return addr & 0x1FFF;
     return (uint32_t)maskBank(bank, chrBanks) * 0x2000 + (addr & 0x1FFF);
 }
 
-inline bool chrRamWrite(uint16_t addr, uint32_t &mapped, uint8_t chrBanks) {
+inline bool chrRamWrite(uint16_t addr, uint32_t &mapped, uint16_t chrBanks) {
     if (addr <= 0x1FFF && chrBanks == 0) {
         mapped = addr;
         return true;
@@ -62,7 +62,7 @@ inline bool chrRamWrite(uint16_t addr, uint32_t &mapped, uint8_t chrBanks) {
 
 class Mapper {
 public:
-    Mapper(uint16_t prgBanks, uint8_t chrBanks)
+    Mapper(uint16_t prgBanks, uint16_t chrBanks)
         : prgBanks(prgBanks), chrBanks(chrBanks) {}
     virtual ~Mapper() = default;
 
@@ -96,6 +96,8 @@ public:
 
     virtual void setAudioSettings(AudioSettings& settings) {}
 
+    void setChrRam1kBanks(uint16_t banks) { chrRam1kBanks = banks; }
+
     virtual const char* name() const = 0;
 
 protected:
@@ -119,7 +121,8 @@ protected:
     }
 
     uint16_t prgBanks;
-    uint8_t chrBanks;
+    uint16_t chrBanks;
+    uint16_t chrRam1kBanks = 8;
 
 private:
     bool a12 = false;

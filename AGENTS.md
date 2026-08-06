@@ -32,13 +32,58 @@ wszystkie ROM-y testowe z jednoznacznym wynikiem tekstowym (testy wizualne
 i niejednoznaczne są pomijane — nie da się ich zweryfikować automatycznie)
 i wypisuje aktualny stan: wszystkie faile z powodami. Nic nie porównuje —
 raport to po prostu stan. Użycie:
-- `python run_tests.py` — build + wszystkie testy (~4 min)
+- `python run_tests.py` — build + wszystkie testy (~2 min, w tym Holy Mapperel)
 - `python run_tests.py --no-build` — bez przebudowy
+
+ROM-y są odpalane w trybie interaktywnym nes_test (stdin): pętla
+`frames:30` + `ascii`, klasyfikacja co krok, wczesny stop przy wyniku
+(2 kolejne poll-e z tym samym statusem dla pewności; Holy Mapperel po
+pierwszym). Testy z resetem (cpu_reset, apu_reset) używają klasycznego
+przebiegu jednorazowego.
 
 Aktualne faile i ich powody (stan na dziś):
 - `mmc3_test/5-MMC3` i `mmc3_irq_tests/6.MMC3_rev_B` — testy rewizji B
   (Sharp); emulujemy rewizję A/MMC6, rewizje są wzajemnie wykluczające się
 - `read_joy3/count_errors*` i `test_buttons` to INFO (szum sprzętu / interaktywne)
+- Holy Mapperel: patrz sekcja poniżej (fail = ekran z detałem != 0000 albo kod morsa)
+
+### holy_mapperel (nes-test-roms-master/holy-mapperel/)
+Test płytki PCB autorstwa Damiana Yerricka (pinobatch/holy-mapperel): wykrywa
+mapper po mirroringu, testuje bankowanie PRG/CHR, WRAM, CHR RAM i IRQ.
+Wynik wyświetla na ekranie albo — przy twardej awarii — pika kodem morsa.
+ROM-y generowane z repo (repo nie zawiera gotowych ROM-ów):
+```
+cd nes-test-roms-master/holy-mapperel
+export PATH="<repo>/cc65-snapshot-win32/bin:$PATH"   # ca65/ld65
+make            # buduje mapperel-primary.nes (wymaga ca65, Pillow, git tag)
+cd tools && py make_roms.py   # generuje 35 ROM-ów do ../testroms/
+```
+Pliki `.lbl` przy ROM-ach (kopie primary.lbl) dają symbole w trace CPU.
+
+Mapa znaków dla `ascii:` (font 8x5: litery na kafelkach $01-$1A, reszta jak ASCII):
+```
+ascii:' ABCDEFGHIJKLMNOPQRSTUVWXYZ      !"#$%&'()*+,-./0123456789:;<=>?'
+```
+
+Kody morsa (README + morse.inc): WB = wrong bank przy starcie, MIR = mirroring
+nie pasuje do żadnego mappera, SU = SUROM 4M, LB/RB = zły bank po detekcji/
+teście, CBT = CHR bank tags niespójne, FON = font w CHR nie zgadza się z PRG,
+DRV = brak sterownika mappera.
+
+Ekran: `DETAILED TEST RESULT: XXXX` — 4 cyfry (WRAM, PRG, IRQ, CHR), 0 = OK.
+Znane kody: MMC1 `1xxx` = $E000 bit 4 nie wyłącza WRAM; MMC1 `4xxx` = $A000
+bit 4; MMC3 `2xxx` = brak trybu read-only WRAM. Linie `... OK / PROBLEM /
+MISSING` dla PRG RAM i CHR.
+
+run_tests.py klasyfikuje automatycznie: ekran z detałem != 0000 lub
+PROBLEM/MISSING = fail (z pełnym opisem). Brak ekranu wyniku = detekcja kodu
+morsa z pamięci, bez trace: litery morsa to stałe w kodzie ROM (wzorzec
+`A9 xx 20 B0 FF` = LDA #lit; JSR morsebeep), a JSR wpycha na stos
+(adres_powrotu - 1) — run_tests.py skanuje stos CPU ($01F0, `mem:`) i zeropage
+($01-$03 dla ścieżki MIR), mapując wciśnięte adresy na litery (`hm_morse_sites()`
+buduje mapę z pliku ROM). M69 (FME-7) = fail "emulator nie implementuje tego
+mappera" (Cartridge odrzuca ROM). MISSING na ekranie = fail tylko gdy nagłówek
+ROM-u deklaruje PRG RAM (bajt 10 nagłówka), inaczej oczekiwane.
 
 ### accuracy_coin (build/release/accuracy_coin.exe)
 Odpala `nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.nes` i zwraca listę testów z wynikami pass/fail.
@@ -64,7 +109,16 @@ automatycznie z miejsca obok wynikowego `.nes` i pojawiają się w trace CPU.
 Użycie:
   nes_test <rom-or-asm-or-nsf> [command]...
 
-Komendy (wykonywane sekwencyjnie, każda jako osobny argv):
+Tryb interaktywny (stdin): bez komend w argv nes_test czyta komendy ze
+standardowego wejścia — jedna na linię (puste linie i `#` są ignorowane,
+`quit`/`exit` kończy sesję). Po każdej komendzie stdout jest flushowany,
+więc skrypt może sterować krok po kroku: `frames:1`, potem `ascii`, sprawdzić
+wynik i albo kontynuować, albo ubić proces. Na tym opiera się run_tests.py
+(`run_rom_poll` — pętla frames:30 + ascii, wczesny stop przy wyniku).
+Przykład (potok):
+  printf 'frames:120\nascii:MAP\nquit\n' | nes_test rom.nes
+
+Komendy (wykonywane sekwencyjnie, każda jako osobny argv lub linia stdin):
   frames:N             clockuj N klatek (lub N wywołań play() dla .nsf)
   cycles:N             clockuj N cykli CPU
   reset                soft reset

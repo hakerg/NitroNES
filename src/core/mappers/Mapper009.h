@@ -66,12 +66,11 @@ public:
         if (addr > 0x1FFF)
             return false;
 
-        // Wyb�r banku wed�ug aktualnego stanu latcha
         if (addr < 0x1000) {
-            uint8_t bank = (latch0 == 0xFD) ? chrBank0A : chrBank0B;
+            uint8_t bank = (latch0 == 0xFD) ? chrBankMask(chrBank0A) : chrBankMask(chrBank0B);
             mapped = (uint32_t)bank * 0x1000 + (addr & 0x0FFF);
         } else {
-            uint8_t bank = (latch1 == 0xFD) ? chrBank1A : chrBank1B;
+            uint8_t bank = (latch1 == 0xFD) ? chrBankMask(chrBank1A) : chrBankMask(chrBank1B);
             mapped = (uint32_t)bank * 0x1000 + (addr & 0x0FFF);
         }
 
@@ -97,6 +96,11 @@ public:
     bool hasDynamicMirror() const override { return true; }
 
 private:
+    uint8_t chrBankMask(uint8_t reg) const {
+        if (chrBanks == 0) return reg;
+        uint16_t total = (uint16_t)chrBanks * 2;
+        return mapper_helpers::maskBank(reg, total);
+    }
     uint8_t prgBank = 0;
     uint8_t chrBank0A = 0, chrBank0B = 0;
     uint8_t chrBank1A = 0, chrBank1B = 0;

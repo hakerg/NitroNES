@@ -8,10 +8,14 @@
 class Mapper066 : public Mapper {
 public:
     using Mapper::Mapper;
+    void reset() override {
+        prgBankSelect = (prgBanks / 2) > 0 ? (prgBanks / 2 - 1) & 0x03 : 0;
+        chrBankSelect = 0;
+    }
 
     bool cpuMapRead(uint16_t addr, uint32_t &mapped, uint8_t &) override {
         if (addr >= 0x8000) {
-            mapped = (uint32_t)prgBankSelect * 0x8000 + (addr & 0x7FFF);
+            mapped = mapper_helpers::mapPrg32k(addr, prgBankSelect, prgBanks);
             return true;
         }
         return false;
@@ -24,7 +28,7 @@ public:
     }
     bool ppuMapRead(uint16_t addr, uint32_t &mapped) override {
         if (addr <= 0x1FFF) {
-            mapped = (uint32_t)chrBankSelect * 0x2000 + addr;
+            mapped = mapper_helpers::mapChr8k(addr, chrBankSelect, chrBanks);
             return true;
         }
         return false;

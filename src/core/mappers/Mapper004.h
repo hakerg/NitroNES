@@ -25,6 +25,7 @@ public:
         irqReloadFlag = false;
         irqCounter = 0;
         irqReload = 0;
+        wramReadOnly = false;
         for (auto &r : pRegister)
             r = 0;
         updateBanks();
@@ -71,7 +72,7 @@ public:
                 mirrorMode =
                     (data & 0x01) ? Mirroring::HORIZONTAL : Mirroring::VERTICAL;
             } else {
-                // PRG-RAM protect ignorujemy
+                wramReadOnly = (data & 0x80) != 0;
             }
         } else if (addr < 0xE000) {
             // $C000-$DFFF
@@ -92,29 +93,16 @@ public:
         }
     }
 
+    bool cpuWriteDirect(uint16_t addr, uint8_t) override {
+        return wramReadOnly && addr >= 0x6000 && addr <= 0x7FFF;
+    }
+
     bool ppuMapRead(uint16_t addr, uint32_t &mapped) override {
-        if (addr > 0x1FFF)
-            return false;
-        if (addr < 0x0400)
-            mapped = pCHRBank[0] + (addr & 0x03FF);
-        else if (addr < 0x0800)
-            mapped = pCHRBank[1] + (addr & 0x03FF);
-        else if (addr < 0x0C00)
-            mapped = pCHRBank[2] + (addr & 0x03FF);
-        else if (addr < 0x1000)
-            mapped = pCHRBank[3] + (addr & 0x03FF);
-        else if (addr < 0x1400)
-            mapped = pCHRBank[4] + (addr & 0x03FF);
-        else if (addr < 0x1800)
-            mapped = pCHRBank[5] + (addr & 0x03FF);
-        else if (addr < 0x1C00)
-            mapped = pCHRBank[6] + (addr & 0x03FF);
-        else
-            mapped = pCHRBank[7] + (addr & 0x03FF);
-        return true;
+        return chrMapAddr(addr, mapped);
     }
     bool ppuMapWrite(uint16_t addr, uint32_t &mapped) override {
-        return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
+        if (chrBanks > 0) return false;
+        return chrMapAddr(addr, mapped);
     }
 
     Mirroring mirror() const override { return mirrorMode; }
@@ -147,35 +135,66 @@ public:
     void irqClear() override { irqActive = false; }
 
 protected:
+    bool chrMapAddr(uint16_t addr, uint32_t &mapped) const {
+        if (addr > 0x1FFF)
+            return false;
+        if (addr < 0x0400)
+            mapped = pCHRBank[0] + (addr & 0x03FF);
+        else if (addr < 0x0800)
+            mapped = pCHRBank[1] + (addr & 0x03FF);
+        else if (addr < 0x0C00)
+            mapped = pCHRBank[2] + (addr & 0x03FF);
+        else if (addr < 0x1000)
+            mapped = pCHRBank[3] + (addr & 0x03FF);
+        else if (addr < 0x1400)
+            mapped = pCHRBank[4] + (addr & 0x03FF);
+        else if (addr < 0x1800)
+            mapped = pCHRBank[5] + (addr & 0x03FF);
+        else if (addr < 0x1C00)
+            mapped = pCHRBank[6] + (addr & 0x03FF);
+        else
+            mapped = pCHRBank[7] + (addr & 0x03FF);
+        return true;
+    }
+
+    uint8_t chrBankMasked(uint8_t reg) const {
+        uint16_t total1k = chrBanks > 0 ? (uint16_t)chrBanks * 8 : chrRam1kBanks;
+        if ((total1k & (total1k - 1)) == 0)
+            return reg & (total1k - 1);
+        return reg % total1k;
+    }
+
     void updateBanks() {
         if (chrInversion) {
-            pCHRBank[0] = (uint32_t)pRegister[2] * 0x0400;
-            pCHRBank[1] = (uint32_t)pRegister[3] * 0x0400;
-            pCHRBank[2] = (uint32_t)pRegister[4] * 0x0400;
-            pCHRBank[3] = (uint32_t)pRegister[5] * 0x0400;
-            pCHRBank[4] = (uint32_t)(pRegister[0] & 0xFE) * 0x0400;
+            pCHRBank[0] = (uint32_t)chrBankMasked(pRegister[2]) * 0x0400;
+            pCHRBank[1] = (uint32_t)chrBankMasked(pRegister[3]) * 0x0400;
+            pCHRBank[2] = (uint32_t)chrBankMasked(pRegister[4]) * 0x0400;
+            pCHRBank[3] = (uint32_t)chrBankMasked(pRegister[5]) * 0x0400;
+            pCHRBank[4] = (uint32_t)chrBankMasked(pRegister[0] & 0xFE) * 0x0400;
             pCHRBank[5] = pCHRBank[4] + 0x0400;
-            pCHRBank[6] = (uint32_t)(pRegister[1] & 0xFE) * 0x0400;
+            pCHRBank[6] = (uint32_t)chrBankMasked(pRegister[1] & 0xFE) * 0x0400;
             pCHRBank[7] = pCHRBank[6] + 0x0400;
         } else {
-            pCHRBank[0] = (uint32_t)(pRegister[0] & 0xFE) * 0x0400;
+            uint8_t r0 = chrBankMasked(pRegister[0] & 0xFE);
+            pCHRBank[0] = (uint32_t)r0 * 0x0400;
             pCHRBank[1] = pCHRBank[0] + 0x0400;
-            pCHRBank[2] = (uint32_t)(pRegister[1] & 0xFE) * 0x0400;
+            uint8_t r1 = chrBankMasked(pRegister[1] & 0xFE);
+            pCHRBank[2] = (uint32_t)r1 * 0x0400;
             pCHRBank[3] = pCHRBank[2] + 0x0400;
-            pCHRBank[4] = (uint32_t)pRegister[2] * 0x0400;
-            pCHRBank[5] = (uint32_t)pRegister[3] * 0x0400;
-            pCHRBank[6] = (uint32_t)pRegister[4] * 0x0400;
-            pCHRBank[7] = (uint32_t)pRegister[5] * 0x0400;
+            pCHRBank[4] = (uint32_t)chrBankMasked(pRegister[2]) * 0x0400;
+            pCHRBank[5] = (uint32_t)chrBankMasked(pRegister[3]) * 0x0400;
+            pCHRBank[6] = (uint32_t)chrBankMasked(pRegister[4]) * 0x0400;
+            pCHRBank[7] = (uint32_t)chrBankMasked(pRegister[5]) * 0x0400;
         }
 
         if (prgMode) {
             pPRGBank[0] = (uint32_t)(prgBanks * 2 - 2) * 0x2000;
-            pPRGBank[2] = (uint32_t)(pRegister[6] & 0x3F) * 0x2000;
+            pPRGBank[2] = (uint32_t)mapper_helpers::maskBank(pRegister[6], prgBanks * 2) * 0x2000;
         } else {
-            pPRGBank[0] = (uint32_t)(pRegister[6] & 0x3F) * 0x2000;
+            pPRGBank[0] = (uint32_t)mapper_helpers::maskBank(pRegister[6], prgBanks * 2) * 0x2000;
             pPRGBank[2] = (uint32_t)(prgBanks * 2 - 2) * 0x2000;
         }
-        pPRGBank[1] = (uint32_t)(pRegister[7] & 0x3F) * 0x2000;
+        pPRGBank[1] = (uint32_t)mapper_helpers::maskBank(pRegister[7], prgBanks * 2) * 0x2000;
         pPRGBank[3] = (uint32_t)(prgBanks * 2 - 1) * 0x2000;
     }
 
@@ -190,6 +209,7 @@ protected:
     DelayedPin<bool> irqActive{false};
     bool irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+    bool wramReadOnly = false;
     const char* name() const override { return "MMC3"; }
 };
 

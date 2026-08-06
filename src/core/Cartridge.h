@@ -44,23 +44,49 @@ public:
 
         const bool nes2 = (header.mapper2 & 0x0C) == 0x08;
         prgBanks = header.prg_rom_chunks;
-        if (nes2 && (header.tv_system1 & 0x0F) != 0x0F)
-            prgBanks |= (uint16_t)(header.tv_system1 & 0x0F) << 8;
+        if (nes2)
+            prgBanks |= (uint16_t)(header.tv_system1 >> 4) << 8;
         chrBanks = header.chr_rom_chunks;
+        if (nes2)
+            chrBanks |= (uint16_t)(header.tv_system1 & 0x0F) << 8;
 
         vPRGMemory.resize(prgBanks * 16384);
         ifs.read((char*)vPRGMemory.data(), vPRGMemory.size());
 
         vCHRMemory.resize(chrBanks == 0 ? 8192 : chrBanks * 8192);
+        if (chrBanks == 0 && nes2) {
+            uint8_t chrRamShift = (uint8_t)header.unused[0] >> 4;
+            if (chrRamShift > 0)
+                vCHRMemory.resize(64 << chrRamShift);
+        }
         if (chrBanks != 0) ifs.read((char*)vCHRMemory.data(), vCHRMemory.size());
 
         vPRGRAM.assign(8192, 0x00);
+        if (nes2) {
+            uint32_t prgRamSize = 0;
+            uint8_t nvNibble = header.prg_ram_size >> 4;
+            if (nvNibble > 0)
+                prgRamSize = 64U << nvNibble;
+            else if ((header.tv_system2 >> 4) > 0)
+                prgRamSize = 64U << (header.tv_system2 >> 4);
+            uint8_t vNibble = header.prg_ram_size & 0x0F;
+            if (vNibble > 0) {
+                uint32_t vsize = 64U << vNibble;
+                if (vsize > prgRamSize) prgRamSize = vsize;
+            } else if ((header.tv_system2 & 0x0F) > 0) {
+                uint32_t vsize = 64U << (header.tv_system2 & 0x0F);
+                if (vsize > prgRamSize) prgRamSize = vsize;
+            }
+            if (prgRamSize > 8192)
+                vPRGRAM.assign(prgRamSize, 0x00);
+        }
 
         pMapper = MapperRegistry::instance().create(mapperID, prgBanks, chrBanks);
         if (!pMapper)
             throw std::runtime_error("[Cartridge] unsupported iNES mapper #"
                                      + std::to_string((int)mapperID));
 
+        pMapper->setChrRam1kBanks((uint16_t)(vCHRMemory.size() / 1024));
         pMapper->setAudioSettings(audioSettings);
     }
 
@@ -73,7 +99,7 @@ public:
     const Mapper& getMapper() const { return *pMapper; }
 
     uint16_t getPrgBanks() const { return prgBanks; }
-    uint8_t  getChrBanks() const { return chrBanks; }
+    uint16_t getChrBanks() const { return chrBanks; }
     bool hasPrgRam() const { return pMapper->hasPrgRam(); }
     bool hasBusConflicts() const { return pMapper->hasBusConflicts(); }
 
@@ -148,7 +174,7 @@ public:
 private:
     uint8_t mapperID = 0;
     uint16_t prgBanks = 0;
-    uint8_t chrBanks = 0;
+    uint16_t chrBanks = 0;
     Mirroring hwMirror = Mirroring::HORIZONTAL;
 
     std::vector<uint8_t> vPRGMemory;
