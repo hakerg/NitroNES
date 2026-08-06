@@ -62,6 +62,7 @@ protected:
         ppu.clock();
         cart.clock();
         a2a03.clockPhi1();
+        a2a03.clockPhi2Write();
         ppu.clock();
         a2a03.clockPhi2();
 

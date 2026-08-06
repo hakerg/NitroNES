@@ -39,10 +39,12 @@ public:
         apu.emitTrace();
     }
 
-    void clockPhi2() {
-        if (!cpu.isRead()) {
+    void clockPhi2Write() {
+        if (!cpu.isRead())
             writeData(cpu.getWriteData());
-        }
+    }
+
+    void clockPhi2() {
         dma.clockPhi2();
         cpu.clockPhi2();
 

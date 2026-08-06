@@ -143,6 +143,7 @@ public:
         scanline = 261;
         cycle = 0;
         bgNextTileId = bgNextTileAttrib = 0;
+        curTilePatternBg = 0;
         bgNextTilePattern = {};
         bgPattern = {};
         bgAttrib  = {};
@@ -388,14 +389,15 @@ private:
     uint8_t  ppuOpenBus = 0x00;
 
     bool renderingActive = false;
-    ShiftDelay<bool, 3> renderEnableDelay{false};
+    ShiftDelay<bool, 4> renderEnableDelay{false};
 
     template <typename T>
     struct ShiftPair { T lo = 0, hi = 0; };
 
-    uint8_t  bgNextTileId     = 0;
-    uint8_t  bgNextTileAttrib = 0;
-    ShiftPair<uint8_t> bgNextTilePattern{};
+    uint8_t  bgNextTileId      = 0;
+    uint8_t  bgNextTileAttrib  = 0;
+    uint8_t  curTilePatternBg  = 0;
+    ShiftPair<uint8_t>  bgNextTilePattern{};
 
     ShiftPair<uint16_t> bgPattern{};
     ShiftPair<uint16_t> bgAttrib{};
@@ -614,25 +616,26 @@ private:
             bgNextTileAttrib &= 0x03;
             break;
         case 5: {
-            const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
+            curTilePatternBg = ctrl.patternBackground;
+            const uint16_t base = ((uint16_t)curTilePatternBg << 12)
                 + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
             beginBusRead(base);
             break;
         }
         case 6: {
-            const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
+            const uint16_t base = ((uint16_t)curTilePatternBg << 12)
                 + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
             bgNextTilePattern.lo = finishBusRead(base);
             break;
         }
         case 7: {
-            const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
+            const uint16_t base = ((uint16_t)curTilePatternBg << 12)
                 + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
             beginBusRead(base + 8);
             break;
         }
         case 0: {
-            const uint16_t base = ((uint16_t)ctrl.patternBackground << 12)
+            const uint16_t base = ((uint16_t)curTilePatternBg << 12)
                 + ((uint16_t)bgNextTileId << 4) + vramAddr.fineY;
             bgNextTilePattern.hi = finishBusRead(base + 8);
             incrementScrollX();
@@ -891,8 +894,8 @@ private:
     }
 
     void advanceCycle() {
-        if (scanline == 261 && cycle == 338)
-            oddFrameSkip.set(frameOdd && (mask.renderBackground || mask.renderSprites), 2);
+        if (scanline == 261 && cycle == 337)
+            oddFrameSkip.set(frameOdd && (mask.renderBackground || mask.renderSprites), 3);
         oddFrameSkip.tick();
 
         cycle++;
