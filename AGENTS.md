@@ -47,6 +47,36 @@ Aktualne faile i ich powody (stan na dziś):
 - `read_joy3/count_errors*` i `test_buttons` to INFO (szum sprzętu / interaktywne)
 - Holy Mapperel: patrz sekcja poniżej (fail = ekran z detałem != 0000 albo kod morsa)
 
+## Subsystemy NTSC / PAL / Dendy
+
+Pełna obsługa trzech subsystemów. Przełączanie w GUI: Emulacja -> System
+(radio NTSC/PAL/Dendy, zmiana robi reset; wybór persystowany w settings.cfg).
+W nes_test: komenda `system:ntsc|pal|dendy` (+ reset). Stan w
+`NESCoreBase::system` (enum `NESStandard` w NESConst.h); `setSystem()` woła
+wirtualne `applySystem()` (NESSystem: A2A03 + PPU; NSFPlayer: region NSF).
+Częstotliwości wyprowadzone analitycznie w NESConst.h (master clock / dzielnik).
+Zaimplementowane quirk-i (źródła: nesdev wiki Cycle reference chart, PPU_OAM,
+DMA; fora: t=15763, t=25939; pomiary Eugene.S; MesenCE jako referencja):
+- PAL (2A07/2C07): CPU master/16, 16 dotów PPU na 5 cykli CPU (3.2; dodatkowy
+  dot gdy `cycle % 5 == 0` w NESSystem::clockOneCycle), 312 linii, vblank
+  241-310, brak odd-frame skip, frame counter/noise/DMC po tablicach PAL
+  (APU::setPalMode), DMA halt tylko na cyklu opcode fetch (SYNC zamiast R/W —
+  A2A03::pollIsRead), wymuszone odświeżanie OAM w liniach 265-310 (OAMADDR++
+  co 2 px bez px 0; zapis $2004 inkrementuje tylko na nieparzystych != 339),
+  brak korupcji OAM, zamiana bitów emphasis R/G, czarne bordery (1 linia góra,
+  2 px boki, $0E).
+- Dendy (UA6527P/UA6538): CPU master/15, 3 doty/cykl jak NTSC, 312 linii,
+  NMI dopiero na linii 291 (post-render 51 linii), vblank 20 linii, brak
+  odd-frame skip, APU z timingiem NTSC (frame IRQ ~59 Hz), emphasis i bordery
+  jak PAL, korupcja OAM jak NTSC, brak OAM refresh 265-310.
+- NSF: `usePal()` = PAL-only albo dual + system PAL; X=1 dla PAL przy init,
+  speedPAL/NSF_SPEED_PAL, Dendy traktowany jak NTSC (APU NTSC).
+- Stan rejestrów CPU po power/reset jest regionowo identyczny (nesdev wiki
+  CPU power-up state) — celowo brak różnic w kodzie.
+- PAR: NTSC 8:7, PAL/Dendy 11:8 (NESCoordUtils::calcDestRect parametr system).
+- Testy: `pal_apu_tests/*.nes` (10 ROM-ów blargga) w run_tests.py odpalane
+  przez `system:pal` — wszystkie przechodzą (w tym clock_jitter/irq_timing).
+
 ### holy_mapperel (nes-test-roms-master/holy-mapperel/)
 Test płytki PCB autorstwa Damiana Yerricka (pinobatch/holy-mapperel): wykrywa
 mapper po mirroringu, testuje bankowanie PRG/CHR, WRAM, CHR RAM i IRQ.
@@ -121,6 +151,7 @@ Przykład (potok):
 Komendy (wykonywane sekwencyjnie, każda jako osobny argv lub linia stdin):
   frames:N             clockuj N klatek (lub N wywołań play() dla .nsf)
   cycles:N             clockuj N cykli CPU
+  system:SYS           przełącz subsystem (SYS = NTSC|PAL|DENDY) + reset
   reset                soft reset
   screen               wypisz nametable 0 (32x30) jako indeksy kafelków w hex
                        (np. 24 24 0C 19...)

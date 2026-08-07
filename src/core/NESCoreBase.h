@@ -2,11 +2,7 @@
 #include <array>
 #include "NESConst.h"
 #include "A2A03.h"
-#include "PPU2C02.h"
 #include "Tracer.h"
-
-// TODO: only NTSC is properly supported
-enum class NESStandard { NTSC, PAL, DENDY };
 
 class NESCoreBase : public IA2A03 {
 public:
@@ -16,9 +12,21 @@ public:
 
     ~NESCoreBase() override = default;
 
-    double getCPUClockRate()    const { return NES::CPU_CLOCK_NTSC; }
+    double getCPUClockRate() const {
+        switch (system) {
+        case NESStandard::PAL:   return NES::CPU_CLOCK_PAL;
+        case NESStandard::DENDY: return NES::CPU_CLOCK_DENDY;
+        default:                 return NES::CPU_CLOCK_NTSC;
+        }
+    }
     virtual double getBaseFramerate() const = 0;
     double getTargetFramerate() const { return getBaseFramerate() * speed; }
+
+    void setSystem(NESStandard s) {
+        if (system == s) return;
+        system = s;
+        applySystem();
+    }
 
     void tickFrame() {
         if (paused) return;
@@ -53,10 +61,9 @@ public:
     virtual uint8_t peekMemory(uint16_t addr) = 0;
     void writeMemory(uint16_t addr, uint8_t data) { a2a03.writeData(addr, data); }
 
-    int getCurrentScanline() {
-        PPU2C02* p = getPPU();
-        return p ? p->getScanline() : -1;
-    }
+    virtual int getCurrentScanline() = 0;
+
+    virtual int getTotalScanlines() = 0;
 
     uint8_t a2a03ReadData(uint16_t addr) override { return readMemory(addr); }
     uint8_t a2a03ReadDataExternal(uint16_t addr) override { return readMemoryExternal(addr); }
@@ -67,8 +74,9 @@ protected:
     virtual uint8_t readMemoryExternal(uint16_t addr) = 0;
     virtual void writeMemoryMapped(uint16_t addr, uint8_t data) = 0;
 
-    virtual void    clockOneCycle() = 0;
-    virtual PPU2C02* getPPU() { return nullptr; }
+    virtual void clockOneCycle() = 0;
+
+    virtual void applySystem() {}
 
     virtual void pushAudioSample(float sample, double dt) = 0;
 

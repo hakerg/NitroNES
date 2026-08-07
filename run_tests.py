@@ -111,6 +111,17 @@ TESTS = [
     ("apu_reset/irq_flag_cleared.nes", ""),
     ("apu_reset/len_ctrs_enabled.nes", ""),
     ("apu_reset/works_immediately.nes", ""),
+    # ---------------- PAL APU (blargg; wymagaja system:pal) ----------------
+    ("pal_apu_tests/01.len_ctr.nes", ""),
+    ("pal_apu_tests/02.len_table.nes", ""),
+    ("pal_apu_tests/03.irq_flag.nes", ""),
+    ("pal_apu_tests/04.clock_jitter.nes", ""),
+    ("pal_apu_tests/05.len_timing_mode0.nes", ""),
+    ("pal_apu_tests/06.len_timing_mode1.nes", ""),
+    ("pal_apu_tests/07.irq_flag_timing.nes", ""),
+    ("pal_apu_tests/08.irq_timing.nes", ""),
+    ("pal_apu_tests/10.len_halt_timing.nes", ""),
+    ("pal_apu_tests/11.len_reload_timing.nes", ""),
     # ---------------- Mappery ----------------
     ("mmc3_test/1-clocking.nes", ""),
     ("mmc3_test/2-details.nes", ""),
@@ -455,6 +466,8 @@ def run_rom_poll(rel, budget, step=30):
     morse_letters = []  # akumulacja liter morsa z kolejnych probeek stosu
     nlines = 31 + (4 if hm else 0)  # ascii (31) + mem:0x01F0:16 + mem:0x00:8
     try:
+        if rel.startswith("pal_apu_tests/"):
+            send("system:pal")
         while frames < budget:
             try:
                 send("frames:%d" % step)

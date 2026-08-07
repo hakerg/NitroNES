@@ -30,7 +30,7 @@ public:
             ctrl.reg = data;
             tramAddr.nametableX = ctrl.nametableX;
             tramAddr.nametableY = ctrl.nametableY;
-            if (!ctrl.enableNmi && scanline == 241
+            if (!ctrl.enableNmi && scanline == nmiScanline
                 && (cycle == 1 || cycle == 2 || cycle == 3))
                 nmiCycleLatch = false;
             break;
@@ -41,8 +41,10 @@ public:
         case 2: break;
         case 3: oamAddr = data; break;
         case 4:
-            if (renderingEnabled() && (scanline <= 239 || scanline == 261))
+            if (renderingEnabled() && (scanline <= 239 || scanline == preRenderScanline))
                 oamAddr = (oamAddr + 4) & 0xFC;
+            else if (palOamRefreshActive() && (!(cycle & 1) || cycle == 339))
+                OAM[oamAddr] = data;
             else
                 OAM[oamAddr++] = data;
             break;
@@ -106,6 +108,17 @@ public:
     uint8_t getOamAddr() const        { return oamAddr; }
     const uint8_t* oamData() const    { return OAM; }
 
+    void setRegion(NESStandard r) {
+        region = r;
+        nmiScanline       = r == NESStandard::DENDY ? NES::SCANLINE_VBLANK_START_DENDY
+                                                    : NES::SCANLINE_VBLANK_START_NTSC;
+        preRenderScanline = r == NESStandard::NTSC ? NES::SCANLINE_PRERENDER_NTSC
+                                                   : NES::SCANLINE_PRERENDER_PAL;
+        totalScanlines    = r == NESStandard::NTSC ? NES::TOTAL_SCANLINES_NTSC
+                                                   : NES::TOTAL_SCANLINES_PAL;
+    }
+    int getTotalScanlines() const { return totalScanlines; }
+
     uint8_t ppuRead(uint16_t addr) {
         addr &= 0x3FFF;
         if (addr >= 0x3F00) {
@@ -140,7 +153,7 @@ public:
 
     void reset() {
         fineX = addressLatch = ppuDataBuffer = 0;
-        scanline = 261;
+        scanline = preRenderScanline;
         cycle = 0;
         bgNextTileId = bgNextTileAttrib = 0;
         curTilePatternBg = 0;
@@ -205,20 +218,23 @@ public:
         }
         const bool visible = (scanline >= 0 && scanline <= 239);
 
-        if (wasRendering && !renderingActive && (visible || scanline == 261)) {
+        if (wasRendering && !renderingActive && (visible || scanline == preRenderScanline)) {
             oamCorruptionRow = (cycle >= 65 && cycle <= 256)
                 ? (oamSecondaryAddr + 3) & 0x1C
                 : oamSecondaryAddr;
-            oamCorruptionPending = true;
+            oamCorruptionPending = region != NESStandard::PAL;
         }
 
-        if (oamCorruptionPending && renderingEnabled() && (visible || scanline == 261)) {
+        if (oamCorruptionPending && renderingEnabled() && (visible || scanline == preRenderScanline)) {
             std::memcpy(OAM + oamCorruptionRow * 8, OAM, 8);
             oamSecondary[oamCorruptionRow & 0x1F] = oamSecondary[0];
             oamCorruptionPending = false;
         }
 
-        if (bool prerender = (scanline == 261); visible || prerender) {
+        if (palOamRefreshActive() && cycle != 0 && !(cycle & 1))
+            oamAddr++;
+
+        if (bool prerender = (scanline == preRenderScanline); visible || prerender) {
             if (prerender && cycle == 0) {
                 status.spriteZeroHit  = 0;
                 status.spriteOverflow = 0;
@@ -260,14 +276,14 @@ public:
                 for (int i = 0; i < 8 && i < spriteCount; i++) spriteX[i] = 0;
         }
 
-        if (scanline == 241 && cycle == 1) {
+        if (scanline == nmiScanline && cycle == 1) {
             if (!suppressVblThisFrame) status.verticalBlank = 1;
             suppressVblThisFrame = false;
             ppuOpenBus = 0x00;
         }
 
-        if (scanline == 241 && cycle == 0) nmiVbl = true;
-        if (scanline == 261 && cycle == 0) nmiVbl = false;
+        if (scanline == nmiScanline && cycle == 0) nmiVbl = true;
+        if (scanline == preRenderScanline && cycle == 0) nmiVbl = false;
 
         if (updatePpuDataBuffer) {
             if (ppuBusRead)
@@ -380,6 +396,10 @@ private:
 
     int16_t  scanline             = 0;
     int16_t  cycle                = 0;
+    NESStandard region            = NESStandard::NTSC;
+    int16_t  nmiScanline          = NES::SCANLINE_VBLANK_START_NTSC;
+    int16_t  preRenderScanline    = NES::SCANLINE_PRERENDER_NTSC;
+    int16_t  totalScanlines       = NES::TOTAL_SCANLINES_NTSC;
     bool     frameOdd             = false;
     bool     suppressVblThisFrame = false;
     DelayedPin<bool> oddFrameSkip{false};
@@ -434,6 +454,14 @@ private:
 
     bool renderingEnabled() const { return renderingActive; }
 
+    // 2C07: wymuszone odswiezanie OAM w lin. 265-310 (24 linie po NMI) -
+    // OAMADDR inkrementowany co 2 piksele; sprite evaluation nie dziala
+    bool palOamRefreshActive() const {
+        return region == NESStandard::PAL
+            && scanline >= nmiScanline + 24
+            && scanline <  preRenderScanline;
+    }
+
     void refreshOpenBus(uint8_t maskBits, uint8_t value) {
         ppuOpenBus = (ppuOpenBus & ~maskBits) | (value & maskBits);
     }
@@ -441,7 +469,7 @@ private:
     uint8_t readStatus() {
         uint8_t ppuBits = status.reg & 0xE0;
         uint8_t data = ppuBits | (ppuOpenBus & 0x1F);
-        if (scanline == 241) {
+        if (scanline == nmiScanline) {
             if (cycle == 1) {
                 suppressVblThisFrame = true;
             }
@@ -723,7 +751,7 @@ private:
     }
 
     void incrementVramAddr() {
-        if (renderingEnabled() && (scanline == 261 || scanline <= 239)) {
+        if (renderingEnabled() && (scanline == preRenderScanline || scanline <= 239)) {
             incrementScrollY();
             incrementScrollX();
         } else {
@@ -805,7 +833,7 @@ private:
         const uint8_t y = spriteScanline[spriteIdx * 4];
         const uint8_t row = static_cast<uint8_t>(scanline) - y;
         const bool active = spriteIdx < spriteCount
-            && (visible || (scanline == 261 && row < (ctrl.spriteSize ? 16 : 8)));
+            && (visible || (scanline == preRenderScanline && row < (ctrl.spriteSize ? 16 : 8)));
         if (phase != 4 && phase != 5 && phase != 6 && phase != 7) return;
 
         const uint8_t tile = active ? spriteScanline[spriteIdx * 4 + 1] : 0xFF;
@@ -890,18 +918,24 @@ private:
         else
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         if (mask.greyscale) idx &= 0x30;
-        auto emph = (uint8_t)((mask.enhanceBlue << 2) | (mask.enhanceGreen << 1) | mask.enhanceRed);
+        // 2C07/UA6538: border zawsze czarny - 1 linia u gory, 2 px z bokow
+        if (region != NESStandard::NTSC && (y == 0 || x <= 1 || x >= NES::SCREEN_WIDTH - 2))
+            idx = 0x0E;
+        // 2C07/UA6538: bity emphasis red/green sa zamienione miejscami
+        auto emph = (uint8_t)((mask.enhanceBlue << 2)
+            | (region != NESStandard::NTSC ? ((mask.enhanceRed << 1) | mask.enhanceGreen)
+                                           : ((mask.enhanceGreen << 1) | mask.enhanceRed)));
         buf[y * NES::SCREEN_WIDTH + x] = emphasisLUT()[emph][idx & 0x3F];
     }
 
     void advanceCycle() {
-        if (scanline == 261 && cycle == 337)
+        if (scanline == preRenderScanline && cycle == 337 && region == NESStandard::NTSC)
             oddFrameSkip.set(frameOdd && (mask.renderBackground || mask.renderSprites), 3);
         oddFrameSkip.tick();
 
         cycle++;
 
-        if (scanline == 261 && cycle == 340 && oddFrameSkip.get()) {
+        if (scanline == preRenderScanline && cycle == 340 && oddFrameSkip.get()) {
             cycle    = 0;
             scanline = 0;
             oddFrameSkip.force(false);
@@ -910,7 +944,7 @@ private:
             cycle = 0;
             if (scanline == 239) completedFramesCount++;
             scanline++;
-            if (scanline >= 262) {
+            if (scanline >= totalScanlines) {
                 scanline = 0;
                 frameOdd = !frameOdd;
             }
@@ -999,7 +1033,7 @@ private:
     }
 
     const char* phaseName() const {
-        if (scanline == 261)              return "PRE";
+        if (scanline == preRenderScanline)    return "PRE";
         if (scanline >= 0 && scanline <= 239) {
             if (cycle == 0)               return "IDLE";
             if (cycle <= 256)             return "BG-FETCH";
@@ -1008,7 +1042,7 @@ private:
             return "NT-DUMMY";
         }
         if (scanline == 240)              return "POST";
-        if (scanline >= 241 && scanline <= 260) return "VBLANK";
+        if (scanline >= nmiScanline && scanline < preRenderScanline) return "VBLANK";
         return "?";
     }
 

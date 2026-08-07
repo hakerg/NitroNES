@@ -21,6 +21,7 @@ public:
                AppAudioStream &audio, AppSettings &settings)
         : IFileSession(path, audio, window, settings),
           NSFPlayer(settings.audioSettings, path) {
+        setSystem(static_cast<NESStandard>(settings.system));
         initSong(getCurrentSong());
     }
 

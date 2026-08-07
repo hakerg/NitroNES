@@ -265,6 +265,7 @@ struct NoiseChannel {
     uint8_t  periodIndex = 0;
     uint8_t  lengthCounter = 0;
     bool     enabled       = false;
+    bool     palMode       = false;
 
     bool     skipNextLengthClock    = false;
 
@@ -304,7 +305,8 @@ struct NoiseChannel {
 
     void clockTimer() {
         while (timerCounter <= 0) {
-            const uint16_t period = NOISE_PERIOD_TABLE_NTSC[periodIndex];
+            const uint16_t period = (palMode ? NOISE_PERIOD_TABLE_PAL
+                                             : NOISE_PERIOD_TABLE_NTSC)[periodIndex];
             timerCounter += period + 1;
             uint16_t feedback = (shiftReg & 0x0001) ^
                                 ((modeFlag ? (shiftReg >> 6) : (shiftReg >> 1)) & 0x0001);
@@ -375,6 +377,7 @@ struct DMCChannel {
     bool     sampleBufferEmpty = true;
     bool     silenceFlag   = true;
     bool     irqPending    = false;
+    bool     palMode       = false;
     DelayedPin<bool> dmaDelay{false};
     bool     dmaHaltOnPut  = false;
 
@@ -423,7 +426,8 @@ struct DMCChannel {
 
     void clockTimer() {
         if (timerCounter == 0) {
-            timerCounter = DMC_PERIOD_TABLE_NTSC[rateIndex];
+            timerCounter = (palMode ? DMC_PERIOD_TABLE_PAL
+                                    : DMC_PERIOD_TABLE_NTSC)[rateIndex];
 
             if (!silenceFlag) {
                 if (shiftReg & 0x01) {
@@ -496,6 +500,12 @@ public:
 
     bool irqAsserted() const { return frameIRQLine || dmc.irqPending; }
 
+    void setPalMode(bool pal) {
+        palMode = pal;
+        noise.palMode = pal;
+        dmc.palMode = pal;
+    }
+
     PulseChannel<true>  pulse1;
     PulseChannel<false> pulse2;
     TriangleChannel triangle;
@@ -535,7 +545,7 @@ public:
     bool frameIRQLine = false;
 
     bool isHalfFrameTickNextCycle(bool isAPUPutCycle) const {
-        const uint32_t* s = FRAME_COUNTER_STEPS_NTSC;
+        const uint32_t* s = palMode ? FRAME_COUNTER_STEPS_PAL : FRAME_COUNTER_STEPS_NTSC;
         bool isHalfFrameStep = (frameCounter == s[1]) ||
                                (frameCounter == s[3] && frameMode == 0) ||
                                (frameCounter == s[4] && frameMode != 0);
@@ -683,7 +693,7 @@ private:
 
         serviceFrameCounterWrite();
 
-        const uint32_t* s = FRAME_COUNTER_STEPS_NTSC;
+        const uint32_t* s = palMode ? FRAME_COUNTER_STEPS_PAL : FRAME_COUNTER_STEPS_NTSC;
 
         if (isAPUCycle) {
             if      (frameCounter == s[0]) { clockQuarterFrame(); }
@@ -704,6 +714,7 @@ private:
     uint32_t frameCounter   = 0;
     uint8_t  frameMode      = 0;
     bool     frameIRQInhibit = false;
+    bool     palMode        = false;
     DelayedPin<uint8_t> val4017{0};
     Tracer*  tracer = nullptr;
 

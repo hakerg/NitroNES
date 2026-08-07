@@ -30,6 +30,7 @@ struct AppSettings {
     float speed = 1.0f;
     float speed1 = 4.0f;
     float speed2 = 0.5f;
+    int system = 0;
     AudioSettings audioSettings;
     ControllerSettings controllers[2] = {ControllerSettings::player1(),
                                          ControllerSettings::player2()};
@@ -90,6 +91,7 @@ private:
         f("speed", speed);
         f("speed1", speed1);
         f("speed2", speed2);
+        f("system", system);
         for (int p = 0; p < 2; p++) {
             auto &c = controllers[p];
             std::string pre = "pad" + std::to_string(p) + ".";

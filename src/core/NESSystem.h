@@ -47,7 +47,10 @@ public:
         controllerShift2 = readController(1);
     }
 
-    double getBaseFramerate() const override { return NES::REFRESH_RATE_NTSC_ON; }
+    double getBaseFramerate() const override {
+        return system == NESStandard::NTSC ? NES::REFRESH_RATE_NTSC_ON
+                                           : NES::REFRESH_RATE_PAL;
+    }
 
     const Cartridge& getCartridge() const { return cart; }
 
@@ -64,7 +67,13 @@ public:
 protected:
     virtual uint8_t readController(int port) = 0;
 
-    PPU2C02* getPPU() override { return &ppu; }
+    int getCurrentScanline()  override { return ppu.getScanline(); }
+    int getTotalScanlines()   override { return ppu.getTotalScanlines(); }
+
+    void applySystem() override {
+        a2a03.setRegion(system);
+        ppu.setRegion(system);
+    }
 
     void clockOneCycle() override {
         ppu.clock();
@@ -73,6 +82,9 @@ protected:
         a2a03.clockPhi1();
         a2a03.clockPhi2Write();
         ppu.clock();
+        // PAL: 16 dotow PPU na 5 cykli CPU (3.2/cykl) - co 5. cykl dodatkowy dot
+        if (system == NESStandard::PAL && a2a03.getCPU().getCycle() % 5 == 0)
+            ppu.clock();
         a2a03.clockPhi2();
 
         pushAudioOutput(cart.audioOutput());

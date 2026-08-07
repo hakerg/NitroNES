@@ -198,6 +198,22 @@ public:
                     if (ImGui::MenuItem(tr("emulation.reset")))
                         handler->onReset();
 
+                    if (ImGui::BeginMenu(tr("emulation.system"))) {
+                        menuOpen = true;
+                        static const NESStandard systems[] = {
+                            NESStandard::NTSC, NESStandard::PAL, NESStandard::DENDY,
+                        };
+                        static const char *names[] = { "NTSC", "PAL", "Dendy" };
+                        for (int i = 0; i < 3; i++) {
+                            if (ImGui::RadioButton(names[i], core->system == systems[i])) {
+                                settings->system = i;
+                                core->setSystem(systems[i]);
+                                handler->onReset();
+                            }
+                        }
+                        ImGui::EndMenu();
+                    }
+
                     if (ImGui::BeginMenu(tr("tools"))) {
                         menuOpen = true;
                         if (ImGui::MenuItem(tr("tools.about_file")))

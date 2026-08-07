@@ -3,8 +3,8 @@
 #include <iostream>
 #include <string>
 #include <cstdint>
-#include <cstdlib>
 #include <array>
+#include <memory>
 
 namespace {
 
@@ -153,17 +153,17 @@ int main(int argc, char* argv[]) {
     std::cout << "Loading: " << rom << "\n";
 
     try {
-        NESHeadlessSystem nes(rom);
+        auto nes = std::make_unique<NESHeadlessSystem>(rom);
 
-        runFrames(nes, FRAMES_BOOT);          // boot + menu (5 s)
+        runFrames(*nes, FRAMES_BOOT);          // boot + menu (5 s)
 
-        nes.setController1(BTN_START);        // press Start (run all tests)
-        runFrames(nes, 1);
-        nes.setController1(0x00);             // release
+        nes->setController1(BTN_START);        // press Start (run all tests)
+        runFrames(*nes, 1);
+        nes->setController1(0x00);             // release
 
-        runFrames(nes, FRAMES_RUNNING);       // let all tests run (2 min)
+        runFrames(*nes, FRAMES_RUNNING);       // let all tests run (2 min)
 
-        Decoded d = decode(nes);
+        Decoded d = decode(*nes);
         report(d);
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";

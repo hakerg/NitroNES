@@ -11,7 +11,10 @@ public:
                AppSettings &settings, AppAudioStream &audio)
         : IFileSession(path, audio, window, settings),
           NESSystem(settings.audioSettings, path),
-          input(input) {}
+          input(input) {
+        setSystem(static_cast<NESStandard>(settings.system));
+        reset();
+    }
 
     ~NESSession() override = default;
 
@@ -39,7 +42,8 @@ public:
         s += "Mirroring: " + std::string(mirror) + "\n";
         s += "PRG RAM: " + std::string(c.hasPrgRam() ? "yes" : "no") + "\n";
         s += "Bus conflicts: " + std::string(c.hasBusConflicts() ? "yes" : "no") + "\n";
-        s += "System: " + std::string(system == NESStandard::PAL ? "PAL" : "NTSC") + "\n";
+        s += "System: " + std::string(system == NESStandard::PAL ? "PAL"
+                                    : system == NESStandard::DENDY ? "Dendy" : "NTSC") + "\n";
         return s;
     }
 

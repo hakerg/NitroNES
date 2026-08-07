@@ -16,7 +16,7 @@ public:
             {"file.close", "Zamknij"},
             {"file.quit", "Wyjdź"},
             {"emulation", "Emulacja"},
-            {"emulation.system", "Podsystem"},
+            {"emulation.system", "System"},
             {"emulation.pause", "Pauza"},
             {"emulation.reset", "Reset"},
             {"settings", "Ustawienia"},

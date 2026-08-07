@@ -151,7 +151,8 @@ public:
             SDL_EndGPUCopyPass(copy);
 
             float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
-            NES::calcDestRect(sw, sh, dstX, dstY, dstW, dstH);
+            NES::calcDestRect(sw, sh, dstX, dstY, dstW, dstH,
+                              session->getCore().system);
             SDL_GPUBlitInfo blit = {};
             blit.source.texture = nesTexture;
             blit.source.w = NES::SCREEN_WIDTH;

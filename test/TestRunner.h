@@ -213,6 +213,14 @@ private:
         auto parts = splitArgs(cmd);
         const std::string& head = parts[0];
 
+        if (head == "system" && parts.size() == 2) {
+            std::string s = upper(parts[1]);
+            nes->setSystem(s == "PAL"   ? NESStandard::PAL
+                         : s == "DENDY" ? NESStandard::DENDY
+                                        : NESStandard::NTSC);
+            nes->reset();
+            return true;
+        }
         if (head == "frames" && parts.size() == 2) {
             nes->tickFrames(parseInt(parts[1]));
             return true;

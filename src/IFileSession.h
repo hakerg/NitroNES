@@ -179,13 +179,14 @@ private:
         double predicted = monitorScanline + delta;
 
         float dstX, dstY, dstW, dstH;
-        NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH);
+        NESCoreBase& core = getCore();
+        NES::calcDestRect(geoW, geoH, dstX, dstY, dstW, dstH, core.system);
         float nesY = ((float)predicted - dstY) / dstH * (float)NES::SCREEN_HEIGHT;
 
-        int target = static_cast<int>(std::round(nesY)) % NES::TOTAL_SCANLINES;
-        if (target < 0) target += NES::TOTAL_SCANLINES;
+        int totalScanlines = core.getTotalScanlines();
+        int target = static_cast<int>(std::round(nesY)) % totalScanlines;
+        if (target < 0) target += totalScanlines;
 
-        NESCoreBase& core = getCore();
         core.tickWhile([&] { return core.getCurrentScanline() != target; });
     }
 

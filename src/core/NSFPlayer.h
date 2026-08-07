@@ -110,8 +110,7 @@ public:
 
     bool load(const NSFFile& nsf, AudioSettings& audioSettings) {
         nsfHeader = nsf.header;
-        cpuClock = NES::CPU_CLOCK_NTSC;
-        playCycles = calcPlayCycles();
+        applySystem();
 
         expChip.reset();
         uint8_t chips = nsfHeader.extraChipFlags;
@@ -164,7 +163,7 @@ public:
 
         a2a03.getCPU().reset();
         a2a03.getCPU().A = songNum - 1;
-        a2a03.getCPU().X = false ? 1 : 0; // TODO: 1 for PAL?
+        a2a03.getCPU().X = usePal() ? 1 : 0;
         a2a03.getCPU().P = CPU6502::FLAG_I | CPU6502::FLAG_U;
         a2a03.getCPU().S = 0xFD;
 
@@ -196,7 +195,7 @@ public:
     const NSFHeader& header() const { return nsfHeader; }
 
     double getBaseFramerate() const override {
-        return NES::CPU_CLOCK_NTSC / playCycles;
+        return cpuClock / playCycles;
     }
 
     void reset() override { initSong(currentSong); }
@@ -204,6 +203,8 @@ public:
     bool irqAsserted() override { return false; }
     uint32_t* getFramebuffer() override { return nullptr; }
     int getCompletedFramesCount() override { return completedFramesCount; }
+    int getCurrentScanline() override { return -1; }
+    int getTotalScanlines()  override { return -1; }
 
     uint8_t peekMemory(uint16_t addr) override {
         if (addr <= 0x07FF) return cpuRam[addr];
@@ -238,6 +239,18 @@ protected:
         a2a03.clockPhi2();
 
         pushAudioOutput(expChip ? expChip->audioOutput() : 0.0f);
+    }
+
+    void applySystem() override {
+        // NSF zna tylko NTSC/PAL; Dendy ma APU z timingiem NTSC
+        const bool pal = usePal();
+        a2a03.setRegion(pal ? NESStandard::PAL
+                            : (system == NESStandard::DENDY ? NESStandard::DENDY
+                                                            : NESStandard::NTSC));
+        cpuClock = pal ? NES::CPU_CLOCK_PAL : getCPUClockRate();
+        uint16_t speed = pal ? nsfHeader.speedPAL : nsfHeader.speedNTSC;
+        if (speed == 0) speed = pal ? NES::NSF_SPEED_PAL : NES::NSF_SPEED_NTSC;
+        playCycles = cpuClock * speed / 1000000.0;
     }
 
     uint8_t readMemoryExternal(uint16_t addr) override { return readMemory(addr); }
@@ -284,6 +297,11 @@ protected:
     }
 
 private:
+    bool usePal() const {
+        return nsfHeader.isPAL()
+            || (nsfHeader.isDualMode() && system == NESStandard::PAL);
+    }
+
     bool isAtTrampoline() {
         const uint16_t pc = a2a03.getCPU().PC;
         return pc >= TRAMPOLINE_ADDR && pc <= TRAMPOLINE_ADDR + 3;
@@ -308,13 +326,6 @@ private:
     }
 
 
-
-    double calcPlayCycles() const {
-        double clk = NES::CPU_CLOCK_NTSC;
-        uint16_t speed = nsfHeader.speedNTSC;
-        if (speed == 0) speed = NES::NSF_SPEED_NTSC;
-        return clk * speed / 1000000.0;
-    }
 
     void loadBankswitched(const std::vector<uint8_t>& data) {
         uint16_t loadOffset  = nsfHeader.loadAddr & 0x0FFF;

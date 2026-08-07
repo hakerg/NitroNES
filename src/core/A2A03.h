@@ -3,6 +3,7 @@
 #include "CPU6502.h"
 #include "DMA.h"
 #include "NESBus.h"
+#include "NESConst.h"
 
 class IA2A03 {
 public:
@@ -18,6 +19,11 @@ public:
 class A2A03 : public ICPUBus, public IDMA {
 public:
     bool isControllerStrobeActive() const { return controllerStrobe; }
+
+    void setRegion(NESStandard r) {
+        region = r;
+        apu.setPalMode(r == NESStandard::PAL);
+    }
 
     void reset() {
         cpu.reset();
@@ -72,7 +78,12 @@ public:
     bool dmcReadyForFetch() override { return apu.dmcReadyForFetch(); }
     bool dmcHasBytesRemaining() override { return apu.dmcHasBytesRemaining(); }
     bool dmcDMAHaltOnPut()   override { return apu.dmcDMAHaltOnPut(); }
-    bool pollIsRead()        override { return cpu.isRead(); }
+    bool pollIsRead()        override {
+        // 2A07 (PAL): DMA halt uzyje sygnalu SYNC zamiast R/W - halt tylko
+        // w cyklu pobrania opcode'u, co eliminuje konflikty DMA z odczytami
+        // rejestrow ($4016/$4017/$2002/$2007).
+        return cpu.isRead() && (region != NESStandard::PAL || cpu.isOpcodeFetchCycle());
+    }
 
     uint8_t dmaReadData() override {
         return readData();
@@ -160,6 +171,7 @@ private:
     CPU6502 cpu;
     APU apu;
     DMA dma;
+    NESStandard region = NESStandard::NTSC;
     uint8_t busData = 0;
     bool isAPUPutCycle = false;
     uint8_t internalBus = 0;

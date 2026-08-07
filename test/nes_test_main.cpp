@@ -16,6 +16,7 @@
 // Commands (run sequentially; one per argv):
 //   frames:N            tick N frames (or N play() calls for .nsf)
 //   cycles:N            tick N CPU cycles
+//   system:SYS          switch subsystem (SYS = NTSC|PAL|DENDY) + reset
 //   reset               soft reset
 //   screen              dump nametable 0 as hex tile indices
 //   ascii[:MAP]         dump nametable 0 as characters; MAP is a
@@ -173,7 +174,7 @@ int main(int argc, char* argv[]) {
             "Input: .nes (run), .nsf (run NSF player), .asm (nesasm3), .s (ca65+ld65)\n"
             "With no commands, reads them from stdin (one per line, '#' = comment);\n"
             "each response is flushed, enabling script-driven stepping.\n"
-            "Commands: frames:N cycles:N reset screen ascii[:MAP] pixels:X:Y:W:H mem:ADDR:LEN\n"
+            "Commands: frames:N cycles:N reset system:NTSC|PAL|DENDY screen ascii[:MAP] pixels:X:Y:W:H mem:ADDR:LEN\n"
             "          pad1=BTNS pad1+BTN pad1-BTN (same for pad2)\n"
             "          trace:cpu|ppu|dma|apu:on|off  trace-file:PATH\n"
             "          ac:PAGE:ROW (AccuracyCoin menu navigation + run)\n"

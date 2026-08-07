@@ -109,6 +109,10 @@ public:
 
     bool isAtInstructionBoundary() const { return nextOp == &CPU6502::decodeAndDispatch; }
 
+    // cykl odpowiada sygnalowi SYNC 6502 (pobranie opcode'u; utrzymuje sie
+    // podczas haltu CPU - w 2A07 SYNC steruje startem DMA zamiast R/W)
+    bool isOpcodeFetchCycle() const { return currentOp == &CPU6502::opFetch; }
+
     uint16_t PC = 0;
     uint8_t  S  = 0x00;
     uint8_t  A  = 0;
