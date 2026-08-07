@@ -1,12 +1,14 @@
 ﻿#pragma once
 
-#include <vector>
+#include <array>
+#include <cstring>
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 
+#include "NESConst.h"
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
 #include "mappers/AllMappers.h"
@@ -50,43 +52,50 @@ public:
         if (nes2)
             chrBanks |= (uint16_t)(header.tv_system1 & 0x0F) << 8;
 
-        vPRGMemory.resize(prgBanks * 16384);
-        ifs.read((char*)vPRGMemory.data(), vPRGMemory.size());
+        prgRomSize = prgBanks * NES::PRG_BANK_SIZE;
+        if (prgRomSize > NES::MAX_PRG_ROM_SIZE)
+            throw std::runtime_error("[Cartridge] PRG ROM too large: " + std::to_string(prgRomSize));
+        ifs.read((char*)vPRGMemory.data(), prgRomSize);
 
-        vCHRMemory.resize(chrBanks == 0 ? 8192 : chrBanks * 8192);
+        chrRomSize = chrBanks == 0 ? NES::CHR_BANK_SIZE : chrBanks * NES::CHR_BANK_SIZE;
         if (chrBanks == 0 && nes2) {
             uint8_t chrRamShift = (uint8_t)header.unused[0] >> 4;
             if (chrRamShift > 0)
-                vCHRMemory.resize(64 << chrRamShift);
+                chrRomSize = 64 << chrRamShift;
         }
-        if (chrBanks != 0) ifs.read((char*)vCHRMemory.data(), vCHRMemory.size());
+        if (chrRomSize > NES::MAX_CHR_ROM_SIZE)
+            throw std::runtime_error("[Cartridge] CHR too large: " + std::to_string(chrRomSize));
+        if (chrBanks != 0) ifs.read((char*)vCHRMemory.data(), chrRomSize);
 
-        vPRGRAM.assign(8192, 0x00);
+        prgRamSize = 8192;
         if (nes2) {
-            uint32_t prgRamSize = 0;
+            uint32_t size = 0;
             uint8_t nvNibble = header.prg_ram_size >> 4;
             if (nvNibble > 0)
-                prgRamSize = 64U << nvNibble;
+                size = 64U << nvNibble;
             else if ((header.tv_system2 >> 4) > 0)
-                prgRamSize = 64U << (header.tv_system2 >> 4);
+                size = 64U << (header.tv_system2 >> 4);
             uint8_t vNibble = header.prg_ram_size & 0x0F;
             if (vNibble > 0) {
                 uint32_t vsize = 64U << vNibble;
-                if (vsize > prgRamSize) prgRamSize = vsize;
+                if (vsize > size) size = vsize;
             } else if ((header.tv_system2 & 0x0F) > 0) {
                 uint32_t vsize = 64U << (header.tv_system2 & 0x0F);
-                if (vsize > prgRamSize) prgRamSize = vsize;
+                if (vsize > size) size = vsize;
             }
-            if (prgRamSize > 8192)
-                vPRGRAM.assign(prgRamSize, 0x00);
+            if (size > 8192)
+                prgRamSize = size;
         }
+        if (prgRamSize > NES::MAX_PRG_RAM_SIZE)
+            throw std::runtime_error("[Cartridge] PRG RAM too large: " + std::to_string(prgRamSize));
+        std::memset(vPRGRAM.data(), 0, prgRamSize);
 
         pMapper = MapperRegistry::instance().create(mapperID, prgBanks, chrBanks);
         if (!pMapper)
             throw std::runtime_error("[Cartridge] unsupported iNES mapper #"
                                      + std::to_string((int)mapperID));
 
-        pMapper->setChrRam1kBanks((uint16_t)(vCHRMemory.size() / 1024));
+        pMapper->setChrRam1kBanks((uint16_t)(chrRomSize / 1024));
         pMapper->setAudioSettings(audioSettings);
     }
 
@@ -124,7 +133,7 @@ public:
         }
 
         if (pMapper->cpuMapRead(addr, mapped, data)) {
-            if (mapped < vPRGMemory.size()) return vPRGMemory[mapped];
+            if (mapped < prgRomSize) return vPRGMemory[mapped];
             return data;
         }
         return openBusFallback;
@@ -143,7 +152,7 @@ public:
         if (pMapper->hasBusConflicts() && addr >= 0x8000) {
             uint32_t romOff = 0;
             uint8_t dummy = 0;
-            if (pMapper->cpuMapRead(addr, romOff, dummy) && romOff < vPRGMemory.size()) {
+            if (pMapper->cpuMapRead(addr, romOff, dummy) && romOff < prgRomSize) {
                 data &= vPRGMemory[romOff];
             }
         }
@@ -155,7 +164,7 @@ public:
         pMapper->ppuReadCycle(addr);
         if (pMapper->ppuReadDirect(addr, data)) return true;
         if (pMapper->ppuMapRead(addr, mapped)) {
-            if (mapped < vCHRMemory.size()) data = vCHRMemory[mapped];
+            if (mapped < chrRomSize) data = vCHRMemory[mapped];
             return true;
         }
         return false;
@@ -165,7 +174,7 @@ public:
         uint32_t mapped = 0;
         if (pMapper->ppuWriteDirect(addr, data)) return true;
         if (pMapper->ppuMapWrite(addr, mapped)) {
-            if (mapped < vCHRMemory.size()) vCHRMemory[mapped] = data;
+            if (mapped < chrRomSize) vCHRMemory[mapped] = data;
             return true;
         }
         return false;
@@ -177,9 +186,12 @@ private:
     uint16_t chrBanks = 0;
     Mirroring hwMirror = Mirroring::HORIZONTAL;
 
-    std::vector<uint8_t> vPRGMemory;
-    std::vector<uint8_t> vCHRMemory;
-    std::vector<uint8_t> vPRGRAM;
+    std::array<uint8_t, NES::MAX_PRG_ROM_SIZE> vPRGMemory{};
+    std::array<uint8_t, NES::MAX_CHR_ROM_SIZE> vCHRMemory{};
+    std::array<uint8_t, NES::MAX_PRG_RAM_SIZE> vPRGRAM{};
+    size_t prgRomSize = 0;
+    size_t chrRomSize = 0;
+    size_t prgRamSize = 0;
 
     std::unique_ptr<Mapper> pMapper;
 };

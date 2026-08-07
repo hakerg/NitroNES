@@ -31,4 +31,12 @@ namespace NES {
     static constexpr double REFRESH_RATE_NTSC_OFF = PPU_CLOCK_NTSC / PPU_CYCLES_PER_FRAME;
     static constexpr double REFRESH_RATE_NTSC_ON  = PPU_CLOCK_NTSC / (PPU_CYCLES_PER_FRAME - 0.5);
 
+    static constexpr size_t PRG_BANK_SIZE = 16384;
+    static constexpr size_t CHR_BANK_SIZE = 8192;
+    static constexpr size_t MAX_PRG_BANKS = 512;
+    static constexpr size_t MAX_CHR_BANKS = 256;
+    static constexpr size_t MAX_PRG_ROM_SIZE = MAX_PRG_BANKS * PRG_BANK_SIZE;
+    static constexpr size_t MAX_CHR_ROM_SIZE = MAX_CHR_BANKS * CHR_BANK_SIZE;
+    static constexpr size_t MAX_PRG_RAM_SIZE = 256 * 1024;
+
 }
