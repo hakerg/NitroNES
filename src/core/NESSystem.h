@@ -20,7 +20,10 @@ public:
         a2a03.getCPU().A = 0; a2a03.getCPU().X = 0; a2a03.getCPU().Y = 0;
         a2a03.getCPU().S = 0x00;
         a2a03.getCPU().P = CPU6502::FLAG_U | CPU6502::FLAG_B;
-        reset();
+
+        cart.reset();
+        a2a03.reset();
+        ppu.reset();
     }
 
     void reset() override {
