@@ -2,6 +2,7 @@
 #include "APU.h"
 #include "CPU6502.h"
 #include "DMA.h"
+#include "NESBus.h"
 
 class IA2A03 {
 public:
@@ -16,9 +17,6 @@ public:
 
 class A2A03 : public ICPUBus, public IDMA {
 public:
-    explicit A2A03(IA2A03& core, AudioSettings& audioSettings)
-        : cpu(*this), apu(audioSettings), dma(*this), core(core) {}
-
     bool isControllerStrobeActive() const { return controllerStrobe; }
 
     void reset() {
@@ -49,7 +47,7 @@ public:
         cpu.clockPhi2();
 
         if (controllerStrobe && !isAPUPutCycle) {
-            core.latchControllers();
+            core().latchControllers();
         }
 
         isAPUPutCycle = !isAPUPutCycle;
@@ -67,8 +65,8 @@ public:
         return readData();
     }
 
-    bool pollNMI() override { return core.pollNMI(); }
-    bool pollIRQ() override { return !(apu.irqAsserted() || core.irqAsserted()); }
+    bool pollNMI() override { return core().pollNMI(); }
+    bool pollIRQ() override { return !(apu.irqAsserted() || core().irqAsserted()); }
     bool pollRDY() override { return dma.getRDYOut(); }
     bool isReadOverridden() override { return dma.overridesAddr(); }
     bool dmcReadyForFetch() override { return apu.dmcReadyForFetch(); }
@@ -84,7 +82,7 @@ public:
 
     void writeOAMData(uint8_t data) override {
         busData = data;
-        core.a2a03WriteData(0x2004, data);
+        core().a2a03WriteData(0x2004, data);
     }
 
     void loadDMCSample(uint8_t data) override { apu.loadDMCSample(data); }
@@ -99,7 +97,7 @@ public:
             internalBus = apu.readData(addr, internalBus);
             return internalBus;
         }
-        busData = core.a2a03ReadData(addr);
+        busData = core().a2a03ReadData(addr);
         internalBus = busData;
         return busData;
     }
@@ -111,8 +109,8 @@ public:
         const uint16_t reg = 0x4000 | (dmaAddr & 0x001F);
 
         if (regActive && (reg == 0x4016 || reg == 0x4017)) {
-            const uint8_t ctrl = core.a2a03ReadData(reg);
-            const uint8_t ext  = core.a2a03ReadDataExternal(dmaAddr);
+            const uint8_t ctrl = core().a2a03ReadData(reg);
+            const uint8_t ext  = core().a2a03ReadDataExternal(dmaAddr);
             busData = (ext & 0xE0) | (ctrl & 0x1F);
             internalBus = busData;
             return busData;
@@ -131,7 +129,7 @@ public:
 
     uint8_t readExternal(uint16_t addr) {
         if (addr >= 0x4000 && addr <= 0x401F) return busData;
-        return core.a2a03ReadData(addr);
+        return core().a2a03ReadData(addr);
     }
 
     void writeData(uint8_t data) {
@@ -142,7 +140,7 @@ public:
         busData = data;
         internalBus = data;
 
-        core.a2a03WriteData(addr, data);
+        core().a2a03WriteData(addr, data);
 
         if (addr == 0x4016) {
             controllerStrobe = (data & 0x01) != 0;
@@ -156,11 +154,12 @@ public:
     }
 
 private:
+    static IA2A03& core() { return *NESBus::instance().core; }
+
+
     CPU6502 cpu;
     APU apu;
     DMA dma;
-    IA2A03& core;
-
     uint8_t busData = 0;
     bool isAPUPutCycle = false;
     uint8_t internalBus = 0;

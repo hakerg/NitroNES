@@ -1,6 +1,7 @@
 #pragma once
 #include "AudioSettings.h"
 #include "DelayedPin.h"
+#include "NESBus.h"
 #include "Tracer.h"
 #include <cstdint>
 #include <format>
@@ -65,10 +66,6 @@ struct PulseChannel {
     uint8_t  sweepDivider   = 0;
     bool     sweepReload    = false;
 
-    AudioSettings& settings;
-
-    PulseChannel(AudioSettings& settings) : settings(settings) {}
-
     void writeR0(uint8_t data) {
         duty           = (data >> 6) & 0x03;
         lengthHalt.set((data >> 5) & 0x01, 2);
@@ -113,7 +110,7 @@ struct PulseChannel {
             timerCounter += timerPeriod + 1;
             dutyPos = (dutyPos + 1) & 0x07;
         }
-        timerCounter -= settings.pitch;
+        timerCounter -= NESBus::instance().audio->pitch;
     }
 
     void clockEnvelope() {
@@ -191,10 +188,6 @@ struct TriangleChannel {
     uint8_t  linearCounter     = 0;
     bool     linearCounterReload = false;
 
-    AudioSettings& settings;
-
-    TriangleChannel(AudioSettings& settings) : settings(settings) {}
-
     void writeR0(uint8_t data) {
         lengthHalt.set((data >> 7) & 0x01, 2);
         linearCounterLoad = data & 0x7F;
@@ -228,7 +221,7 @@ struct TriangleChannel {
             if (timerPeriod >= 2 && lengthCounter > 0 && linearCounter > 0)
                 seqPos = (seqPos + 1) & 0x1F;
         }
-        timerCounter -= settings.pitch;
+        timerCounter -= NESBus::instance().audio->pitch;
     }
 
     void clockLinearCounter() {
@@ -282,10 +275,6 @@ struct NoiseChannel {
     uint8_t  envDivider  = 0;
     uint8_t  envDecay    = 0;
 
-    AudioSettings& settings;
-
-    NoiseChannel(AudioSettings& settings) : settings(settings) {}
-
     void writeR0(uint8_t data) {
         lengthHalt.set((data >> 5) & 0x01, 2);
         constVolume    = (data >> 4) & 0x01;
@@ -322,7 +311,7 @@ struct NoiseChannel {
             shiftReg >>= 1;
             shiftReg |= (feedback << 14);
         }
-        timerCounter -= settings.pitch;
+        timerCounter -= NESBus::instance().audio->pitch;
     }
 
     void clockEnvelope() {
@@ -477,8 +466,7 @@ static constexpr uint32_t FRAME_COUNTER_STEPS_PAL[5] = {
 
 class APU {
 public:
-    explicit APU(AudioSettings& settings) : pulse1(settings), pulse2(settings),
-        triangle(settings), noise(settings) {
+    APU() {
         initMixerTables();
     }
 

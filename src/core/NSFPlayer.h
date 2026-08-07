@@ -63,8 +63,15 @@ public:
     static constexpr uint16_t RESET_VECTOR      = 0xFFFC;
     static constexpr int      CALL_WATCHDOG_CYCLES = 200000;
 
-    explicit NSFPlayer(AudioSettings& audioSettings, const std::string& path)
-        : NESCoreBase(audioSettings) {
+    explicit NSFPlayer(AudioSettings& audioSettings, const std::string& path) {
+        auto& bus = NESBus::instance();
+        bus.apu = &a2a03.getAPU();
+        bus.core = this;
+        bus.cpuBus = &a2a03;
+        bus.dmaBus = &a2a03;
+        bus.audio = &audioSettings;
+        bus.cart = nullptr;
+        bus.ppu = nullptr;
         extRam.fill(0x00);
         prgRom.assign(32768, 0x00);
         NSFFile nsf;

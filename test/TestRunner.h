@@ -1,6 +1,7 @@
 #pragma once
 #include "NESHeadlessSystem.h"
 #include "../src/core/Tracer.h"
+#include <memory>
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -18,14 +19,14 @@ template <typename CoreT>
 class TestRunner : public Tracer {
 public:
     explicit TestRunner(const std::string& romPath)
-        : nes(romPath) {
-        nes.setTracer(this);
+        : nes(std::make_unique<CoreT>(romPath)) {
+        nes->setTracer(this);
     }
 
     ~TestRunner() override {
         flushPending();
         closeTrace();
-        nes.setTracer(nullptr);
+        nes->setTracer(nullptr);
     }
 
     void loadSymbols(const std::string& path) {
@@ -127,7 +128,7 @@ public:
     }
 
 private:
-    CoreT nes;
+    std::unique_ptr<CoreT> nes;
     std::map<uint16_t, std::string> symbolByAddr;
 
     std::FILE* traceFp = nullptr;
@@ -198,7 +199,7 @@ private:
 
     // dispatch ---------------------------------------------------------------
     bool dispatch(const std::string& cmd) {
-        if (cmd == "reset") { nes.reset(); return true; }
+        if (cmd == "reset") { nes->reset(); return true; }
 
         if (cmd.size() >= 5 && cmd.compare(0, 3, "pad") == 0
             && (cmd[3] == '1' || cmd[3] == '2'))
@@ -213,15 +214,15 @@ private:
         const std::string& head = parts[0];
 
         if (head == "frames" && parts.size() == 2) {
-            nes.tickFrames(parseInt(parts[1]));
+            nes->tickFrames(parseInt(parts[1]));
             return true;
         }
         if (head == "cycles" && parts.size() == 2) {
-            nes.tickCycles(parseInt(parts[1]));
+            nes->tickCycles(parseInt(parts[1]));
             return true;
         }
         if (cmd == "info") {
-            std::cout << "---- info frame=" << nes.frameNo() << " cyc=" << nes.cycleNo() << " ----\n";
+            std::cout << "---- info frame=" << nes->frameNo() << " cyc=" << nes->cycleNo() << " ----\n";
             return true;
         }
         if (head == "mem" && parts.size() == 3) {
@@ -245,21 +246,21 @@ private:
             return true;
         }
         if (head == "song" && parts.size() == 2) {
-            if constexpr (requires { nes.initSong(uint8_t{}); }) {
-                nes.initSong((uint8_t)parseInt(parts[1]));
+            if constexpr (requires { nes->initSong(uint8_t{}); }) {
+                nes->initSong((uint8_t)parseInt(parts[1]));
                 return true;
             } else return false;
         }
         if (cmd == "next") {
-            if constexpr (requires { nes.nextSong(); }) { nes.nextSong(); return true; }
+            if constexpr (requires { nes->nextSong(); }) { nes->nextSong(); return true; }
             else return false;
         }
         if (cmd == "prev") {
-            if constexpr (requires { nes.prevSong(); }) { nes.prevSong(); return true; }
+            if constexpr (requires { nes->prevSong(); }) { nes->prevSong(); return true; }
             else return false;
         }
         if (cmd == "songinfo") {
-            if constexpr (requires { nes.header(); }) { printSongInfo(); return true; }
+            if constexpr (requires { nes->header(); }) { printSongInfo(); return true; }
             else return false;
         }
         if (head == "trace-file" && parts.size() == 2) {
@@ -285,7 +286,7 @@ private:
     }
 
     bool padCmd(int port, char op, const std::string& arg) {
-        uint8_t cur  = port == 0 ? nes.getController1() : nes.getController2();
+        uint8_t cur  = port == 0 ? nes->getController1() : nes->getController2();
         uint8_t mask = arg.empty() ? 0 : parseButtons(arg);
 
         if      (op == '=') cur = mask;
@@ -293,7 +294,7 @@ private:
         else if (op == '-') cur &= ~mask;
         else return false;
 
-        if (port == 0) nes.setController1(cur); else nes.setController2(cur);
+        if (port == 0) nes->setController1(cur); else nes->setController2(cur);
         return true;
     }
 
@@ -306,11 +307,11 @@ private:
     }
 
     void printScreen(bool ascii, const std::string& charMap) {
-        if constexpr (requires { nes.dumpNametable((uint8_t*)nullptr, 0); }) {
+        if constexpr (requires { nes->dumpNametable((uint8_t*)nullptr, 0); }) {
             uint8_t tiles[960]{};
-            nes.dumpNametable(tiles, 0);
-            std::cout << "---- screen (NT0) frame=" << nes.frameNo()
-                      << " cyc=" << nes.cycleNo()
+            nes->dumpNametable(tiles, 0);
+            std::cout << "---- screen (NT0) frame=" << nes->frameNo()
+                      << " cyc=" << nes->cycleNo()
                       << (ascii ? " ascii" : " hex") << " ----\n";
             for (int row = 0; row < 30; ++row) {
                 std::string line;
@@ -336,12 +337,12 @@ private:
     }
 
     void printPixels(int x0, int y0, int w, int h) {
-        if constexpr (requires { nes.framebuffer(); }) {
-            const uint32_t* fb = nes.framebuffer();
+        if constexpr (requires { nes->framebuffer(); }) {
+            const uint32_t* fb = nes->framebuffer();
             if (!fb) { std::cerr << "[nes_test] pixels: no framebuffer\n"; return; }
             std::cout << "---- pixels x=" << x0 << " y=" << y0
                       << " w=" << w << " h=" << h
-                      << " frame=" << nes.frameNo() << " ----\n";
+                      << " frame=" << nes->frameNo() << " ----\n";
             for (int y = y0; y < y0 + h; ++y) {
                 std::string line;
                 for (int x = x0; x < x0 + w; ++x) {
@@ -360,10 +361,10 @@ private:
     }
 
     void printSongInfo() {
-        if constexpr (requires { nes.header(); }) {
-            const auto& h = nes.header();
-            std::cout << "---- NSF song " << (int)nes.getCurrentSong() << "/"
-                      << (int)nes.getTotalSongs() << " \"" << h.title()
+        if constexpr (requires { nes->header(); }) {
+            const auto& h = nes->header();
+            std::cout << "---- NSF song " << (int)nes->getCurrentSong() << "/"
+                      << (int)nes->getTotalSongs() << " \"" << h.title()
                       << "\" by " << h.artistName() << " (" << h.copyrightText() << ")"
                       << (h.isPAL() ? " [PAL]" : " [NTSC]") << " ----\n"
                       << "load=$" << hex4(h.loadAddr)
@@ -377,7 +378,7 @@ private:
         for (uint32_t i = 0; i < len; i += 16) {
             std::string line = std::format("{:04X}: ", (uint16_t)(addr + i));
             for (uint32_t j = 0; j < 16 && i + j < len; ++j)
-                line += std::format("{:02X} ", nes.peekMemory((uint16_t)(addr + i + j)));
+                line += std::format("{:02X} ", nes->peekMemory((uint16_t)(addr + i + j)));
             std::cout << line << "\n";
         }
     }
@@ -399,7 +400,7 @@ private:
     void beginLine(std::string_view body) {
         if (!traceFp) openTrace();
         if (!traceFp) return;
-        pending = std::format("F={} CYC={} ", nes.frameNo(), nes.cycleNo());
+        pending = std::format("F={} CYC={} ", nes->frameNo(), nes->cycleNo());
         pending += body;
     }
 
@@ -415,22 +416,22 @@ private:
     }
 
     void navigateAccuracyCoin(int page, int row) {
-        nes.tickFrames(60);
+        nes->tickFrames(60);
 
         for (int i = 1; i < page; ++i) {
-            nes.setController1(0x01);
-            nes.tickFrames(20);
-            nes.setController1(0x00);
-            nes.tickFrames(20);
+            nes->setController1(0x01);
+            nes->tickFrames(20);
+            nes->setController1(0x00);
+            nes->tickFrames(20);
         }
 
         for (int i = 0; i < row; ++i) {
-            nes.setController1(0x04);
-            nes.tickFrames(20);
-            nes.setController1(0x00);
-            nes.tickFrames(20);
+            nes->setController1(0x04);
+            nes->tickFrames(20);
+            nes->setController1(0x00);
+            nes->tickFrames(20);
         }
 
-        nes.setController1(0x80);
+        nes->setController1(0x80);
     }
 };

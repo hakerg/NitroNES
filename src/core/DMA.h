@@ -3,6 +3,7 @@
 #include <string>
 #include <format>
 #include "DelayedPin.h"
+#include "NESBus.h"
 #include "Tracer.h"
 
 class IDMA {
@@ -20,8 +21,6 @@ public:
 
 class DMA {
 public:
-    DMA(IDMA& idma) : idma(idma) {}
-
     void reset() {
         rdy = true;
         oamPhase = OAMPhase::Idle;
@@ -36,10 +35,10 @@ public:
 
     void clockPhi1(bool isPutCycle) {
         action = Action::None;
-        const bool cpuRead = idma.pollIsRead();
+        const bool cpuRead = idma().pollIsRead();
         const bool getCycle = !isPutCycle;
 
-        if (idma.dmcHasBytesRemaining()) {
+        if (idma().dmcHasBytesRemaining()) {
             hadBytesRecently.force(true);
         } else if (hadBytesRecently.getTarget()) {
             hadBytesRecently.set(false, 4);
@@ -47,9 +46,9 @@ public:
         hadBytesRecently.tick();
 
         if (dmcPhase == DMCPhase::Idle) {
-            if (hadBytesRecently.get() && idma.dmcReadyForFetch()) {
+            if (hadBytesRecently.get() && idma().dmcReadyForFetch()) {
                 dmcPhase = DMCPhase::Halt;
-                dmcHaltOnPut = idma.dmcDMAHaltOnPut();
+                dmcHaltOnPut = idma().dmcDMAHaltOnPut();
                 dmcHaltArmed = false;
                 dmcAbortPending = true;
             }
@@ -106,15 +105,15 @@ public:
             case Action::None:
                 break;
             case Action::DMCGet:
-                idma.loadDMCSample(idma.dmaReadData());
+                idma().loadDMCSample(idma().dmaReadData());
                 dmcPhase = DMCPhase::Idle;
                 break;
             case Action::OAMGet:
-                oamBuffer = idma.dmaReadData();
+                oamBuffer = idma().dmaReadData();
                 oamHasByte = true;
                 break;
             case Action::OAMPut:
-                idma.writeOAMData(oamBuffer);
+                idma().writeOAMData(oamBuffer);
                 oamHasByte = false;
                 if ((oamAddr & 0xFF) == 0xFF) oamPhase = OAMPhase::Idle;
                 else                          oamAddr++;
@@ -124,7 +123,7 @@ public:
     }
 
     uint16_t getAddr() {
-        if (action == Action::DMCGet) return idma.getDMCSampleAddress();
+        if (action == Action::DMCGet) return idma().getDMCSampleAddress();
         if (action == Action::OAMGet) return oamAddr;
         if (action == Action::OAMPut) return 0x2004;
         return 0;
@@ -162,7 +161,7 @@ private:
         tracer->appendDma(buf);
     }
 
-    IDMA& idma;
+    static IDMA& idma() { return *NESBus::instance().dmaBus; }
     Tracer* tracer = nullptr;
     bool rdy = true;
 

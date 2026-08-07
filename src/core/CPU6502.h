@@ -1,5 +1,6 @@
 #pragma once
 #include "DelayedPin.h"
+#include "NESBus.h"
 #include <cstdint>
 #include <string>
 #include <format>
@@ -26,7 +27,7 @@ public:
     static constexpr uint8_t FLAG_V = 0x40;
     static constexpr uint8_t FLAG_N = 0x80;
 
-    CPU6502(ICPUBus& busInterface) : bus(busInterface) {
+    CPU6502() {
         reset();
     }
 
@@ -58,7 +59,7 @@ public:
     }
 
     void clockPhi1() {
-        rdyLevel = bus.pollRDY();
+        rdyLevel = bus().pollRDY();
         nmiSignal.tick();
         irqDetected = !irqLevel;
 
@@ -77,18 +78,18 @@ public:
     }
 
     void clockPhi2() {
-        if (currentStep.isRead && !bus.isReadOverridden()) {
-            fetched = bus.cpuReadData();
+        if (currentStep.isRead && !bus().isReadOverridden()) {
+            fetched = bus().cpuReadData();
         }
 
-        bool currentNMILevel = bus.pollNMI();
+        bool currentNMILevel = bus().pollNMI();
         if (!currentNMILevel && nmiLevel) {
             if (!nmiSignal.getTarget()) {
                 nmiSignal.set(true, 2);
             }
         }
         nmiLevel = currentNMILevel;
-        irqLevel = bus.pollIRQ();
+        irqLevel = bus().pollIRQ();
 
         emitTracePhi2();
         cycle++;
@@ -140,9 +141,10 @@ private:
         STA, STX, STY, SAX,
         SHX, SHY, SHA, SHS
     };
+    static ICPUBus& bus() { return *NESBus::instance().cpuBus; }
+
     enum class AccessMode : uint8_t { READ, RMW, WRITE };
 
-    ICPUBus& bus;
     MicroOp nextOp = nullptr;
     MicroOp currentOp = nullptr;
     Step currentStep = { nullptr, 0, false, 0 };
@@ -439,7 +441,7 @@ private:
     void emitTracePhi2() {
         if (!tracer || !tracer->cpu) return;
         std::string body;
-        if (currentStep.isRead && !bus.isReadOverridden())
+        if (currentStep.isRead && !bus().isReadOverridden())
             body = std::format("PHI2 fetched={:02X}", fetched);
         else if (!currentStep.isRead)
             body = std::format("PHI2 wrote={:02X}", currentStep.writeData);

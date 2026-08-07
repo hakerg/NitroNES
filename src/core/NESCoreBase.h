@@ -14,10 +14,6 @@ public:
     double speed = 1.0;
     bool paused = false;
 
-    explicit NESCoreBase(AudioSettings& audioSettings)
-        : a2a03(*this, audioSettings) {
-        cpuRam.fill(0x00);
-    }
     ~NESCoreBase() override = default;
 
     double getCPUClockRate()    const { return NES::CPU_CLOCK_NTSC; }
@@ -84,5 +80,5 @@ protected:
     }
 
     A2A03 a2a03;
-    std::array<uint8_t, 2048> cpuRam;
+    std::array<uint8_t, 2048> cpuRam{};
 };

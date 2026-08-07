@@ -2,22 +2,22 @@
 #include <array>
 #include <cstring>
 #include <format>
-#include "Cartridge.h"
 #include "DelayedPin.h"
+#include "mappers/MapperBase.h"
+#include "Cartridge.h"
+#include "NESBus.h"
 #include "NESConst.h"
 #include "Tracer.h"
 
 class PPU2C02 {
 public:
-    explicit PPU2C02(Cartridge& cart) : cart(cart) {
+    PPU2C02() {
         buf.fill(0xFF000000);
         std::memset(OAM, 0, sizeof(OAM));
         std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         nameTable[0].fill(0x00);
         nameTable[1].fill(0x00);
     }
-
-    Cartridge& cart;
 
     bool nmiLineLow() const { return ctrl.enableNmi && nmiVbl; }
 
@@ -112,10 +112,10 @@ public:
             uint8_t v = palScreen[paletteIndex(addr)];
             return mask.greyscale ? (v & 0x30) : v;
         }
-        if (uint8_t ppuReadBuf = 0; cart.ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
+        if (uint8_t ppuReadBuf = 0; cart().ppuRead(addr, ppuReadBuf)) return ppuReadBuf;
         if (addr >= 0x2000 && addr <= 0x3EFF) {
             addr &= 0x0FFF;
-            Mirroring m = cart.getMirroring();
+            Mirroring m = cart().getMirroring();
             if (m == Mirroring::VERTICAL)     return nameTable[(addr & 0x0400) >> 10][addr & 0x03FF];
             if (m == Mirroring::HORIZONTAL)   return nameTable[(addr & 0x0800) >> 11][addr & 0x03FF];
             if (m == Mirroring::ONESCREEN_LO) return nameTable[0][addr & 0x03FF];
@@ -127,10 +127,10 @@ public:
     void ppuWrite(uint16_t addr, uint8_t data) {
         addr &= 0x3FFF;
         if (addr >= 0x3F00) { palScreen[paletteIndex(addr)] = data; return; }
-        if (cart.ppuWrite(addr, data)) return;
+        if (cart().ppuWrite(addr, data)) return;
         if (addr >= 0x2000 && addr <= 0x3EFF) {
             addr &= 0x0FFF;
-            Mirroring m = cart.getMirroring();
+            Mirroring m = cart().getMirroring();
             if (m == Mirroring::VERTICAL)     { nameTable[(addr & 0x0400) >> 10][addr & 0x03FF] = data; return; }
             if (m == Mirroring::HORIZONTAL)   { nameTable[(addr & 0x0800) >> 11][addr & 0x03FF] = data; return; }
             if (m == Mirroring::ONESCREEN_LO) { nameTable[0][addr & 0x03FF] = data; return; }
@@ -188,7 +188,7 @@ public:
     uint32_t* getFramebuffer() { return buf.data(); }
 
     void clock() {
-        cart.clockPpu();
+        cart().clockPpu();
         const bool wasRendering = renderingActive;
         renderingActive = renderEnableDelay.tick(mask.renderBackground || mask.renderSprites);
         ppuBusRead = false;
@@ -275,7 +275,7 @@ public:
             else if (ppuBusAle) {
                 ppuAddressLow = ppuBusData;
                 ppuBusAddr = (ppuBusAddr & 0x3F00) | ppuAddressLow;
-                cart.ppuAddress(ppuBusAddr);
+                cart().ppuAddress(ppuBusAddr);
                 ppuDataBuffer = ppuRead(ppuBusAddr);
             } else
                 ppuDataBuffer = ppuRead(ppuDataAddr);
@@ -304,6 +304,7 @@ public:
     void setTracer(Tracer* t) { tracer = t; }
 
 private:
+    static Cartridge& cart() { return *NESBus::instance().cart; }
     Tracer* tracer = nullptr;
 
     std::array<std::array<uint8_t, 1024>, 2> nameTable{};
@@ -980,13 +981,13 @@ private:
         ppuAddressLow = addr & 0x00FF;
         ppuBusAddr = addr;
         ppuBusAle = true;
-        cart.ppuAddress(addr);
+        cart().ppuAddress(addr);
     }
 
     uint8_t finishBusRead(uint16_t addr) {
         addr = (addr & 0x3F00) | ppuAddressLow;
         ppuBusAddr = addr;
-        cart.ppuAddress(addr);
+        cart().ppuAddress(addr);
         ppuBusData = ppuRead(addr);
         ppuBusRead = true;
         return ppuBusData;
@@ -994,7 +995,7 @@ private:
 
     void drivePpuAddress() {
         ppuBusAddr = vramAddr.reg & 0x3FFF;
-        cart.ppuAddress(vramAddr.reg & 0x3FFF);
+        cart().ppuAddress(vramAddr.reg & 0x3FFF);
     }
 
     const char* phaseName() const {

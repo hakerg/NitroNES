@@ -1,16 +1,22 @@
 ﻿#pragma once
 #include <array>
 #include "NESCoreBase.h"
+#include "NESBus.h"
 #include "Cartridge.h"
 #include "PPU2C02.h"
 
 class NESSystem : public NESCoreBase {
 public:
     explicit NESSystem(AudioSettings& audioSettings, const std::string& path)
-        : NESCoreBase(audioSettings)
-        , cart(path, audioSettings)
-        , ppu(cart) {
-        cpuRam.fill(0x00);
+        : cart(path, audioSettings) {
+        auto& bus = NESBus::instance();
+        bus.cart = &cart;
+        bus.ppu = &ppu;
+        bus.apu = &a2a03.getAPU();
+        bus.core = this;
+        bus.cpuBus = &a2a03;
+        bus.dmaBus = &a2a03;
+        bus.audio = &audioSettings;
         a2a03.getCPU().A = 0; a2a03.getCPU().X = 0; a2a03.getCPU().Y = 0;
         a2a03.getCPU().S = 0x00;
         a2a03.getCPU().P = CPU6502::FLAG_U | CPU6502::FLAG_B;
