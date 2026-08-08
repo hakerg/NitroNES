@@ -172,6 +172,7 @@ public:
         oamCorruptionRow = 0;
         frameOdd = false;
         oddFrameCarryOver = false;
+        oddFrameCarryOverAddr = 0;
         oddFrameSkip.force(false);
         spriteCount = 0;
         spriteZeroHitPossible = false;
@@ -410,9 +411,9 @@ private:
     int16_t  nmiScanline          = NES::SCANLINE_VBLANK_START_NTSC;
     int16_t  preRenderScanline    = NES::SCANLINE_PRERENDER_NTSC;
     int16_t  totalScanlines       = NES::TOTAL_SCANLINES_NTSC;
-    bool     frameOdd             = false;
     bool     oddFrameCarryOver    = false;
     uint16_t oddFrameCarryOverAddr = 0;
+    bool     frameOdd             = false;
     bool     suppressVblThisFrame = false;
     DelayedPin<bool> oddFrameSkip{false};
     bool     nmiCycleLatch        = false;
