@@ -171,6 +171,8 @@ public:
         oamCorruptionPending = false;
         oamCorruptionRow = 0;
         frameOdd = false;
+        oddFrameCarryOver = false;
+        oddFrameCarryOverAddr = 0;
         oddFrameSkip.force(false);
         spriteCount = 0;
         spriteZeroHitPossible = false;
@@ -201,6 +203,11 @@ public:
     uint32_t* getFramebuffer() { return buf.data(); }
 
     void clock() {
+        if (oddFrameCarryOver) {
+            if (renderingEnabled())
+                bgNextTileId = finishBusRead(oddFrameCarryOverAddr);
+            oddFrameCarryOver = false;
+        }
         cart().clockPpu();
         const bool wasRendering = renderingActive;
         renderingActive = renderEnableDelay.tick(mask.renderBackground || mask.renderSprites);
@@ -404,6 +411,8 @@ private:
     int16_t  nmiScanline          = NES::SCANLINE_VBLANK_START_NTSC;
     int16_t  preRenderScanline    = NES::SCANLINE_PRERENDER_NTSC;
     int16_t  totalScanlines       = NES::TOTAL_SCANLINES_NTSC;
+    bool     oddFrameCarryOver    = false;
+    uint16_t oddFrameCarryOverAddr = 0;
     bool     frameOdd             = false;
     bool     suppressVblThisFrame = false;
     DelayedPin<bool> oddFrameSkip{false};
@@ -942,6 +951,8 @@ private:
         cycle++;
 
         if (scanline == preRenderScanline && cycle == 340 && oddFrameSkip.get()) {
+            oddFrameCarryOverAddr = 0x2000 | (vramAddr.reg & 0x0FFF);
+            oddFrameCarryOver = true;
             cycle    = 0;
             scanline = 0;
             oddFrameSkip.force(false);

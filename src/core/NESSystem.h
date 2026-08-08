@@ -82,7 +82,6 @@ protected:
         a2a03.clockPhi1();
         a2a03.clockPhi2Write();
         ppu.clock();
-        // PAL: 16 dotow PPU na 5 cykli CPU (3.2/cykl) - co 5. cykl dodatkowy dot
         if (system == NESStandard::PAL && a2a03.getCPU().getCycle() % 5 == 0)
             ppu.clock();
         a2a03.clockPhi2();
