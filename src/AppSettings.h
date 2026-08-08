@@ -31,6 +31,8 @@ struct AppSettings {
     float speed1 = 4.0f;
     float speed2 = 0.5f;
     int system = 0;
+    bool useBackdropForBackground = false;
+    bool preserveAspectRatio = true;
     AudioSettings audioSettings;
     ControllerSettings controllers[2] = {ControllerSettings::player1(),
                                          ControllerSettings::player2()};
@@ -92,6 +94,8 @@ private:
         f("speed1", speed1);
         f("speed2", speed2);
         f("system", system);
+        f("graphics.useBackdropForBackground", useBackdropForBackground);
+        f("graphics.preserveAspectRatio", preserveAspectRatio);
         for (int p = 0; p < 2; p++) {
             auto &c = controllers[p];
             std::string pre = "pad" + std::to_string(p) + ".";

@@ -3,6 +3,7 @@
 #include "../IInputContext.h"
 #include "../IWindow.h"
 #include "../core/NESConst.h"
+#include "../core/NESBus.h"
 #include "ISDLWindowAPI.h"
 #include "imgui/ImGuiLayer.h"
 
@@ -151,8 +152,13 @@ public:
             SDL_EndGPUCopyPass(copy);
 
             float dstX = 0, dstY = 0, dstW = 0, dstH = 0;
-            NES::calcDestRect(sw, sh, dstX, dstY, dstW, dstH,
-                              session->getCore().system);
+            if (NESBus::instance().preserveAspectRatio) {
+                NES::calcDestRect(sw, sh, dstX, dstY, dstW, dstH,
+                                  session->getCore().system);
+            } else {
+                dstW = (float)sw;
+                dstH = (float)sh;
+            }
             SDL_GPUBlitInfo blit = {};
             blit.source.texture = nesTexture;
             blit.source.w = NES::SCREEN_WIDTH;
@@ -163,7 +169,20 @@ public:
             blit.destination.w = static_cast<int>(dstW);
             blit.destination.h = static_cast<int>(dstH);
             blit.load_op = SDL_GPU_LOADOP_CLEAR;
-            blit.clear_color = {0, 0, 0, 1};
+            {
+                auto& bus = NESBus::instance();
+                if (bus.useBackdropForBackground && bus.ppu) {
+                    uint32_t c = bus.ppu->getBackdropColor();
+                    blit.clear_color = {
+                        ((c >> 16) & 0xFF) / 255.0f,
+                        ((c >> 8) & 0xFF) / 255.0f,
+                        (c & 0xFF) / 255.0f,
+                        1.0f
+                    };
+                } else {
+                    blit.clear_color = {0, 0, 0, 1};
+                }
+            }
             blit.filter = SDL_GPU_FILTER_NEAREST;
             SDL_BlitGPUTexture(cmd, &blit);
         } else {

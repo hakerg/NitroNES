@@ -22,6 +22,9 @@ public:
     ICPUBus* cpuBus = nullptr;
     IDMA* dmaBus = nullptr;
     AudioSettings* audio = nullptr;
+    bool useBackdropForBackground = false;
+    bool preserveAspectRatio = true;
+    uint32_t backdropPixel = 0xFF000000;
 
 private:
     NESBus() = default;

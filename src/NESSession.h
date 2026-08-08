@@ -12,6 +12,8 @@ public:
         : IFileSession(path, audio, window, settings),
           NESSystem(settings.audioSettings, path),
           input(input) {
+        NESBus::instance().useBackdropForBackground = settings.useBackdropForBackground;
+        NESBus::instance().preserveAspectRatio = settings.preserveAspectRatio;
         setSystem(static_cast<NESStandard>(settings.system));
         reset();
     }

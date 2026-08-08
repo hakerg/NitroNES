@@ -3,6 +3,7 @@
 #include "../../IFileSession.h"
 #include "../../IInputContext.h"
 #include "../../IMenuHandler.h"
+#include "../../core/NESBus.h"
 #include "../../lang/LanguageRegistry.h"
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_sdlgpu3.h"
@@ -242,6 +243,9 @@ public:
                 if (ImGui::MenuItem(tr("settings.sync")))
                     syncSettingsOpen = true;
 
+                if (ImGui::MenuItem(tr("settings.graphics")))
+                    graphicsSettingsOpen = true;
+
                 if (ImGui::MenuItem(tr("settings.audio")))
                     audioSettingsOpen = true;
 
@@ -259,6 +263,7 @@ public:
         renderSyncWindow(session);
         renderAudioWindow();
         renderControlsWindow();
+        renderGraphicsWindow(session);
         renderAboutFileWindow(session);
         renderMemoryViewerWindow(session);
 
@@ -626,6 +631,25 @@ private:
         ImGui::End();
     }
 
+    void renderGraphicsWindow(IFileSession *session) {
+        if (!graphicsSettingsOpen || !settings)
+            return;
+
+        menuOpen = true;
+        if (!ImGui::Begin(tr("settings.graphics"), &graphicsSettingsOpen, WINDOW_FLAGS)) {
+            ImGui::End();
+            return;
+        }
+
+        if (ImGui::Checkbox(tr("settings.graphics.use_backdrop"), &settings->useBackdropForBackground))
+            NESBus::instance().useBackdropForBackground = settings->useBackdropForBackground;
+
+        if (ImGui::Checkbox(tr("settings.graphics.preserve_aspect"), &settings->preserveAspectRatio))
+            NESBus::instance().preserveAspectRatio = settings->preserveAspectRatio;
+
+        ImGui::End();
+    }
+
     void renderMemoryViewerWindow(IFileSession *session) {
         if (!memoryViewerOpen || !session)
             return;
@@ -732,6 +756,7 @@ private:
     bool controlsOpen = false;
     bool syncSettingsOpen = false;
     bool audioSettingsOpen = false;
+    bool graphicsSettingsOpen = false;
     bool aboutFileOpen = false;
     bool memoryViewerOpen = false;
 

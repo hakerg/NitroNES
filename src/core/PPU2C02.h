@@ -319,6 +319,10 @@ public:
 
     void setTracer(Tracer* t) { tracer = t; }
 
+    uint32_t getBackdropColor() const {
+        return palette()[palScreen[0] & 0x3F];
+    }
+
 private:
     static Cartridge& cart() { return *NESBus::instance().cart; }
     Tracer* tracer = nullptr;
@@ -452,7 +456,7 @@ private:
         return addr;
     }
 
-    bool renderingEnabled() const { return renderingActive; }
+    bool     renderingEnabled() const { return renderingActive; }
 
     // 2C07: wymuszone odswiezanie OAM w lin. 265-310 (24 linie po NMI) -
     // OAMADDR inkrementowany co 2 piksele; sprite evaluation nie dziala
@@ -918,9 +922,11 @@ private:
         else
             idx = palScreen[paletteIndex(0x3F00u | ((uint16_t)paletteIdx << 2) | pixel)];
         if (mask.greyscale) idx &= 0x30;
-        // 2C07/UA6538: border zawsze czarny - 1 linia u gory, 2 px z bokow
-        if (region != NESStandard::NTSC && (y == 0 || x <= 1 || x >= NES::SCREEN_WIDTH - 2))
-            idx = 0x0E;
+        if (region != NESStandard::NTSC && (y == 0 || x <= 1 || x >= NES::SCREEN_WIDTH - 2)) {
+            buf[y * NES::SCREEN_WIDTH + x] = NESBus::instance().useBackdropForBackground
+                ? palette()[palScreen[0] & 0x3F] : 0xFF000000;
+            return;
+        }
         // 2C07/UA6538: bity emphasis red/green sa zamienione miejscami
         auto emph = (uint8_t)((mask.enhanceBlue << 2)
             | (region != NESStandard::NTSC ? ((mask.enhanceRed << 1) | mask.enhanceGreen)

@@ -72,7 +72,8 @@ public:
                 mirrorMode =
                     (data & 0x01) ? Mirroring::HORIZONTAL : Mirroring::VERTICAL;
             } else {
-                wramReadOnly = (data & 0x80) != 0;
+                wramEnabled    = (data & 0x80) != 0;
+                wramReadOnly   = (data & 0x40) != 0;
             }
         } else if (addr < 0xE000) {
             // $C000-$DFFF
@@ -93,9 +94,21 @@ public:
         }
     }
 
+    bool cpuReadDirect(uint16_t addr, uint8_t& data) override {
+        if (!wramEnabled && addr >= 0x6000 && addr <= 0x7FFF) {
+            data = (addr >> 8) & 0xFF;
+            return true;
+        }
+        return false;
+    }
+
     bool cpuWriteDirect(uint16_t addr, uint8_t) override {
+        if (!wramEnabled && addr >= 0x6000 && addr <= 0x7FFF)
+            return true;
         return wramReadOnly && addr >= 0x6000 && addr <= 0x7FFF;
     }
+
+    bool hasPrgRam() const override { return wramEnabled; }
 
     bool ppuMapRead(uint16_t addr, uint32_t &mapped) override {
         return chrMapAddr(addr, mapped);
@@ -209,6 +222,7 @@ protected:
     DelayedPin<bool> irqActive{false};
     bool irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+    bool wramEnabled  = true;
     bool wramReadOnly = false;
     const char* name() const override { return "MMC3"; }
 };
