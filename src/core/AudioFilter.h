@@ -48,10 +48,7 @@ public:
         return y;
     }
 
-    void reset() {
-        prevX = 0.0f;
-        prevY = 0.0f;
-    }
+    void reset() { *this = AudioFilter(); }
 
 private:
     FilterType type   = FilterType::LowPass;

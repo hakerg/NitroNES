@@ -21,17 +21,7 @@ public:
 
 class DMA {
 public:
-    void reset() {
-        rdy = true;
-        oamPhase = OAMPhase::Idle;
-        dmcPhase = DMCPhase::Idle;
-        oamHasByte = false;
-        action = Action::None;
-        dmcHaltOnPut = false;
-        dmcHaltArmed = false;
-        dmcAbortPending = false;
-        hadBytesRecently.force(false);
-    }
+    void reset() { *this = DMA(); }
 
     void clockPhi1(bool isPutCycle) {
         action = Action::None;

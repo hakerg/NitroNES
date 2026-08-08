@@ -152,52 +152,35 @@ public:
     }
 
     void reset() {
-        fineX = addressLatch = ppuDataBuffer = 0;
+        auto savedRegion         = region;
+        auto savedNmiScanline    = nmiScanline;
+        auto savedPreRender      = preRenderScanline;
+        auto savedTotalScanlines = totalScanlines;
+        auto savedNameTable0     = nameTable[0];
+        auto savedNameTable1     = nameTable[1];
+        auto savedPalScreen      = palScreen;
+        auto savedStatus         = status.reg;
+        auto savedOamAddr        = oamAddr;
+        auto savedVramAddr       = vramAddr.reg;
+        auto savedTracer         = tracer;
+
+        *this = PPU2C02();
+
+        region           = savedRegion;
+        nmiScanline      = savedNmiScanline;
+        preRenderScanline = savedPreRender;
+        totalScanlines   = savedTotalScanlines;
+        nameTable[0]     = savedNameTable0;
+        nameTable[1]     = savedNameTable1;
+        palScreen        = savedPalScreen;
+        status.reg       = savedStatus;
+        oamAddr          = savedOamAddr;
+        vramAddr.reg     = savedVramAddr;
+        tracer           = savedTracer;
+
         scanline = preRenderScanline;
-        cycle = 0;
-        bgNextTileId = bgNextTileAttrib = 0;
-        curTilePatternBg = 0;
-        bgNextTilePattern = {};
-        bgPattern = {};
-        bgAttrib  = {};
-        status.reg = mask.reg = ctrl.reg = 0;
-        vramAddr.reg = tramAddr.reg = 0;
-        oamAddr = 0;
-        oamDataBuffer = oamSecondaryAddr = 0;
-        oamEvalStartAddr = 0;
-        evalCopying = ovBugCounter = 0;
-        oamAddrOverflow = secOamOverflow = spriteInRangeEval = false;
         std::memset(oamSecondary, 0xFF, sizeof(oamSecondary));
-        oamCorruptionPending = false;
-        oamCorruptionRow = 0;
-        frameOdd = false;
-        oddFrameCarryOver = false;
-        oddFrameCarryOverAddr = 0;
-        oddFrameSkip.force(false);
-        spriteCount = 0;
-        spriteZeroHitPossible = false;
-        spriteOverflowCycle = -1;
-        suppressVblThisFrame = false;
-        nmiCycleLatch = false;
-        nmiVbl = false;
-        ppuOpenBus = 0x00;
-        renderingActive = false;
-        renderEnableDelay.force(false);
-        std::memset(spriteScanline, 0xFF, sizeof(spriteScanline));
         spriteX.fill(0xFF);
-        for (auto& p : spritePattern) p = {};
-        ppuDataRead.force(false);
-        ppuDataReadAddr.force(0);
-        ppuDataReadPending = false;
-        ppuDataReadPendingAddr = 0;
-        ppuBusData = 0;
-        ppuBusRead = false;
-        ppuBusAle = false;
-        ppuAddressLow = 0;
-        ppuBusAddr = 0;
-        vramAddrWrite.force(false);
-        vramAddrWriteValue.force(0);
-        vramAddrWritePending = false;
     }
 
     uint32_t* getFramebuffer() { return buf.data(); }
@@ -456,7 +439,7 @@ private:
     bool     spriteZeroHitPossible = false;
     int16_t  spriteOverflowCycle   = -1;
 
-    std::array<uint8_t, 32>          palScreen;
+    std::array<uint8_t, 32>          palScreen{};
     std::array<uint32_t, 256 * 240>  buf;
 
     static uint16_t paletteIndex(uint16_t addr) {
