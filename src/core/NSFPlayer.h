@@ -7,7 +7,8 @@
 #include <cstring>
 #include <iostream>
 #include <filesystem>
-#include <sstream>
+#include <span>
+#include <spanstream>
 #include "NESConst.h"
 #include "NESCoreBase.h"
 #include "mappers/MapperBase.h"
@@ -208,17 +209,19 @@ public:
     int getTotalScanlines()  override { return -1; }
 
     std::vector<uint8_t> saveState() const override {
-        std::ostringstream ss;
+        size_t sz = a2a03.stateSize() + cpuRam.size()
+                  + (reinterpret_cast<const char*>(&paused + 1) - reinterpret_cast<const char*>(&system));
+        std::vector<uint8_t> buf(sz);
+        std::ospanstream ss(std::span(reinterpret_cast<char*>(buf.data()), sz));
         a2a03.save(ss);
         ss.write(reinterpret_cast<const char*>(cpuRam.data()), cpuRam.size());
         ss.write(reinterpret_cast<const char*>(&system),
                  reinterpret_cast<const char*>(&paused + 1) - reinterpret_cast<const char*>(&system));
-        auto str = ss.str();
-        return {str.begin(), str.end()};
+        return buf;
     }
     void loadState(const std::vector<uint8_t>& data) override {
         if (data.size() < cpuRam.size()) return;
-        std::istringstream ss(std::string(reinterpret_cast<const char*>(data.data()), data.size()));
+        std::ispanstream ss(std::span(reinterpret_cast<const char*>(data.data()), data.size()));
         a2a03.load(ss);
         ss.read(reinterpret_cast<char*>(cpuRam.data()), cpuRam.size());
         ss.read(reinterpret_cast<char*>(&system),

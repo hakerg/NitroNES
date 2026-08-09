@@ -77,6 +77,10 @@ public:
                reinterpret_cast<char*>(&controllerStrobe + 1) - reinterpret_cast<char*>(&cpu));
     }
 
+    size_t stateSize() const {
+        return reinterpret_cast<const char*>(&controllerStrobe + 1) - reinterpret_cast<const char*>(&cpu);
+    }
+
     uint8_t cpuReadData() override {
         if (dma.overridesAddr()) return busData;
         return readData();
