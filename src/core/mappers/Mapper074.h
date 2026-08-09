@@ -12,6 +12,7 @@
 class Mapper074 : public Mapper004 {
 public:
     using Mapper004::Mapper004;
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper074>(*this); }
     const char* name() const override { return "pirate MMC3 z 2 KB CHR-RAM (Di 4 Ci, Ji Jia Zhan Shi)"; }
 };
 

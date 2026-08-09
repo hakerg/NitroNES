@@ -48,6 +48,8 @@ public:
 private:
     uint8_t bank = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper200>(*this); }
     const char* name() const override { return "1200-in-1 / 36-in-1"; }
 };
 

@@ -46,6 +46,8 @@ public:
 private:
     uint8_t prg = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper242>(*this); }
     const char* name() const override { return "Wai Xing Zhan Shi"; }
 };
 

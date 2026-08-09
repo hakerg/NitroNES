@@ -41,6 +41,8 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper203>(*this); }
     const char* name() const override { return "35-in-1 multicart"; }
 };
 

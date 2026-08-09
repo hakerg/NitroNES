@@ -371,6 +371,8 @@ private:
     bool splitActive = false;
     uint8_t splitFineY = 0;
     MMC5Audio audio;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper005>(*this); }
     const char* name() const override { return "MMC5"; }
 };
 

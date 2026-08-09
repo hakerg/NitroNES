@@ -54,6 +54,7 @@ public:
             return;
         }
     }
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper182>(*this); }
     const char* name() const override { return "MMC3 z poprzestawianymi rejestrami"; }
 };
 

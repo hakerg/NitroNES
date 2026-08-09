@@ -49,6 +49,8 @@ public:
 private:
     uint8_t prgBankSelect = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper007>(*this); }
     const char* name() const override { return "AxROM"; }
 };
 

@@ -38,6 +38,8 @@ public:
 
 private:
     uint8_t chr0 = 0, chr1 = 4;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper184>(*this); }
     const char* name() const override { return "Sunsoft-1. Rejestr w $6000-7FFF."; }
 };
 

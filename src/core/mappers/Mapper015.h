@@ -75,6 +75,8 @@ private:
     uint8_t reg = 0, addrLow = 0;
     uint16_t addr = 0x8000;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper015>(*this); }
     const char* name() const override { return "100-in-1 Contra Function 16. Tylko PRG bank, brak CHR-ROM."; }
 };
 

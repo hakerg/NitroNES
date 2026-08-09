@@ -34,6 +34,8 @@ public:
 
 private:
     uint8_t prg = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper094>(*this); }
     const char* name() const override { return "Senjou no Ookami. 16k PRG @ $8000 (bity 2-4 z zapisu)."; }
 };
 

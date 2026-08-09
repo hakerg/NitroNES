@@ -52,6 +52,8 @@ private:
     uint8_t prg = 0;
     uint8_t chr0 = 0;
     uint8_t chr1 = 1;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper034>(*this); }
     const char* name() const override { return "BxROM"; }
 };
 

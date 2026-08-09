@@ -28,6 +28,7 @@ public:
     bool ppuMapWrite(uint16_t addr, uint32_t &mapped) override {
         return mapper_helpers::chrRamWrite(addr, mapped, chrBanks);
     }
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper000>(*this); }
     const char* name() const override { return "NROM"; }
 };
 

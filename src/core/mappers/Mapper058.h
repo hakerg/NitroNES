@@ -94,6 +94,8 @@ private:
     uint8_t chrBank = 0;
     bool prgMode = false;
     Mirroring mirror_ = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper058>(*this); }
     const char* name() const override { return "Mapper 58"; }
 };
 

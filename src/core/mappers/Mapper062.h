@@ -67,6 +67,8 @@ public:
 private:
     uint16_t addrLatch = 0;
     uint8_t dataLatch = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper062>(*this); }
     const char* name() const override { return "Super 700-in-1"; }
 };
 

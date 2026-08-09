@@ -100,6 +100,8 @@ public:
 
     virtual const char* name() const = 0;
 
+    virtual std::unique_ptr<Mapper> clone() const = 0;
+
 protected:
     bool a12RisingEdge(uint16_t addr) {
         const bool a12High = (addr & 0x1000) != 0;

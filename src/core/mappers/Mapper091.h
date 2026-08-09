@@ -111,6 +111,8 @@ private:
     std::array<uint8_t, 2> prg{};
     uint16_t irqCounter = 0;
     bool irqEnable = false, irqActive = false, irqReloadFlag = false;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper091>(*this); }
     const char* name() const override { return "Street Fighter III / Super Mario & Sonic 2 pirate"; }
 };
 

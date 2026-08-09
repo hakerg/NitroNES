@@ -50,6 +50,8 @@ public:
 
 private:
     uint8_t block = 0, page = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper232>(*this); }
     const char* name() const override { return "Camerica/Codemasters Quattro"; }
 };
 

@@ -49,6 +49,8 @@ private:
     }
     uint8_t prgBankSelect = 0;
     uint8_t chrBankSelect = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper011>(*this); }
     const char* name() const override { return "Color Dreams"; }
 };
 

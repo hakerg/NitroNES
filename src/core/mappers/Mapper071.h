@@ -55,6 +55,8 @@ private:
     uint8_t prgBankLo = 0, prgBankHi = 0;
     bool hasMirror = false;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper071>(*this); }
     const char* name() const override { return "Camerica / Codemasters (UNROM-podobny)"; }
 };
 

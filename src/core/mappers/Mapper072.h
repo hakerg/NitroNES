@@ -54,6 +54,8 @@ public:
 private:
     uint8_t prgBank = 0, chrBank = 0;
     bool lastP = false, lastC = false;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper072>(*this); }
     const char* name() const override { return "Jaleco JF-17 (bez expansion audio - tylko PRG/CHR)"; }
 };
 

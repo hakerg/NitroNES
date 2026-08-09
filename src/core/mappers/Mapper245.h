@@ -154,6 +154,8 @@ private:
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
     bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper245>(*this); }
     const char* name() const override { return "MMC3 clone (chinski) z PRG-OR sterowanym przez R:0 bit 1"; }
 };
 

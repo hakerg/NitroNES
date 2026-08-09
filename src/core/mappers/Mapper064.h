@@ -177,6 +177,8 @@ private:
     bool irqEnable = false, irqActive = false, irqReloadFlag = false,
          irqCpuMode = false;
     uint8_t prescaler = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper064>(*this); }
     const char* name() const override { return "Tengen RAMBO-1"; }
 };
 

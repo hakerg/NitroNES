@@ -48,6 +48,8 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper078>(*this); }
     const char* name() const override { return "Cosmo Carrier / Holy Diver. Bus conflicts."; }
 };
 

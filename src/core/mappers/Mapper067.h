@@ -123,6 +123,8 @@ private:
     Mirroring mirrorMode = Mirroring::VERTICAL;
     uint16_t irqCounter = 0;
     bool irqEnable = false, irqActive = false, irqHighNext = true;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper067>(*this); }
     const char* name() const override { return "Sunsoft-3 (Fantasy Zone 2 J)"; }
 };
 

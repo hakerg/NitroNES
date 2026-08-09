@@ -56,6 +56,8 @@ public:
 
 private:
     uint16_t addrLatch = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper061>(*this); }
     const char* name() const override { return "20-in-1"; }
 };
 

@@ -35,6 +35,8 @@ public:
 
 private:
     uint8_t chrBankSelect = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper003>(*this); }
     const char* name() const override { return "CNROM (and compatible)"; }
 };
 

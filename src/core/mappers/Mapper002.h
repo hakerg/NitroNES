@@ -47,6 +47,8 @@ public:
 
 private:
     uint8_t prgBankLo = 0, prgBankHi = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper002>(*this); }
     const char* name() const override { return "UxROM (and compatible)"; }
 };
 

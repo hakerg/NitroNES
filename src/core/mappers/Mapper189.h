@@ -144,6 +144,8 @@ private:
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
     bool irqActive = false, irqEnable = false, irqReloadFlag = false;
     uint16_t irqCounter = 0, irqReload = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper189>(*this); }
     const char* name() const override { return "MMC3 modified (Thunder Warrior)"; }
 };
 

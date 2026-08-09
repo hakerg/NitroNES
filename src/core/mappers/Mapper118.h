@@ -8,6 +8,7 @@
 class Mapper118 : public Mapper004 {
 public:
     using Mapper004::Mapper004;
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper118>(*this); }
     const char* name() const override { return "MMC3  (modified)"; }
 };
 

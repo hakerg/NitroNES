@@ -43,6 +43,8 @@ public:
 
 private:
     uint8_t reg = 0xFF;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper164>(*this); }
     const char* name() const override { return "Final Fantasy V (pirate)"; }
 };
 

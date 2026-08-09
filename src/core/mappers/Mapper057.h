@@ -66,6 +66,8 @@ public:
 
 private:
     uint8_t reg8000 = 0, reg8800 = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper057>(*this); }
     const char* name() const override { return "GK 47-in-1 / 6-in-1 (SuperGK)"; }
 };
 

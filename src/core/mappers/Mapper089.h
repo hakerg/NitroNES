@@ -45,6 +45,8 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper089>(*this); }
     const char* name() const override { return "Sunsoft. Bus conflicts."; }
 };
 

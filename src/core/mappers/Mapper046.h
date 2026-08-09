@@ -46,6 +46,8 @@ public:
 
 private:
     uint8_t prgHi = 0, chrHi = 0, prgLo = 0, chrLo = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper046>(*this); }
     const char* name() const override { return "Rumblestation 15-in-1"; }
 };
 

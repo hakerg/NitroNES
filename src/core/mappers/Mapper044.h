@@ -57,6 +57,8 @@ public:
 
 private:
     uint8_t block = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper044>(*this); }
     const char* name() const override { return "MMC3 multicart z 7 blokami po 128K PRG/CHR (blok 6 = 256K)."; }
 };
 

@@ -38,6 +38,8 @@ public:
 
 private:
     uint8_t bank = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper201>(*this); }
     const char* name() const override { return "8-in-1 / 21-in-1 multicart"; }
 };
 

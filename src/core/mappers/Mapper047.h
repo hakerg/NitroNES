@@ -38,6 +38,8 @@ public:
 
 private:
     uint8_t block = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper047>(*this); }
     const char* name() const override { return "Super Spike V'Ball + Nintendo World Cup (MMC3 multicart)"; }
 };
 

@@ -35,6 +35,8 @@ public:
 
 private:
     uint8_t prg = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper180>(*this); }
     const char* name() const override { return "Crazy Climber. PRG bank zmienny w $C000, $8000 sta�y. Bus"; }
 };
 

@@ -39,6 +39,8 @@ public:
 
 private:
     uint8_t reg = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper185>(*this); }
     const char* name() const override { return "protect. CHR enable na podstawie warto�ci w rejestrze; bus"; }
 };
 

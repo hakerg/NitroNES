@@ -173,6 +173,8 @@ private:
     uint8_t chrBank0 = 0, chrBank1 = 0, prgBankReg = 0;
     bool prgRamEnabled = true;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper001>(*this); }
     const char* name() const override { return "MMC1"; }
 };
 

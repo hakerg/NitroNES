@@ -11,7 +11,10 @@
 #include "PressStart2P-Regular.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
+#include <chrono>
+#include <filesystem>
 #include <format>
+#include <functional>
 #include <string>
 #include <charconv>
 #include <array>
@@ -187,6 +190,22 @@ public:
                     handler->onReload();
                 if (session && ImGui::MenuItem(tr("file.close")))
                     handler->onClose();
+                if (session) {
+                    if (ImGui::BeginMenu(tr("file.saveState"))) {
+                        menuOpen = true;
+                        for (int i = 1; i <= 9; i++)
+                            drawStateSlot(tr, session, handler, i, true);
+                        drawStateSlot(tr, session, handler, 0, true);
+                        ImGui::EndMenu();
+                    }
+                    if (ImGui::BeginMenu(tr("file.loadState"))) {
+                        menuOpen = true;
+                        for (int i = 1; i <= 9; i++)
+                            drawStateSlot(tr, session, handler, i, false);
+                        drawStateSlot(tr, session, handler, 0, false);
+                        ImGui::EndMenu();
+                    }
+                }
                 if (ImGui::MenuItem(tr("file.quit")))
                     handler->onQuit();
                 ImGui::EndMenu();
@@ -324,7 +343,9 @@ private:
             return controllerBinding(input->controllerSettings(0), index);
         if (index < 20)
             return controllerBinding(input->controllerSettings(1), index - 10);
-        return appBinding(index - 20);
+        if (index < 29)
+            return appBinding(index - 20);
+        return saveLoadBinding(index - 30);
     }
 
     static Binding controllerBinding(ControllerSettings &s, int index) {
@@ -351,9 +372,36 @@ private:
         case 3: return {"controls.speeddown", nullptr, AppKey::SpeedDown};
         case 4: return {"controls.reset", nullptr, AppKey::Reset};
         case 5: return {"controls.open", nullptr, AppKey::Open};
-        case 6: return {"controls.nsf.pause", nullptr, AppKey::NsfTogglePause};
-        case 7: return {"controls.nsf.next", nullptr, AppKey::NsfNextSong};
-        case 8: return {"controls.nsf.prev", nullptr, AppKey::NsfPrevSong};
+        case 6: return {"controls.reload", nullptr, AppKey::Reload};
+        case 7: return {"controls.nsf.pause", nullptr, AppKey::NsfTogglePause};
+        case 8: return {"controls.nsf.next", nullptr, AppKey::NsfNextSong};
+        case 9: return {"controls.nsf.prev", nullptr, AppKey::NsfPrevSong};
+        default: return {"", nullptr, AppKey::Unknown};
+        }
+    }
+
+    static Binding saveLoadBinding(int index) {
+        switch (index) {
+        case 0: return {"Slot 1", nullptr, AppKey::SaveState0};
+        case 1: return {"Slot 2", nullptr, AppKey::SaveState1};
+        case 2: return {"Slot 3", nullptr, AppKey::SaveState2};
+        case 3: return {"Slot 4", nullptr, AppKey::SaveState3};
+        case 4: return {"Slot 5", nullptr, AppKey::SaveState4};
+        case 5: return {"Slot 6", nullptr, AppKey::SaveState5};
+        case 6: return {"Slot 7", nullptr, AppKey::SaveState6};
+        case 7: return {"Slot 8", nullptr, AppKey::SaveState7};
+        case 8: return {"Slot 9", nullptr, AppKey::SaveState8};
+        case 9: return {"Slot 0", nullptr, AppKey::SaveState9};
+        case 10: return {"Slot 1", nullptr, AppKey::LoadState0};
+        case 11: return {"Slot 2", nullptr, AppKey::LoadState1};
+        case 12: return {"Slot 3", nullptr, AppKey::LoadState2};
+        case 13: return {"Slot 4", nullptr, AppKey::LoadState3};
+        case 14: return {"Slot 5", nullptr, AppKey::LoadState4};
+        case 15: return {"Slot 6", nullptr, AppKey::LoadState5};
+        case 16: return {"Slot 7", nullptr, AppKey::LoadState6};
+        case 17: return {"Slot 8", nullptr, AppKey::LoadState7};
+        case 18: return {"Slot 9", nullptr, AppKey::LoadState8};
+        case 19: return {"Slot 0", nullptr, AppKey::LoadState9};
         default: return {"", nullptr, AppKey::Unknown};
         }
     }
@@ -612,8 +660,9 @@ private:
 
         renderBindingsSection("controls.pad1", 0, 10);
         renderBindingsSection("controls.pad2", 10, 10);
-        renderBindingsSection("controls.emulation", 20, 6);
-        renderBindingsSection("controls.nsf", 26, 3);
+        renderBindingsSection("controls.emulation", 20, 7);
+        renderBindingsSection("controls.nsf", 27, 3);
+        renderBindingsSection("controls.savestate", 30, 20);
 
         ImGui::End();
     }
@@ -735,6 +784,26 @@ private:
         ImGui::TextUnformatted(text);
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
+    }
+
+    static void drawStateSlot(const std::function<const char*(const char*)>& tr,
+                              IFileSession* session, IMenuHandler* mh,
+                              int slot, bool isSave) {
+        std::string label = "Slot " + std::to_string(slot);
+        auto savePath = std::filesystem::path(session->path).parent_path() / "saves"
+                        / (session->filename + "." + std::to_string(slot) + ".sav");
+        if (std::filesystem::exists(savePath)) {
+            auto ftime = std::filesystem::last_write_time(savePath);
+            auto sctp = std::chrono::clock_cast<std::chrono::system_clock>(ftime);
+            auto tt = std::chrono::system_clock::to_time_t(sctp);
+            std::tm tm;
+            localtime_s(&tm, &tt);
+            char buf[32];
+            std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
+            label += "  (" + std::string(buf) + ")";
+        }
+        if (ImGui::MenuItem(label.c_str()))
+            isSave ? mh->onSaveState(slot) : mh->onLoadState(slot);
     }
 
     static constexpr ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;

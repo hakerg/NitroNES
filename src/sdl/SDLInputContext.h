@@ -70,7 +70,14 @@ public:
         case AppKey::NsfTogglePause: return settings.keys.nsfTogglePause;
         case AppKey::NsfNextSong: return settings.keys.nsfNextSong;
         case AppKey::NsfPrevSong: return settings.keys.nsfPrevSong;
-        default: return {};
+        case AppKey::Reload: return settings.keys.reload;
+        default: {
+            int s = saveStateSlot(key);
+            if (s >= 0) return settings.keys.saveState[s];
+            int l = loadStateSlot(key);
+            if (l >= 0) return settings.keys.loadState[l];
+            return {};
+        }
         }
     }
 
@@ -87,8 +94,26 @@ public:
             return;
         case AppKey::NsfNextSong: settings.keys.nsfNextSong = chord; return;
         case AppKey::NsfPrevSong: settings.keys.nsfPrevSong = chord; return;
-        default: return;
+        case AppKey::Reload: settings.keys.reload = chord; return;
+        default: {
+            int s = saveStateSlot(key);
+            if (s >= 0) { settings.keys.saveState[s] = chord; return; }
+            int l = loadStateSlot(key);
+            if (l >= 0) { settings.keys.loadState[l] = chord; return; }
+            return;
         }
+        }
+    }
+
+    static int saveStateSlot(AppKey key) {
+        int v = static_cast<int>(key);
+        int base = static_cast<int>(AppKey::SaveState0);
+        return (v >= base && v < base + 10) ? v - base : -1;
+    }
+    static int loadStateSlot(AppKey key) {
+        int v = static_cast<int>(key);
+        int base = static_cast<int>(AppKey::LoadState0);
+        return (v >= base && v < base + 10) ? v - base : -1;
     }
 
 private:

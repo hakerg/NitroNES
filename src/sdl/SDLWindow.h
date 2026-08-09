@@ -248,6 +248,15 @@ private:
             AppKey::Pause,       AppKey::FullScreen,  AppKey::SpeedUp,
             AppKey::SpeedDown,   AppKey::Reset,        AppKey::Open,
             AppKey::NsfTogglePause, AppKey::NsfNextSong, AppKey::NsfPrevSong,
+            AppKey::Reload,
+            AppKey::SaveState0, AppKey::SaveState1, AppKey::SaveState2,
+            AppKey::SaveState3, AppKey::SaveState4, AppKey::SaveState5,
+            AppKey::SaveState6, AppKey::SaveState7, AppKey::SaveState8,
+            AppKey::SaveState9,
+            AppKey::LoadState0, AppKey::LoadState1, AppKey::LoadState2,
+            AppKey::LoadState3, AppKey::LoadState4, AppKey::LoadState5,
+            AppKey::LoadState6, AppKey::LoadState7, AppKey::LoadState8,
+            AppKey::LoadState9,
         };
         for (AppKey key : keys) {
             if (input->appKeyBinding(key).matches(sc, mods))
@@ -263,6 +272,15 @@ private:
             AppKey::Pause,       AppKey::FullScreen,  AppKey::SpeedUp,
             AppKey::SpeedDown,   AppKey::Reset,        AppKey::Open,
             AppKey::NsfTogglePause, AppKey::NsfNextSong, AppKey::NsfPrevSong,
+            AppKey::Reload,
+            AppKey::SaveState0, AppKey::SaveState1, AppKey::SaveState2,
+            AppKey::SaveState3, AppKey::SaveState4, AppKey::SaveState5,
+            AppKey::SaveState6, AppKey::SaveState7, AppKey::SaveState8,
+            AppKey::SaveState9,
+            AppKey::LoadState0, AppKey::LoadState1, AppKey::LoadState2,
+            AppKey::LoadState3, AppKey::LoadState4, AppKey::LoadState5,
+            AppKey::LoadState6, AppKey::LoadState7, AppKey::LoadState8,
+            AppKey::LoadState9,
         };
         uint8_t modBit = KeyChord::modBitForScancode(sc);
         for (AppKey key : keys) {

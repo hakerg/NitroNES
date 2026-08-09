@@ -92,6 +92,8 @@ public:
 
 private:
     uint8_t chr0 = 0, chr1 = 0, chr2 = 0, prgReg = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper193>(*this); }
     const char* name() const override { return "NTDEC TC-112 (Fighting Hero)"; }
 };
 

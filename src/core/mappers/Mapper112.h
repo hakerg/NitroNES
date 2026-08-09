@@ -76,6 +76,8 @@ private:
     uint8_t sel = 0;
     std::array<uint8_t, 8> R{};
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper112>(*this); }
     const char* name() const override { return "Asder/NTDEC. PRG 2x8k + 2x fixed, CHR 2x2k + 4x1k."; }
 };
 

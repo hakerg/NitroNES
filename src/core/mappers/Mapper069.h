@@ -119,6 +119,8 @@ private:
     bool irqCounterEnabled = false;
     bool irqEnabled = false;
     bool irqActive = false;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper069>(*this); }
     const char* name() const override { return "FME-7"; }
 };
 

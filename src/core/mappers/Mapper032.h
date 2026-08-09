@@ -83,6 +83,8 @@ private:
     bool prgMode = false;
     Mirroring mirrorMode = Mirroring::VERTICAL;
     std::array<uint8_t, 8> chr{};
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper032>(*this); }
     const char* name() const override { return "Irem G-101 (Image Fight, Major League, Kaiketsu Yanchamaru 2)"; }
 };
 

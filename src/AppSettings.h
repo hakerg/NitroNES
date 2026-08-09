@@ -14,11 +14,36 @@ struct AppKeyBindings {
     KeyChord fullScreen{SDL_SCANCODE_F11};
     KeyChord speedUp{SDL_SCANCODE_TAB};
     KeyChord speedDown{SDL_SCANCODE_TAB, KeyChord::MOD_SHIFT};
-    KeyChord reset{};
+    KeyChord reset{SDL_SCANCODE_R, KeyChord::MOD_SHIFT};
     KeyChord open{SDL_SCANCODE_O, KeyChord::MOD_CTRL};
     KeyChord nsfTogglePause{SDL_SCANCODE_SPACE};
     KeyChord nsfNextSong{SDL_SCANCODE_RIGHT};
     KeyChord nsfPrevSong{SDL_SCANCODE_LEFT};
+    KeyChord reload{SDL_SCANCODE_T, KeyChord::MOD_SHIFT};
+    KeyChord saveState[10] = {
+        {SDL_SCANCODE_0, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_1, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_2, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_3, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_4, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_5, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_6, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_7, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_8, KeyChord::MOD_CTRL},
+        {SDL_SCANCODE_9, KeyChord::MOD_CTRL},
+    };
+    KeyChord loadState[10] = {
+        {SDL_SCANCODE_0},
+        {SDL_SCANCODE_1},
+        {SDL_SCANCODE_2},
+        {SDL_SCANCODE_3},
+        {SDL_SCANCODE_4},
+        {SDL_SCANCODE_5},
+        {SDL_SCANCODE_6},
+        {SDL_SCANCODE_7},
+        {SDL_SCANCODE_8},
+        {SDL_SCANCODE_9},
+    };
 };
 
 struct AppSettings {
@@ -119,6 +144,11 @@ private:
         f("key.nsfTogglePause", keys.nsfTogglePause);
         f("key.nsfNextSong", keys.nsfNextSong);
         f("key.nsfPrevSong", keys.nsfPrevSong);
+        f("key.reload", keys.reload);
+        for (int i = 0; i < 10; i++) {
+            f("key.saveState" + std::to_string(i), keys.saveState[i]);
+            f("key.loadState" + std::to_string(i), keys.loadState[i]);
+        }
     }
 
     void save() {

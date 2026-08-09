@@ -78,6 +78,8 @@ public:
 private:
     uint8_t target = 0;
     std::array<uint8_t, 8> regs{};
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper088>(*this); }
     const char* name() const override { return "Namco 118 / Namcot 3433 (Quinty, Dragon Spirit)"; }
 };
 

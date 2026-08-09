@@ -5,10 +5,10 @@
 #include <string>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
 
 #include "NESConst.h"
+#include "clone_ptr.h"
 #include "mappers/MapperBase.h"
 #include "mappers/MapperRegistry.h"
 #include "mappers/AllMappers.h"
@@ -180,6 +180,28 @@ public:
         return false;
     }
 
+    void save(std::ostream& s) const {
+        s.write(reinterpret_cast<const char*>(vPRGMemory.data()), prgRomSize);
+        s.write(reinterpret_cast<const char*>(vCHRMemory.data()), chrRomSize);
+        s.write(reinterpret_cast<const char*>(vPRGRAM.data()), prgRamSize);
+
+        size_t msize = MapperRegistry::instance().mapperSize(mapperID);
+        if (msize > sizeof(void*))
+            s.write(reinterpret_cast<const char*>(pMapper.get()) + sizeof(void*),
+                    msize - sizeof(void*));
+    }
+
+    void load(std::istream& s) {
+        s.read(reinterpret_cast<char*>(vPRGMemory.data()), prgRomSize);
+        s.read(reinterpret_cast<char*>(vCHRMemory.data()), chrRomSize);
+        s.read(reinterpret_cast<char*>(vPRGRAM.data()), prgRamSize);
+
+        size_t msize = MapperRegistry::instance().mapperSize(mapperID);
+        if (msize > sizeof(void*))
+            s.read(reinterpret_cast<char*>(pMapper.get()) + sizeof(void*),
+                   msize - sizeof(void*));
+    }
+
 private:
     uint8_t mapperID = 0;
     uint16_t prgBanks = 0;
@@ -193,5 +215,5 @@ private:
     size_t chrRomSize = 0;
     size_t prgRamSize = 0;
 
-    std::unique_ptr<Mapper> pMapper;
+    clone_ptr<Mapper> pMapper;
 };

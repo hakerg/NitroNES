@@ -30,6 +30,8 @@ public:
 
 private:
     uint8_t chr = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper087>(*this); }
     const char* name() const override { return "Jaleco/Konami. Rejestr w $6000-7FFF (zamiast SRAM)."; }
 };
 

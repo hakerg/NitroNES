@@ -58,6 +58,16 @@ public:
         session->getCore().reset();
     }
 
+    void onSaveState(int slot) override {
+        auto* nes = dynamic_cast<NESSession*>(session.get());
+        if (nes) nes->saveState(slot);
+    }
+
+    void onLoadState(int slot) override {
+        auto* nes = dynamic_cast<NESSession*>(session.get());
+        if (nes) nes->loadState(slot);
+    }
+
     void onQuit() override { running = false; }
 
     bool isMenuVisible() override { return guiActive; }
@@ -168,10 +178,25 @@ private:
         case AppKey::Open:
             onOpen();
             return;
-        default:
+        case AppKey::Reload:
+            onReload();
+            return;
+        default: {
+            int v = static_cast<int>(key);
+            int saveBase = static_cast<int>(AppKey::SaveState0);
+            if (v >= saveBase && v < saveBase + 10) {
+                onSaveState(v - saveBase);
+                return;
+            }
+            int loadBase = static_cast<int>(AppKey::LoadState0);
+            if (v >= loadBase && v < loadBase + 10) {
+                onLoadState(v - loadBase);
+                return;
+            }
             if (session)
                 session->processKeyDown(key);
             return;
+        }
         }
     }
 

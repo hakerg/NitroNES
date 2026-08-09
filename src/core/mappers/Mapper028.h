@@ -121,6 +121,8 @@ private:
     uint8_t prgOuter = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
     std::array<uint8_t, 32768> chrRam{};
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper028>(*this); }
     const char* name() const override { return "Action 53"; }
 };
 

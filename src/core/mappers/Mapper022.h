@@ -89,6 +89,8 @@ private:
     std::array<uint8_t, 2> prgReg{};
     std::array<uint8_t, 8> chrReg{};
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper022>(*this); }
     const char* name() const override { return "VRC2"; }
 };
 

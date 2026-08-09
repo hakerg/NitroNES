@@ -63,6 +63,8 @@ public:
 
 private:
     uint8_t reg = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper233>(*this); }
     const char* name() const override { return "42-in-1 (zgodnie z dokumentacja Disch'a)"; }
 };
 REGISTER_MAPPER(233, Mapper233)

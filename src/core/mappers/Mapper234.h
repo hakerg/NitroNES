@@ -131,6 +131,8 @@ private:
         if ((reg0 & 0x3F) != 0)
             locked = true;
     }
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper234>(*this); }
     const char* name() const override { return "Maxi 15"; }
 };
 

@@ -58,6 +58,8 @@ public:
 private:
     uint8_t bankSel = 0;
     std::array<uint8_t, 8> R{};
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper076>(*this); }
     const char* name() const override { return "Namcot 108 (wariant; bez nametable RAM control)."; }
 };
 

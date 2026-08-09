@@ -65,6 +65,8 @@ private:
     bool extPrgMode = false;
     uint8_t extPrgPage = 0;
     uint8_t chrBlock = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper115>(*this); }
     const char* name() const override { return "MMC3 wariant (Yuu Yuu Hakusho)"; }
 };
 

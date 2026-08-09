@@ -80,6 +80,8 @@ private:
     uint8_t P = 0;
     bool O = false, L = false, S = false;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper227>(*this); }
     const char* name() const override { return "1200-in-1"; }
 };
 

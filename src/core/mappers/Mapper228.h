@@ -81,6 +81,8 @@ private:
     bool mode16 = false;
     uint8_t chrLo = 0, chrHi = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper228>(*this); }
     const char* name() const override { return "Action 52 / Cheetah Men II"; }
 };
 

@@ -224,6 +224,8 @@ protected:
     uint16_t irqCounter = 0, irqReload = 0;
     bool wramEnabled  = true;
     bool wramReadOnly = false;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper004>(*this); }
     const char* name() const override { return "MMC3"; }
 };
 

@@ -55,6 +55,8 @@ public:
 private:
     uint8_t reg = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper231>(*this); }
     const char* name() const override { return "20-in-1 multicart"; }
 };
 

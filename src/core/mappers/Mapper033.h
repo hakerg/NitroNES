@@ -85,6 +85,8 @@ private:
     std::array<uint8_t, 2> chr2k{};
     std::array<uint8_t, 4> chr1k{};
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper033>(*this); }
     const char* name() const override { return "Taito TC0190 (bez IRQ; wariant z IRQ to mapper 048)."; }
 };
 

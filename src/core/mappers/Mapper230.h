@@ -72,6 +72,8 @@ private:
     bool contraMode =
         true; // pierwszy reset() ustawi false -> multicart przy starcie
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper230>(*this); }
     const char* name() const override { return "22-in-1 (Contra / multicart, reset-driven)"; }
 };
 

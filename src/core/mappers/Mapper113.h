@@ -40,6 +40,8 @@ public:
 private:
     uint8_t prg = 0, chr = 0;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper113>(*this); }
     const char* name() const override { return "HES."; }
 };
 

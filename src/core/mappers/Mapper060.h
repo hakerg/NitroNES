@@ -35,6 +35,8 @@ public:
 
 private:
     uint8_t block = 0xFF; // pierwszy reset() przejdzie na 0
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper060>(*this); }
     const char* name() const override { return "Reset-Based 4-in-1 (NROM-128 x4)"; }
 };
 

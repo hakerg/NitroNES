@@ -37,6 +37,8 @@ public:
 
 private:
     uint8_t prg = 0, chr = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper070>(*this); }
     const char* name() const override { return "Bandai 74161/74161/32. PRG select 16k @ $8000, CHR 8k."; }
 };
 

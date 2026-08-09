@@ -292,6 +292,8 @@ public:
 
 protected:
     bool swapA01() const override { return false; }
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper024>(*this); }
     const char* name() const override { return "VRC6"; }
 };
 

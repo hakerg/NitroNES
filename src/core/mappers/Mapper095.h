@@ -151,6 +151,8 @@ private:
     bool prgMode = false;
     bool chrInversion = false;
     uint8_t ntA = 0, ntB = 0, ntC = 0, ntD = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper095>(*this); }
     const char* name() const override { return "MMC3  (modified)"; }
 };
 

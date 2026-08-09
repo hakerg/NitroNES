@@ -47,6 +47,24 @@ public:
         controllerShift2 = readController(1);
     }
 
+    void save(std::ostream& s) const {
+        cart.save(s);
+        auto* baseEnd = reinterpret_cast<const char*>(&cart);
+        s.write(reinterpret_cast<const char*>(this), baseEnd - reinterpret_cast<const char*>(this));
+        s.write(reinterpret_cast<const char*>(&ppu),
+                reinterpret_cast<const char*>(&lastBusReadAddr + 1) -
+                    reinterpret_cast<const char*>(&ppu));
+    }
+
+    void load(std::istream& s) {
+        cart.load(s);
+        auto* baseEnd = reinterpret_cast<char*>(&cart);
+        s.read(reinterpret_cast<char*>(this), baseEnd - reinterpret_cast<char*>(this));
+        s.read(reinterpret_cast<char*>(&ppu),
+                reinterpret_cast<char*>(&lastBusReadAddr + 1) -
+                    reinterpret_cast<char*>(&ppu));
+    }
+
     double getBaseFramerate() const override {
         return system == NESStandard::NTSC ? NES::REFRESH_RATE_NTSC_ON
                                            : NES::REFRESH_RATE_PAL;
@@ -64,11 +82,15 @@ public:
         return 0xFF;
     }
 
-protected:
-    virtual uint8_t readController(int port) = 0;
-
     int getCurrentScanline()  override { return ppu.getScanline(); }
     int getTotalScanlines()   override { return ppu.getTotalScanlines(); }
+
+protected:
+    void copyStateFrom(const NESSystem& src) {
+        *this = src;
+    }
+
+    virtual uint8_t readController(int port) = 0;
 
     void applySystem() override {
         a2a03.setRegion(system);

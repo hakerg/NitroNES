@@ -67,6 +67,8 @@ public:
 
 private:
     uint8_t block = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper205>(*this); }
     const char* name() const override { return "MMC3 multicart (15-in-1, 3-in-1)"; }
 };
 

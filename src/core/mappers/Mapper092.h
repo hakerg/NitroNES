@@ -53,6 +53,8 @@ public:
 private:
     uint8_t prgBank = 0, chrBank = 0;
     bool lastP = false, lastC = false;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper092>(*this); }
     const char* name() const override { return "Jaleco JF-19 (Moero!! Pro Yakyuu '88, Moero!! Pro Soccer)"; }
 };
 

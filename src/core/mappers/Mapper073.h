@@ -95,6 +95,8 @@ private:
     uint16_t reload = 0, counter = 0;
     bool irqMode = false, irqEnable = false, irqEnableOnAck = false,
          irqActive = false;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper073>(*this); }
     const char* name() const override { return "VRC3"; }
 };
 

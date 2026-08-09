@@ -78,6 +78,8 @@ private:
     uint8_t target = 0;
     std::array<uint8_t, 8> regs{};
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper154>(*this); }
     const char* name() const override { return "Namcot 88 (Devil Man)"; }
 };
 

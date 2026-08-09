@@ -68,6 +68,8 @@ private:
     uint8_t prgLo = 0, prgHi = 0;
     bool mode32 = true;
     Mirroring mirrorMode = Mirroring::HORIZONTAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper226>(*this); }
     const char* name() const override { return "76-in-1 / Super 42-in-1"; }
 };
 

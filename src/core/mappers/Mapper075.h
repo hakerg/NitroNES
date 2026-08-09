@@ -83,6 +83,8 @@ private:
     std::array<uint8_t, 2> chrLo{};
     uint8_t chrHi = 0;
     Mirroring mirrorMode = Mirroring::VERTICAL;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper075>(*this); }
     const char* name() const override { return "VRC1."; }
 };
 

@@ -15,6 +15,8 @@ public:
 
 protected:
     bool swapA01() const override { return true; }
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper026>(*this); }
     const char* name() const override { return "Mapper 26"; }
 };
 

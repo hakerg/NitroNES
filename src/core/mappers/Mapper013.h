@@ -42,6 +42,8 @@ public:
 
 private:
     uint8_t chrBank = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper013>(*this); }
     const char* name() const override { return "CPROM. PRG fixed 32KB, CHR-RAM 16KB; bank 4KB @ $1000."; }
 };
 

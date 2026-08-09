@@ -43,6 +43,8 @@ public:
 
 private:
     uint8_t prg = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper093>(*this); }
     const char* name() const override { return "Sunsoft-2 (Fantasy Zone JP)"; }
 };
 

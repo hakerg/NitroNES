@@ -53,6 +53,8 @@ public:
 private:
     uint8_t prg = 0;
     Mirroring mirrorMode = Mirroring::ONESCREEN_LO;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper097>(*this); }
     const char* name() const override { return "Irem. 16k PRG @ $C000 (zamiast $8000). Dwa bity mirroringu."; }
 };
 

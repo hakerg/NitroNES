@@ -77,6 +77,8 @@ public:
 
 private:
     uint8_t multi = 0;
+public:
+    std::unique_ptr<Mapper> clone() const override { return std::make_unique<Mapper049>(*this); }
     const char* name() const override { return "Super HIK 4-in-1 (MMC3 multicart)"; }
 };
 
