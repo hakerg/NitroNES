@@ -343,9 +343,9 @@ private:
             return controllerBinding(input->controllerSettings(0), index);
         if (index < 20)
             return controllerBinding(input->controllerSettings(1), index - 10);
-        if (index < 29)
+        if (index < 28)
             return appBinding(index - 20);
-        return saveLoadBinding(index - 30);
+        return saveLoadBinding(index - 31);
     }
 
     static Binding controllerBinding(ControllerSettings &s, int index) {
@@ -373,9 +373,10 @@ private:
         case 4: return {"controls.reset", nullptr, AppKey::Reset};
         case 5: return {"controls.open", nullptr, AppKey::Open};
         case 6: return {"controls.reload", nullptr, AppKey::Reload};
-        case 7: return {"controls.nsf.pause", nullptr, AppKey::NsfTogglePause};
-        case 8: return {"controls.nsf.next", nullptr, AppKey::NsfNextSong};
-        case 9: return {"controls.nsf.prev", nullptr, AppKey::NsfPrevSong};
+        case 7: return {"controls.rewind", nullptr, AppKey::Rewind};
+        case 8: return {"controls.nsf.pause", nullptr, AppKey::NsfTogglePause};
+        case 9: return {"controls.nsf.next", nullptr, AppKey::NsfNextSong};
+        case 10: return {"controls.nsf.prev", nullptr, AppKey::NsfPrevSong};
         default: return {"", nullptr, AppKey::Unknown};
         }
     }
@@ -660,9 +661,9 @@ private:
 
         renderBindingsSection("controls.pad1", 0, 10);
         renderBindingsSection("controls.pad2", 10, 10);
-        renderBindingsSection("controls.emulation", 20, 7);
-        renderBindingsSection("controls.nsf", 27, 3);
-        renderBindingsSection("controls.savestate", 30, 20);
+        renderBindingsSection("controls.emulation", 20, 8);
+        renderBindingsSection("controls.nsf", 28, 3);
+        renderBindingsSection("controls.savestate", 31, 20);
 
         ImGui::End();
     }

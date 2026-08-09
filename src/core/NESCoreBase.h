@@ -1,8 +1,18 @@
 ﻿#pragma once
 #include <array>
+#include <vector>
 #include "NESConst.h"
 #include "A2A03.h"
 #include "Tracer.h"
+
+struct StateChange {
+    size_t offset;
+    uint8_t oldValue;
+};
+
+struct RewindFrame {
+    std::vector<StateChange> changes;
+};
 
 class NESCoreBase : public IA2A03 {
 public:
@@ -57,6 +67,9 @@ public:
     virtual int  getCompletedFramesCount() = 0;
     virtual uint32_t* getFramebuffer() = 0;
     virtual void setTracer(Tracer* t) { a2a03.setTracer(t); }
+
+    virtual std::vector<uint8_t> saveState() const = 0;
+    virtual void loadState(const std::vector<uint8_t>& data) = 0;
 
     virtual uint8_t peekMemory(uint16_t addr) = 0;
     void writeMemory(uint16_t addr, uint8_t data) { a2a03.writeData(addr, data); }

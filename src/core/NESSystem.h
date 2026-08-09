@@ -1,5 +1,8 @@
 ﻿#pragma once
 #include <array>
+#include <span>
+#include <spanstream>
+#include <vector>
 #include "NESCoreBase.h"
 #include "NESBus.h"
 #include "Cartridge.h"
@@ -65,6 +68,40 @@ public:
                     reinterpret_cast<char*>(&ppu));
     }
 
+    size_t stateSize() const {
+        return cart.saveSize() + sysBlockSize();
+    }
+
+    void saveToBuf(uint8_t* buf) const {
+        std::ospanstream ss(std::span(reinterpret_cast<char*>(buf), stateSize()));
+        save(ss);
+    }
+
+    void loadFromBuf(const uint8_t* buf) {
+        std::ispanstream ss(std::span(reinterpret_cast<const char*>(buf), stateSize()));
+        load(ss);
+    }
+
+    std::vector<uint8_t> saveState() const override {
+        std::vector<uint8_t> buf(stateSize());
+        saveToBuf(buf.data());
+        return buf;
+    }
+
+    void loadState(const std::vector<uint8_t>& data) override {
+        loadFromBuf(data.data());
+    }
+
+private:
+    size_t sysBlockSize() const {
+        auto* baseEnd = reinterpret_cast<const char*>(&cart);
+        size_t baseSize = baseEnd - reinterpret_cast<const char*>(this);
+        size_t ppuSize = reinterpret_cast<const char*>(&lastBusReadAddr + 1)
+                       - reinterpret_cast<const char*>(&ppu);
+        return baseSize + ppuSize;
+    }
+
+public:
     double getBaseFramerate() const override {
         return system == NESStandard::NTSC ? NES::REFRESH_RATE_NTSC_ON
                                            : NES::REFRESH_RATE_PAL;

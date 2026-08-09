@@ -59,13 +59,11 @@ public:
     }
 
     void onSaveState(int slot) override {
-        auto* nes = dynamic_cast<NESSession*>(session.get());
-        if (nes) nes->saveState(slot);
+        if (session) session->saveStateToFile(slot);
     }
 
     void onLoadState(int slot) override {
-        auto* nes = dynamic_cast<NESSession*>(session.get());
-        if (nes) nes->loadState(slot);
+        if (session) session->loadStateFromFile(slot);
     }
 
     void onQuit() override { running = false; }
@@ -201,11 +199,14 @@ private:
     }
 
     double calcSpeed() const {
+        double s = settings.speed;
         if (settings.keys.speedUp.active() || padFast)
-            return settings.speed1;
-        if (settings.keys.speedDown.active() || padSlow)
-            return settings.speed2;
-        return settings.speed;
+            s = settings.speed1;
+        else if (settings.keys.speedDown.active() || padSlow)
+            s = settings.speed2;
+        if (settings.keys.rewind.active())
+            return -s;
+        return s;
     }
 
     IWindow &window;

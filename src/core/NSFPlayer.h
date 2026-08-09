@@ -7,6 +7,7 @@
 #include <cstring>
 #include <iostream>
 #include <filesystem>
+#include <sstream>
 #include "NESConst.h"
 #include "NESCoreBase.h"
 #include "mappers/MapperBase.h"
@@ -205,6 +206,24 @@ public:
     int getCompletedFramesCount() override { return completedFramesCount; }
     int getCurrentScanline() override { return -1; }
     int getTotalScanlines()  override { return -1; }
+
+    std::vector<uint8_t> saveState() const override {
+        std::ostringstream ss;
+        a2a03.save(ss);
+        ss.write(reinterpret_cast<const char*>(cpuRam.data()), cpuRam.size());
+        ss.write(reinterpret_cast<const char*>(&system),
+                 reinterpret_cast<const char*>(&paused + 1) - reinterpret_cast<const char*>(&system));
+        auto str = ss.str();
+        return {str.begin(), str.end()};
+    }
+    void loadState(const std::vector<uint8_t>& data) override {
+        if (data.size() < cpuRam.size()) return;
+        std::istringstream ss(std::string(reinterpret_cast<const char*>(data.data()), data.size()));
+        a2a03.load(ss);
+        ss.read(reinterpret_cast<char*>(cpuRam.data()), cpuRam.size());
+        ss.read(reinterpret_cast<char*>(&system),
+                reinterpret_cast<char*>(&paused + 1) - reinterpret_cast<char*>(&system));
+    }
 
     uint8_t peekMemory(uint16_t addr) override {
         if (addr <= 0x07FF) return cpuRam[addr];

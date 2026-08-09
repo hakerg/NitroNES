@@ -66,6 +66,7 @@ public:
             {"controls.reset", "Reset"},
             {"controls.open", "Open file"},
             {"controls.reload", "Reload file"},
+            {"controls.rewind", "Rewind"},
             {"controls.nsf.pause", "Pause"},
             {"controls.nsf.next", "Next track"},
             {"controls.nsf.prev", "Previous track"},

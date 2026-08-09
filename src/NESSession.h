@@ -32,30 +32,6 @@ public:
 
     NESCoreBase& getCore() override { return *this; }
 
-    void saveState(int slot) const {
-        auto saveDir = std::filesystem::path(path).parent_path() / "saves";
-        std::filesystem::create_directories(saveDir);
-        auto filePath = saveDir / (filename + "." + std::to_string(slot) + ".sav");
-        std::ofstream ofs(filePath, std::ios::binary);
-        if (!ofs) return;
-        save(ofs);
-    }
-
-    void loadState(int slot) {
-        auto saveDir = std::filesystem::path(path).parent_path() / "saves";
-        auto filePath = saveDir / (filename + "." + std::to_string(slot) + ".sav");
-        std::ifstream ifs(filePath, std::ios::binary);
-        if (!ifs) return;
-        load(ifs);
-    }
-
-    static bool stateFileExists(const std::string& romPath, int slot) {
-        auto saveDir = std::filesystem::path(romPath).parent_path() / "saves";
-        auto fileName = std::filesystem::path(romPath).filename().string();
-        std::ifstream ifs(saveDir / (fileName + "." + std::to_string(slot) + ".sav"), std::ios::binary);
-        return ifs.good();
-    }
-
     std::string getInfo() override {
         const Cartridge &c = getCartridge();
         const char *mirror = nullptr;

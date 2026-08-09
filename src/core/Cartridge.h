@@ -2,9 +2,10 @@
 
 #include <array>
 #include <cstring>
+#include <span>
+#include <spanstream>
 #include <string>
 #include <fstream>
-#include <iostream>
 #include <stdexcept>
 
 #include "NESConst.h"
@@ -178,6 +179,24 @@ public:
             return true;
         }
         return false;
+    }
+
+    size_t saveSize() const {
+        size_t s = prgRamSize;
+        if (chrBanks == 0) s += chrRomSize;
+        size_t msize = MapperRegistry::instance().mapperSize(mapperID);
+        if (msize > sizeof(void*)) s += msize - sizeof(void*);
+        return s;
+    }
+
+    void saveToBuf(uint8_t* buf) const {
+        std::ospanstream ss(std::span(reinterpret_cast<char*>(buf), saveSize()));
+        save(ss);
+    }
+
+    void loadFromBuf(const uint8_t* buf) {
+        std::ispanstream ss(std::span(reinterpret_cast<const char*>(buf), saveSize()));
+        load(ss);
     }
 
     void save(std::ostream& s) const {

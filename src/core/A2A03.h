@@ -4,6 +4,7 @@
 #include "DMA.h"
 #include "NESBus.h"
 #include "NESConst.h"
+#include <iostream>
 
 class IA2A03 {
 public:
@@ -65,6 +66,16 @@ public:
     uint8_t getBusData() { return busData; }
 
     void setTracer(Tracer* t) { cpu.setTracer(t); dma.setTracer(t); apu.setTracer(t); }
+
+    void save(std::ostream& s) const {
+        s.write(reinterpret_cast<const char*>(&cpu),
+                reinterpret_cast<const char*>(&controllerStrobe + 1) - reinterpret_cast<const char*>(&cpu));
+    }
+
+    void load(std::istream& s) {
+        s.read(reinterpret_cast<char*>(&cpu),
+               reinterpret_cast<char*>(&controllerStrobe + 1) - reinterpret_cast<char*>(&cpu));
+    }
 
     uint8_t cpuReadData() override {
         if (dma.overridesAddr()) return busData;

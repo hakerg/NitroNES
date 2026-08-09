@@ -71,6 +71,7 @@ public:
         case AppKey::NsfNextSong: return settings.keys.nsfNextSong;
         case AppKey::NsfPrevSong: return settings.keys.nsfPrevSong;
         case AppKey::Reload: return settings.keys.reload;
+        case AppKey::Rewind: return settings.keys.rewind;
         default: {
             int s = saveStateSlot(key);
             if (s >= 0) return settings.keys.saveState[s];
@@ -95,6 +96,7 @@ public:
         case AppKey::NsfNextSong: settings.keys.nsfNextSong = chord; return;
         case AppKey::NsfPrevSong: settings.keys.nsfPrevSong = chord; return;
         case AppKey::Reload: settings.keys.reload = chord; return;
+        case AppKey::Rewind: settings.keys.rewind = chord; return;
         default: {
             int s = saveStateSlot(key);
             if (s >= 0) { settings.keys.saveState[s] = chord; return; }

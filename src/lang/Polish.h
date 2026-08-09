@@ -66,6 +66,7 @@ public:
             {"controls.reset", "Reset"},
             {"controls.open", "Otwórz plik"},
             {"controls.reload", "Przeładuj plik"},
+            {"controls.rewind", "Cofnij"},
             {"controls.nsf.pause", "Pauza"},
             {"controls.nsf.next", "Następny utwór"},
             {"controls.nsf.prev", "Poprzedni utwór"},

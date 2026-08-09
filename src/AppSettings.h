@@ -20,6 +20,7 @@ struct AppKeyBindings {
     KeyChord nsfNextSong{SDL_SCANCODE_RIGHT};
     KeyChord nsfPrevSong{SDL_SCANCODE_LEFT};
     KeyChord reload{SDL_SCANCODE_T, KeyChord::MOD_SHIFT};
+    KeyChord rewind{SDL_SCANCODE_BACKSPACE};
     KeyChord saveState[10] = {
         {SDL_SCANCODE_0, KeyChord::MOD_CTRL},
         {SDL_SCANCODE_1, KeyChord::MOD_CTRL},
@@ -145,6 +146,7 @@ private:
         f("key.nsfNextSong", keys.nsfNextSong);
         f("key.nsfPrevSong", keys.nsfPrevSong);
         f("key.reload", keys.reload);
+        f("key.rewind", keys.rewind);
         for (int i = 0; i < 10; i++) {
             f("key.saveState" + std::to_string(i), keys.saveState[i]);
             f("key.loadState" + std::to_string(i), keys.loadState[i]);

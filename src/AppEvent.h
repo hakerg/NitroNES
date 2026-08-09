@@ -13,6 +13,7 @@ enum class AppKey {
     NsfNextSong,
     NsfPrevSong,
     Reload,
+    Rewind,
     SaveState0, SaveState1, SaveState2, SaveState3, SaveState4,
     SaveState5, SaveState6, SaveState7, SaveState8, SaveState9,
     LoadState0, LoadState1, LoadState2, LoadState3, LoadState4,

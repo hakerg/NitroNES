@@ -10,6 +10,7 @@
 #include <fstream>
 #include <string>
 #include <chrono>
+#include <deque>
 #include <thread>
 
 using namespace std::chrono;
@@ -53,9 +54,40 @@ public:
 
     virtual int getAudioBufferTargetMs() const { return 15; }
 
+    void saveStateToFile(int slot) {
+        auto saveDir = std::filesystem::path(path).parent_path() / "saves";
+        std::filesystem::create_directories(saveDir);
+        auto filePath = saveDir / (filename + "." + std::to_string(slot) + ".sav");
+        std::ofstream ofs(filePath, std::ios::binary);
+        if (!ofs) return;
+        auto data = getCore().saveState();
+        ofs.write(reinterpret_cast<const char*>(data.data()), data.size());
+    }
+
+    void loadStateFromFile(int slot) {
+        auto saveDir = std::filesystem::path(path).parent_path() / "saves";
+        auto filePath = saveDir / (filename + "." + std::to_string(slot) + ".sav");
+        std::ifstream ifs(filePath, std::ios::binary);
+        if (!ifs) return;
+        std::vector<uint8_t> data(std::istreambuf_iterator<char>(ifs), {});
+        getCore().loadState(data);
+    }
+
+    static bool stateFileExists(const std::string& romPath, int slot) {
+        auto saveDir = std::filesystem::path(romPath).parent_path() / "saves";
+        auto fileName = std::filesystem::path(romPath).filename().string();
+        std::ifstream ifs(saveDir / (fileName + "." + std::to_string(slot) + ".sav"), std::ios::binary);
+        return ifs.good();
+    }
+
     void clockCore(double baseSpeed) {
         NESCoreBase& core = getCore();
         core.speed = getSyncedSpeed(baseSpeed);
+        if (core.speed < 0) {
+            waitUntilNextFrameTime(std::abs(baseSpeed));
+            applyRewindFrame();
+            return;
+        }
         settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core.speed);
 
         int frameMs = static_cast<int>(duration_cast<milliseconds>(getFrameDuration(baseSpeed)).count());
@@ -77,6 +109,7 @@ public:
             window.pumpEvents();
             core.tickFrame();
         }
+        captureRewindFrame();
     }
 
     CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) {
@@ -153,6 +186,39 @@ protected:
     AppSettings &settings;
     AppAudioStream &audio;
 
+    void captureRewindFrame() {
+        NESCoreBase& core = getCore();
+        auto data = core.saveState();
+        if (data.empty()) return;
+        if (currBuf.empty()) {
+            prevBuf = std::move(data);
+            currBuf.resize(prevBuf.size());
+            return;
+        }
+        currBuf = std::move(data);
+        std::vector<StateChange> changes;
+        for (size_t i = 0; i < prevBuf.size() && i < currBuf.size(); i++) {
+            if (prevBuf[i] != currBuf[i])
+                changes.push_back({i, prevBuf[i]});
+        }
+        prevBuf.swap(currBuf);
+        rewindHistory.push_back({std::move(changes)});
+        while (rewindHistory.size() > 10000)
+            rewindHistory.pop_front();
+    }
+
+    bool applyRewindFrame() {
+        if (rewindHistory.empty()) return false;
+        auto frame = std::move(rewindHistory.back());
+        rewindHistory.pop_back();
+        for (const auto& c : frame.changes) {
+            if (c.offset < prevBuf.size())
+                prevBuf[c.offset] = c.oldValue;
+        }
+        getCore().loadState(prevBuf);
+        return true;
+    }
+
 private:
     static bool isWithinDetuneTolerance(double ratio) {
         constexpr double kCents = 10.0;
@@ -225,4 +291,7 @@ private:
     }
 
     high_resolution_clock::time_point nextFrameTime = high_resolution_clock::now();
+
+    std::deque<RewindFrame> rewindHistory;
+    std::vector<uint8_t> prevBuf, currBuf;
 };
