@@ -83,11 +83,7 @@ public:
     void clockCore(double baseSpeed) {
         NESCoreBase& core = getCore();
         core.speed = getSyncedSpeed(baseSpeed);
-        if (core.speed < 0) {
-            waitUntilNextFrameTime(std::abs(baseSpeed));
-            applyRewindFrame();
-            return;
-        }
+        core.onFrameCapture = [this] { captureRewindFrame(); };
         settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core.speed);
 
         int frameMs = static_cast<int>(duration_cast<milliseconds>(getFrameDuration(baseSpeed)).count());
@@ -107,9 +103,11 @@ public:
         } else {
             waitUntilNextFrameTime(baseSpeed);
             window.pumpEvents();
-            core.tickFrame();
+            if (core.speed < 0)
+                applyRewindFrame();
+            else
+                core.tickFrame();
         }
-        captureRewindFrame();
     }
 
     CanMatchRefreshRateResult canMatchRefreshRate(double baseSpeed) {
@@ -258,7 +256,7 @@ private:
 
     nanoseconds getFrameDuration(double baseSpeed) {
         double speed = getSyncedSpeed(baseSpeed);
-        double targetFps = getCore().getBaseFramerate() * speed;
+        double targetFps = std::abs(getCore().getBaseFramerate() * speed);
 
         return duration_cast<high_resolution_clock::duration>(
             duration<double>(1.0 / targetFps));

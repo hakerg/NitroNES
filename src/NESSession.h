@@ -62,6 +62,7 @@ public:
 protected:
     void onFrameCompleted() override {
         input.tickFrame();
+        NESCoreBase::onFrameCompleted();
     }
 
     uint8_t readController(int port) override {

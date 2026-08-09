@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <array>
+#include <functional>
 #include <vector>
 #include "NESConst.h"
 #include "A2A03.h"
@@ -19,6 +20,7 @@ public:
     NESStandard system = NESStandard::NTSC;
     double speed = 1.0;
     bool paused = false;
+    std::function<void()> onFrameCapture;
 
     ~NESCoreBase() override = default;
 
@@ -93,7 +95,9 @@ protected:
 
     virtual void pushAudioSample(float sample, double dt) = 0;
 
-    virtual void onFrameCompleted() {}
+    virtual void onFrameCompleted() {
+        if (onFrameCapture) onFrameCapture();
+    }
 
     void pushAudioOutput(float external) {
         pushAudioSample(a2a03.getAPU().getOutputSample() + external,
