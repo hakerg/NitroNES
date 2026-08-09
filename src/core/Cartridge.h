@@ -181,9 +181,9 @@ public:
     }
 
     void save(std::ostream& s) const {
-        s.write(reinterpret_cast<const char*>(vPRGMemory.data()), prgRomSize);
-        s.write(reinterpret_cast<const char*>(vCHRMemory.data()), chrRomSize);
         s.write(reinterpret_cast<const char*>(vPRGRAM.data()), prgRamSize);
+        if (chrBanks == 0)
+            s.write(reinterpret_cast<const char*>(vCHRMemory.data()), chrRomSize);
 
         size_t msize = MapperRegistry::instance().mapperSize(mapperID);
         if (msize > sizeof(void*))
@@ -192,9 +192,9 @@ public:
     }
 
     void load(std::istream& s) {
-        s.read(reinterpret_cast<char*>(vPRGMemory.data()), prgRomSize);
-        s.read(reinterpret_cast<char*>(vCHRMemory.data()), chrRomSize);
         s.read(reinterpret_cast<char*>(vPRGRAM.data()), prgRamSize);
+        if (chrBanks == 0)
+            s.read(reinterpret_cast<char*>(vCHRMemory.data()), chrRomSize);
 
         size_t msize = MapperRegistry::instance().mapperSize(mapperID);
         if (msize > sizeof(void*))
