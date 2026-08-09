@@ -83,8 +83,10 @@ public:
     void clockCore(double baseSpeed) {
         NESCoreBase& core = getCore();
         core.speed = getSyncedSpeed(baseSpeed);
-        core.onFrameCapture = [this] { captureRewindFrame(); };
-        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / core.speed);
+        settings.audioSettings.pitch = settings.adjustPitch ? 1.0f : float(1.0 / std::abs(core.speed));
+        core.onFrameCapture = core.speed >= 0
+            ? std::function<void()>([this] { captureRewindFrame(); })
+            : std::function<void()>();
 
         int frameMs = static_cast<int>(duration_cast<milliseconds>(getFrameDuration(baseSpeed)).count());
         int bufferTarget = frameMs + getAudioBufferTargetMs();
@@ -103,10 +105,10 @@ public:
         } else {
             waitUntilNextFrameTime(baseSpeed);
             window.pumpEvents();
-            if (core.speed < 0)
-                applyRewindFrame();
-            else
-                core.tickFrame();
+            if (core.speed < 0) {
+                if (!applyRewindFrame()) return;
+            }
+            core.tickFrame();
         }
     }
 

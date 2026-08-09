@@ -209,14 +209,12 @@ public:
     int getTotalScanlines()  override { return -1; }
 
     std::vector<uint8_t> saveState() const override {
-        size_t sz = a2a03.stateSize() + cpuRam.size()
-                  + (reinterpret_cast<const char*>(&paused + 1) - reinterpret_cast<const char*>(&system));
+        size_t sz = a2a03.stateSize() + cpuRam.size() + sizeof(system);
         std::vector<uint8_t> buf(sz);
         std::ospanstream ss(std::span(reinterpret_cast<char*>(buf.data()), sz));
         a2a03.save(ss);
         ss.write(reinterpret_cast<const char*>(cpuRam.data()), cpuRam.size());
-        ss.write(reinterpret_cast<const char*>(&system),
-                 reinterpret_cast<const char*>(&paused + 1) - reinterpret_cast<const char*>(&system));
+        ss.write(reinterpret_cast<const char*>(&system), sizeof(system));
         return buf;
     }
     void loadState(const std::vector<uint8_t>& data) override {
@@ -224,8 +222,7 @@ public:
         std::ispanstream ss(std::span(reinterpret_cast<const char*>(data.data()), data.size()));
         a2a03.load(ss);
         ss.read(reinterpret_cast<char*>(cpuRam.data()), cpuRam.size());
-        ss.read(reinterpret_cast<char*>(&system),
-                reinterpret_cast<char*>(&paused + 1) - reinterpret_cast<char*>(&system));
+        ss.read(reinterpret_cast<char*>(&system), sizeof(system));
     }
 
     uint8_t peekMemory(uint16_t addr) override {

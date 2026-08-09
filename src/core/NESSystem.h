@@ -52,8 +52,10 @@ public:
 
     void save(std::ostream& s) const {
         cart.save(s);
-        auto* baseEnd = reinterpret_cast<const char*>(&cart);
-        s.write(reinterpret_cast<const char*>(this), baseEnd - reinterpret_cast<const char*>(this));
+        s.write(reinterpret_cast<const char*>(&system), sizeof(system));
+        auto* ramStart = reinterpret_cast<const char*>(&a2a03);
+        auto* ramEnd   = reinterpret_cast<const char*>(&cart);
+        s.write(ramStart, ramEnd - ramStart);
         s.write(reinterpret_cast<const char*>(&ppu),
                 reinterpret_cast<const char*>(&lastBusReadAddr + 1) -
                     reinterpret_cast<const char*>(&ppu));
@@ -61,8 +63,10 @@ public:
 
     void load(std::istream& s) {
         cart.load(s);
-        auto* baseEnd = reinterpret_cast<char*>(&cart);
-        s.read(reinterpret_cast<char*>(this), baseEnd - reinterpret_cast<char*>(this));
+        s.read(reinterpret_cast<char*>(&system), sizeof(system));
+        auto* ramStart = reinterpret_cast<char*>(&a2a03);
+        auto* ramEnd   = reinterpret_cast<char*>(&cart);
+        s.read(ramStart, ramEnd - ramStart);
         s.read(reinterpret_cast<char*>(&ppu),
                 reinterpret_cast<char*>(&lastBusReadAddr + 1) -
                     reinterpret_cast<char*>(&ppu));
@@ -94,11 +98,11 @@ public:
 
 private:
     size_t sysBlockSize() const {
-        auto* baseEnd = reinterpret_cast<const char*>(&cart);
-        size_t baseSize = baseEnd - reinterpret_cast<const char*>(this);
+        size_t ramSize = reinterpret_cast<const char*>(&cart)
+                       - reinterpret_cast<const char*>(&a2a03);
         size_t ppuSize = reinterpret_cast<const char*>(&lastBusReadAddr + 1)
                        - reinterpret_cast<const char*>(&ppu);
-        return baseSize + ppuSize;
+        return sizeof(system) + ramSize + ppuSize;
     }
 
 public:

@@ -101,7 +101,7 @@ protected:
 
     void pushAudioOutput(float external) {
         pushAudioSample(a2a03.getAPU().getOutputSample() + external,
-                        1.0 / (getCPUClockRate() * speed));
+                        1.0 / (getCPUClockRate() * std::abs(speed)));
     }
 
     A2A03 a2a03;
