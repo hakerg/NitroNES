@@ -175,6 +175,7 @@ public:
         int initCycles = 0;
         for (; initCycles < CALL_WATCHDOG_CYCLES && !isAtTrampoline(); initCycles++) {
             a2a03.clockPhi1();
+            a2a03.clockPhi2Write();
             a2a03.clockPhi2();
         }
     }
@@ -255,6 +256,7 @@ protected:
 
         if (expChip) expChip->clock();
         a2a03.clockPhi1();
+        a2a03.clockPhi2Write();
         a2a03.clockPhi2();
 
         pushAudioOutput(expChip ? expChip->audioOutput() : 0.0f);
