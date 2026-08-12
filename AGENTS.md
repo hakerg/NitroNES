@@ -41,12 +41,6 @@ ROM-y są odpalane w trybie interaktywnym nes_test (stdin): pętla
 pierwszym). Testy z resetem (cpu_reset, apu_reset) używają klasycznego
 przebiegu jednorazowego.
 
-Aktualne faile i ich powody (stan na dziś):
-- `mmc3_test/5-MMC3` i `mmc3_irq_tests/6.MMC3_rev_B` — testy rewizji B
-  (Sharp); emulujemy rewizję A/MMC6, rewizje są wzajemnie wykluczające się
-- `read_joy3/count_errors*` i `test_buttons` to INFO (szum sprzętu / interaktywne)
-- Holy Mapperel: patrz sekcja poniżej (fail = ekran z detałem != 0000 albo kod morsa)
-
 ## Subsystemy NTSC / PAL / Dendy
 
 Pełna obsługa trzech subsystemów. Przełączanie w GUI: Emulacja -> System
