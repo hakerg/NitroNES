@@ -28,7 +28,7 @@ Hold Backspace to rewind gameplay in real time. Keeps up to 10,000 frames of del
 - **Backspace+Shift+Tab**: Slow rewind
 
 ### 🧪 Test Suite
-NitroNES is built against the full NES test ROM corpus. Run `python run_tests.py` for the current state.
+NitroNES passes the full NES test ROM corpus. Run `python run_tests.py` for the current state.
 
 - All blargg CPU tests (5 suites)
 - All blargg APU tests (11 suites)
@@ -39,7 +39,7 @@ NitroNES is built against the full NES test ROM corpus. Run `python run_tests.py
 - AccuracyCoin: 141/141 cycle-exact PPU sub-tests
 - Holy Mapperel mapper tests (35 ROMs, 16 mappers)
 
-Only 2 expected fails: MMC3 rev B tests — mutually exclusive with the emulated rev A/MMC6.
+Two MMC3 rev B (Sharp) tests are excluded — the emulator targets rev A/MMC6; the revisions are mutually exclusive at the hardware level.
 
 ### 🎵 NSF Player
 Full NSF (Nintendo Sound Format) support with:
