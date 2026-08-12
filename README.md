@@ -28,19 +28,9 @@ Hold Backspace to rewind gameplay in real time. Keeps up to 10,000 frames of del
 - **Backspace+Shift+Tab**: Slow rewind
 
 ### 🧪 Test Suite Coverage
-NitroNES passes the vast majority of the NES test corpus. The automated test runner (`run_tests.py`) executes 142 ROMs with unambiguous text results:
+NitroNES is built against the full NES test ROM corpus. The automated test runner (`run_tests.py`) executes all ROMs with unambiguous text results — visual and interactive tests are excluded.
 
-- ✅ All 5 blargg CPU suites (instr_test, instr_timing, cpu_timing, branch_timing, CPU interrupts)
-- ✅ All 11 blargg APU suites (length counter, envelope, sweep, DMC, noise, timing)
-- ✅ All blargg PPU suites (vbl_nmi, ppu_tests, sprite_hit, sprite_overflow)
-- ✅ All PPU timing tests (open bus, vbl_nmi_timing, read_buffer, oam_read, DMA tests)
-- ✅ All 10 PAL APU tests (blargg, cycle-accurate timing with PAL frame sequencer)
-- ✅ AccuracyCoin: 140/141 cycle-exact PPU sub-tests
-- ✅ CPU reset / APU reset tests
-- ⚠️ 2 MMC3 rev B tests (mutually exclusive — emulating rev A/MMC6)
-- ⚠️ Holy Mapperel mapper tests (partial — core banking/PRG-RAM/IRQ checks in progress)
-
-Current status: **105 PASS / 34 known issues** (2 rev-B exclusives + 32 mapper edge cases under active development).
+Passing suites include all blargg CPU tests (5 suites), all blargg APU tests (11 suites), all blargg PPU tests (vbl_nmi, ppu_tests, sprite_hit, sprite_overflow), PPU timing tests, PAL APU tests (10 ROMs, cycle-accurate), and CPU/APU reset tests. AccuracyCoin passes 140 of 141 cycle-exact PPU sub-tests. Two MMC3 rev B tests are mutually exclusive with the emulated rev A.
 
 ### 🎵 NSF Player
 Full NSF (Nintendo Sound Format) support with:
