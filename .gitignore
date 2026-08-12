@@ -364,3 +364,4 @@ FodyWeavers.xsd
 
 # JetBrains IDEs (CLion, IntelliJ, etc.)
 .idea/
+AGENTS.md
