@@ -104,4 +104,10 @@ python run_tests.py
 ```
 
 ## License
-Proprietary. Source available for reference.
+The emulator code (in `src/` and `test/`) is free for anyone to use.
+
+Third-party dependencies, fetched at build time, carry their own licenses:
+- [SDL3](https://github.com/libsdl-org/SDL) — zlib license
+- [Dear ImGui](https://github.com/ocornut/imgui) — MIT license
+
+The `MesenCE/` and `metalnes/` directories are unrelated third-party emulator source trees kept locally for reference only; they are not part of this project and remain under their original authors' licenses.
