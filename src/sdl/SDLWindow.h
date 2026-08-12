@@ -343,10 +343,13 @@ private:
             out.deviceId = ev.gdevice.which;
             return true;
         case SDL_EVENT_DROP_FILE: {
-            out.type = AppEventType::DropFile;
-            out.dropPath = ev.drop.data;
-            SDL_free((void*)ev.drop.data);
-            return true;
+            if (ev.drop.data) {
+                out.type = AppEventType::DropFile;
+                out.dropPath = ev.drop.data;
+                SDL_free((void*)ev.drop.data);
+                return true;
+            }
+            return false;
         }
         case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
             constexpr Sint16 THRESHOLD = 8000;
