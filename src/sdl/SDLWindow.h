@@ -342,6 +342,12 @@ private:
             out.type = AppEventType::GamepadRemoved;
             out.deviceId = ev.gdevice.which;
             return true;
+        case SDL_EVENT_DROP_FILE: {
+            out.type = AppEventType::DropFile;
+            out.dropPath = ev.drop.data;
+            SDL_free((void*)ev.drop.data);
+            return true;
+        }
         case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
             constexpr Sint16 THRESHOLD = 8000;
             if (ev.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {

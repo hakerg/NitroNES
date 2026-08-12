@@ -343,9 +343,11 @@ private:
             return controllerBinding(input->controllerSettings(0), index);
         if (index < 20)
             return controllerBinding(input->controllerSettings(1), index - 10);
-        if (index < 28)
+        if (index < 31)
             return appBinding(index - 20);
-        return saveLoadBinding(index - 31);
+        if (index < 51)
+            return saveLoadBinding(index - 31);
+        return {"", nullptr, AppKey::Unknown};
     }
 
     static Binding controllerBinding(ControllerSettings &s, int index) {

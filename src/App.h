@@ -82,12 +82,7 @@ private:
             case PendingAction::Open: {
                 std::string newPath = window.openFileDialog();
                 if (newPath.empty()) return;
-                session.reset();
-                try {
-                    session = makeSession(newPath);
-                } catch (const std::exception& e) {
-                    std::cerr << "[App] failed to open " << newPath << ": " << e.what() << "\n";
-                }
+                loadFile(newPath);
                 return;
             }
             case PendingAction::Reload: {
@@ -114,6 +109,15 @@ private:
         }
         return std::make_unique<NSFSession>(path, window, audio,
                                             settings);
+    }
+
+    void loadFile(const std::string &path) {
+        session.reset();
+        try {
+            session = makeSession(path);
+        } catch (const std::exception &e) {
+            std::cerr << "[App] failed to open " << path << ": " << e.what() << "\n";
+        }
     }
 
     void processEvent(const AppEvent &ev) {
@@ -155,6 +159,10 @@ private:
             return;
         case AppEventType::GamepadRemoved:
             input.onGamepadRemoved(ev.deviceId);
+            return;
+        case AppEventType::DropFile:
+            if (!ev.dropPath.empty())
+                loadFile(ev.dropPath);
             return;
         default:
             break;

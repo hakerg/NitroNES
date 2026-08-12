@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 
 enum class AppKey {
     Unknown,
@@ -30,7 +31,8 @@ enum class AppEventType {
     GamepadAxisRightTrigger,
     GamepadAxisLeftTrigger,
     MouseMoved,
-    MouseButtonDown
+    MouseButtonDown,
+    DropFile
 };
 
 struct AppEvent {
@@ -38,4 +40,5 @@ struct AppEvent {
     AppKey key = AppKey::Unknown; // KeyDown / KeyUp
     bool axisDown = false;        // GamepadAxis*
     uint32_t deviceId = 0;        // Gamepad*
+    std::string dropPath;         // DropFile
 };
