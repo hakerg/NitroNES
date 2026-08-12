@@ -78,7 +78,7 @@ private:
         const char *base = std::getenv("LOCALAPPDATA");
         std::filesystem::path dir = base ? std::filesystem::path(base)
                                          : std::filesystem::current_path();
-        dir /= "NES Emulator";
+        dir /= "NitroNES";
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
         return dir / "settings.cfg";

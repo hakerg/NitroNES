@@ -9,7 +9,7 @@
 namespace {
 
 constexpr const char* DEFAULT_ROM =
-    "C:/Users/PC COMPUTER/source/repos/NES Emulator/"
+    "C:/Users/PC COMPUTER/source/repos/NitroNES/"
     "nes-test-roms-master/AccuracyCoin-main/AccuracyCoin.nes";
 
 // Controller button bits (as returned by readController; bit7=A ... bit0=Right).

@@ -1,4 +1,4 @@
-# NES Emulator
+# NitroNES
 
 Emulator NES robiony pod kątem minimalnych opóźnień oraz zgodności z fizycznym sprzętem. Cel: zaliczenie wszystkich testów.
 

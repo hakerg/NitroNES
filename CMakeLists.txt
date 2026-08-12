@@ -1,7 +1,7 @@
-﻿# CMakeLists.txt: projekt CMake dla elementu NES Emulator
+﻿# CMakeLists.txt: projekt CMake dla elementu NitroNES
 cmake_minimum_required (VERSION 3.24)
 
-project ("NES Emulator" CXX C)
+project ("NitroNES" CXX C)
 
 # --- AUTOMATYCZNE POBIERANIE SDL3 ---
 include(FetchContent)
@@ -35,16 +35,16 @@ FetchContent_MakeAvailable(imgui)
 # ------------------------------------
 
 # Dodaj główne źródło pliku wykonywalnego
-add_library(NESEmulatorResources OBJECT resources.rc)
-add_executable(NESEmulator WIN32 "src/NES Emulator.cpp" $<TARGET_OBJECTS:NESEmulatorResources>)
-set_property(TARGET NESEmulator PROPERTY OUTPUT_NAME "NES Emulator")
+add_library(NitroNESResources OBJECT resources.rc)
+add_executable(NitroNES WIN32 "src/NitroNES.cpp" $<TARGET_OBJECTS:NitroNESResources>)
+set_property(TARGET NitroNES PROPERTY OUTPUT_NAME "NitroNES")
 
 # Ustawienie standardu C++23
-set_property(TARGET NESEmulator PROPERTY CXX_STANDARD 23)
-set_property(TARGET NESEmulator PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET NitroNES PROPERTY CXX_STANDARD 23)
+set_property(TARGET NitroNES PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # Dodaj pliki źródłowe ImGui oraz backendy (SDL3 + SDL_Renderer) do kompilacji
-target_sources(NESEmulator PRIVATE
+target_sources(NitroNES PRIVATE
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -56,14 +56,14 @@ target_sources(NESEmulator PRIVATE
 )
 
 # Dodaj ścieżki include, żeby kompilator widział nagłówki <imgui.h> oraz <imgui_impl_...h>
-target_include_directories(NESEmulator PRIVATE
+target_include_directories(NitroNES PRIVATE
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
 )
 
 # Połącz z SDL3 statycznie
-target_link_libraries(NESEmulator PRIVATE SDL3::SDL3-static)
-target_link_options(NESEmulator PRIVATE -static-libgcc -static-libstdc++ -static)
+target_link_libraries(NitroNES PRIVATE SDL3::SDL3-static)
+target_link_options(NitroNES PRIVATE -static-libgcc -static-libstdc++ -static)
 
 # ------------------------------------
 # Testy automatyczne

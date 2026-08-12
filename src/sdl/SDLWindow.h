@@ -22,7 +22,7 @@ public:
         int winW = (NES::SCREEN_WIDTH * NES::PAR_NUM * 3) / NES::PAR_DEN;
         int winH = NES::SCREEN_HEIGHT * 3;
 
-        window = SDL_CreateWindow("NES Emulator", winW, winH, SDL_WINDOW_RESIZABLE);
+        window = SDL_CreateWindow("NitroNES", winW, winH, SDL_WINDOW_RESIZABLE);
         if (!window)
             throw std::runtime_error(std::string("SDL_CreateWindow: ") + SDL_GetError());
 
