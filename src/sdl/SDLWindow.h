@@ -346,7 +346,6 @@ private:
             if (ev.drop.data) {
                 out.type = AppEventType::DropFile;
                 out.dropPath = ev.drop.data;
-                SDL_free((void*)ev.drop.data);
                 return true;
             }
             return false;
